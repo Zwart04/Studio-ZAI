@@ -16,6 +16,11 @@
 | **M4** | Aplikasi Android (Flutter, on-device) | ✅ |
 | **M5** | Packaging + rilis + push GitHub | ✅ |
 
+**Artefak rilis v1.0.0 (terverifikasi):**
+- `StudioZAI-1.0.0-windows-x64.zip` — 213 MB (EXE one-folder, FFmpeg terbundel, diuji end-to-end menghasilkan klip 1080×1920)
+- `StudioZAI-1.0.0-android-arm64.apk` — 42.5 MB (compileSdk/targetSdk 37 = Android 17, minSdk 26, tertandatangani)
+- Keduanya terpasang di GitHub Release `v1.0.0` repo private `Zwart04/Studio-ZAI`.
+
 > Tanda ✅ = deliverable kode/dokumen sudah ada di repo. Pengujian perangkat keras nyata (GPU/HP) dilakukan bertahap oleh pemilik repo — lihat bagian Verifikasi.
 
 ---

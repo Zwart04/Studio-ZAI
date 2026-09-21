@@ -32,6 +32,17 @@ Tersedia untuk **Windows, Linux, dan Android**.
 - Model **tidak dibundel** di installer/APK — diunduh hanya saat dibutuhkan.
 - UI tanpa framework berat (vanilla HTML/CSS/JS di desktop).
 
+## ⬇️ Unduhan (siap pakai)
+
+Rilis terbaru: **[github.com/Zwart04/Studio-ZAI/releases/latest](https://github.com/Zwart04/Studio-ZAI/releases/latest)**
+
+| Platform | Berkas | Ukuran |
+|---|---|---|
+| Windows 10/11 (x64) | `StudioZAI-1.0.0-windows-x64.zip` — ekstrak, jalankan `StudioZAI.exe`. FFmpeg sudah terbundel | 213 MB |
+| Android 8+ (arm64) | `StudioZAI-1.0.0-android-arm64.apk` — target Android 17 (API 37) | 42.5 MB |
+
+Model AI tidak ikut di dalam paket — diunduh sekali dari halaman **Model** di aplikasi (mis. suara Indonesia 63 MB).
+
 ## 🚀 Mulai Cepat
 
 ### Desktop (Windows / Linux)
