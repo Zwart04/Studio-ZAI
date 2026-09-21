@@ -74,7 +74,8 @@ def detect_h264_encoder() -> str:
         return "libx264"
     try:
         probe_result = subprocess.run(
-            ["nvidia-smi", "-L"], capture_output=True, text=True, timeout=15, check=False
+            ["nvidia-smi", "-L"], capture_output=True, text=True, timeout=15, check=False,
+            creationflags=_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return "libx264"
@@ -87,6 +88,7 @@ def detect_h264_encoder() -> str:
             text=True,
             timeout=20,
             check=False,
+            creationflags=_creation_flags(),
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return "libx264"
@@ -105,6 +107,13 @@ class RunResult:
         return self.returncode == 0
 
 
+def _creation_flags() -> int:
+    """On Windows, prevent child process consoles from flashing on screen."""
+    if sys.platform == "win32":
+        return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    return 0
+
+
 def run_ffmpeg(
     args: Sequence[str],
     total_duration: float | None = None,
@@ -120,6 +129,7 @@ def run_ffmpeg(
         text=True,
         encoding="utf-8",
         errors="replace",
+        creationflags=_creation_flags(),
     )
     stderr_lines: list[str] = []
     assert proc.stderr is not None
@@ -149,6 +159,7 @@ def run_command(args: Sequence[str], timeout: int | None = None) -> RunResult:
         errors="replace",
         timeout=timeout,
         check=False,
+        creationflags=_creation_flags(),
     )
     return RunResult(proc.returncode, proc.stdout, proc.stderr, list(args))
 

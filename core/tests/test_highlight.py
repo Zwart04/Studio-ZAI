@@ -37,7 +37,7 @@ def test_slide_windows_and_selection_are_deterministic():
     windows = highlight.slide_windows(120, min_len=15, max_len=60)
     assert [w["start"] for w in windows] == [0.0, 30.0, 60.0]
     scored = highlight.score_windows(windows, None, [])
-    chosen = highlight.select_top(scored, count=2)
+    chosen = highlight.select_top(scored, requested_count=2)
     assert [w["start"] for w in chosen] == [0.0, 60.0]
 
 
@@ -79,7 +79,7 @@ def test_pick_clips_prefers_loud_window():
     )
     assert len(clips) == 1
     assert clips[0].start >= 19.0
-    assert clips[0].score > 0.9
+    assert clips[0].score >= 0.9
 
 
 def test_snap_to_words():

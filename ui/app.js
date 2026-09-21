@@ -129,25 +129,71 @@ function formatClock(seconds) {
 
 /* ------------------------------------------------------------------ jobs */
 
+let jobTimer = null;
+let jobStartedAt = 0;
+
+function fmtElapsed(seconds) {
+  if (seconds < 60) return `${Math.floor(seconds)} detik`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m} mnt ${s} dtk`;
+}
+
+function showProcessing(title) {
+  const card = $("#processingCard");
+  card.classList.add("visible");
+  $("#procTitle").textContent = title || t("common.processing");
+  $("#procStage").textContent = t("common.processing");
+  $("#procFill").style.width = "2%";
+  $("#procFill").classList.add("indeterminate");
+  $("#procElapsed").textContent = "0 detik";
+  jobStartedAt = Date.now();
+  clearInterval(jobTimer);
+  jobTimer = setInterval(() => {
+    $("#procElapsed").textContent = fmtElapsed((Date.now() - jobStartedAt) / 1000);
+  }, 1000);
+}
+
+function hideProcessing() {
+  $("#processingCard").classList.remove("visible");
+  clearInterval(jobTimer);
+  jobTimer = null;
+}
+
 function trackJob(job) {
   if (!job || !job.id) return;
   state.jobId = job.id;
+  const startBtn = $("#startBtn");
+  if (startBtn) { startBtn.disabled = true; startBtn.textContent = t("common.processing") + "…"; }
   $("#jobbar").classList.add("visible");
   $("#jobStage").textContent = job.title || "";
   $("#jobFill").style.width = "2%";
   $("#jobPercent").textContent = "0%";
+  showProcessing(job.title);
 
   const source = new EventSource(`/api/jobs/${job.id}/events`);
   source.onmessage = (event) => {
     const data = JSON.parse(event.data);
     const percent = Math.round(data.progress || 0);
+    // Indeterminate hanya saat belum ada angka nyata (mis. unduh model pertama).
+    const fill = $("#procFill");
+    if (percent > 2) fill.classList.remove("indeterminate");
+    fill.style.width = `${Math.max(2, percent)}%`;
     $("#jobFill").style.width = `${percent}%`;
     $("#jobPercent").textContent = `${percent}%`;
-    $("#jobStage").textContent = data.stage ? `${data.stage} — ${data.message || ""}` : (data.message || "");
+    if (data.type === "progress") {
+      const stageText = data.stage ? `${data.stage} — ${data.message || ""}` : (data.message || "");
+      $("#jobStage").textContent = stageText;
+      $("#procStage").textContent = data.stage || t("common.processing");
+      $("#procTitle").textContent = data.message || job.title || t("common.processing");
+      return;
+    }
     if (data.type === "end") {
       source.close();
       $("#jobbar").classList.remove("visible");
       state.jobId = null;
+      hideProcessing();
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
@@ -157,6 +203,8 @@ function trackJob(job) {
   source.onerror = () => {
     source.close();
     $("#jobbar").classList.remove("visible");
+    hideProcessing();
+    if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
     state.jobId = null;
   };
 }
@@ -610,6 +658,174 @@ function openDataFolder() {
   else toast(state.settings.data_dir || "", "");
 }
 
+/* ------------------------------------------------------------------ wizard setup */
+
+const wizard = { step: 0, device: null, models: [], chosen: [], busy: false };
+
+function wizardShow(step) {
+  wizard.step = step;
+  const overlay = $("#wizardOverlay");
+  const title = $("#wizardTitle");
+  const sub = $("#wizardSub");
+  const body = $("#wizardBody");
+  const actions = $("#wizardActions");
+  overlay.hidden = false;
+
+  if (step === 0) {
+    title.textContent = "Selamat datang di Studio ZAI";
+    sub.textContent = "Studio ZAI berjalan lokal di perangkatmu. Sekali pasang model AI kecil (unduh sekali), lalu semua fitur jalan offline.";
+    body.innerHTML = "";
+    actions.innerHTML = `
+      <button class="primary" id="wzStart">Pasang sekarang</button>
+      <button class="link" id="wzSkip">Nanti saja</button>`;
+    $("#wzStart").addEventListener("click", () => wizardDetect());
+    $("#wzSkip").addEventListener("click", wizardDone);
+  }
+}
+
+async function wizardDetect() {
+  const body = $("#wizardBody");
+  const actions = $("#wizardActions");
+  actions.innerHTML = "";
+  body.innerHTML = `<div class="processing-head" style="justify-content:center"><div class="spinner"></div><span class="muted">Mendeteksi perangkat…</span></div>`;
+  try {
+    wizard.data = await api("/api/models");
+    wizard.device = wizard.data.hardware;
+    wizard.models = wizard.data.models;
+    // Pilih otomatis model yang direkomendasikan perangkat ini.
+    const tier = wizard.data.tier;
+    const recommended = [tier.asr, tier.tts].filter(Boolean);
+    wizard.chosen = recommended.slice();
+    wizardShowRecommend();
+  } catch (error) {
+    body.innerHTML = `<p class="muted">Gagal mendeteksi: ${error.message}</p>`;
+  }
+}
+
+function wizardShowRecommend() {
+  const device = wizard.device;
+  const tier = wizard.data.tier;
+  $("#wizardTitle").textContent = "Perangkatmu terdeteksi";
+  $("#wizardSub").textContent = `${device.os} · RAM ${device.ram_gb ?? "?"} GB · ${device.cpu_count} core · disk bebas ${device.disk_free_gb} GB`;
+
+  const rows = wizard.models.map((model) => {
+    const rec = wizard.chosen.includes(model.id);
+    return `
+    <label class="wizard-body-row" style="cursor:pointer">
+      <input type="checkbox" data-model="${model.id}" ${rec ? "checked" : ""} />
+      <span class="label">
+        ${model.id}
+        <span class="sub">${model.kind} · ${model.size_mb ?? "?"} MB · ${model.note || ""}</span>
+      </span>
+      ${model.installed ? `<span class="stage-pill" style="background:rgba(48,209,88,.16);color:var(--green)">terpasang</span>` : ""}
+    </label>`;
+  }).join("");
+
+  $("#wizardBody").innerHTML = `
+    <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${tier.asr}</strong> + <strong>${tier.tts}</strong></p>
+    ${rows}`;
+  $("#wizardActions").innerHTML = `
+    <button class="primary" id="wzInstall">Unduh & pasang</button>
+    <button class="link" id="wzLater">Lewati dulu</button>`;
+
+  $("#wizardBody").querySelectorAll("[data-model]").forEach((cb) =>
+    cb.addEventListener("change", () => {
+      const id = cb.dataset.model;
+      if (cb.checked && !wizard.chosen.includes(id)) wizard.chosen.push(id);
+      if (!cb.checked) wizard.chosen = wizard.chosen.filter((x) => x !== id);
+    })
+  );
+  $("#wzInstall").addEventListener("click", wizardInstall);
+  $("#wzLater").addEventListener("click", wizardDone);
+}
+
+async function wizardInstall() {
+  if (wizard.busy) return;
+  wizard.busy = true;
+  const toInstall = wizard.chosen.filter((id) => {
+    const model = wizard.models.find((m) => m.id === id);
+    return model && !model.installed;
+  });
+
+  $("#wizardTitle").textContent = "Memasang model";
+  $("#wizardSub").textContent = "Tunggu sampai selesai. Ini hanya dilakukan sekali.";
+  $("#wizardActions").innerHTML = "";
+
+  const body = $("#wizardBody");
+  body.innerHTML = toInstall.map((id) => `
+    <div class="wizard-body-row" data-row="${id}">
+      <span class="dot" data-dot="${id}">…</span>
+      <span class="label">${id}
+        <div class="wizard-progress"><span data-bar="${id}" style="width:0%"></span></div>
+      </span>
+      <span class="muted" data-pct="${id}">0%</span>
+    </div>`).join("");
+
+  for (const id of toInstall) {
+    await wizardDownloadModel(id);
+  }
+  wizard.busy = false;
+  wizardFinish();
+}
+
+function wizardDownloadModel(id) {
+  return new Promise((resolve) => {
+    const dot = document.querySelector(`[data-dot="${id}"]`);
+    const bar = document.querySelector(`[data-bar="${id}"]`);
+    const pct = document.querySelector(`[data-pct="${id}"]`);
+    if (dot) dot.classList.add("run");
+
+    api(`/api/models/${id}/download`, { method: "POST" }).then((job) => {
+      const source = new EventSource(`/api/jobs/${job.id}/events`);
+      source.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const progress = Math.round(data.progress || 0);
+        if (bar) bar.style.width = `${progress}%`;
+        if (pct) pct.textContent = `${progress}%`;
+        if (data.type === "end") {
+          source.close();
+          if (data.status === "error") {
+            if (dot) dot.classList.remove("run");
+            if (pct) pct.textContent = "gagal";
+            if (bar) bar.style.background = "var(--red)";
+          } else {
+            if (dot) { dot.classList.remove("run"); dot.classList.add("ok"); dot.textContent = "✓"; }
+            if (bar) bar.style.width = "100%";
+            if (pct) pct.textContent = "100%";
+          }
+          resolve();
+        }
+      };
+      source.onerror = () => { source.close(); resolve(); };
+    }).catch(() => resolve());
+  });
+}
+
+async function wizardFinish() {
+  $("#wizardTitle").textContent = "Siap dipakai 🎉";
+  $("#wizardSub").textContent = "Model terpasang. Semua fitur inti jalan lokal dan offline.";
+  $("#wizardBody").innerHTML = "";
+  $("#wizardActions").innerHTML = `<button class="primary" id="wzGo">Mulai pakai</button>`;
+  $("#wzGo").addEventListener("click", wizardDone);
+  await refreshAll();
+}
+
+async function wizardDone() {
+  $("#wizardOverlay").hidden = true;
+  await api("/api/settings", { method: "POST", body: JSON.stringify({ values: { setup_done: true } }) }).catch(() => {});
+}
+
+async function checkWizard() {
+  try {
+    const settings = await api("/api/settings");
+    const models = await api("/api/models");
+    const hasAnyModel = models.models.some((m) => m.installed);
+    if (!settings.setup_done && !hasAnyModel) {
+      wizardShow(0);
+    }
+  } catch { /* abaikan saat pertama kali */ }
+}
+
 /* ------------------------------------------------------------------ boot */
 
 async function loadVoices() {
@@ -687,6 +903,11 @@ async function boot() {
   $("#jobCancel").addEventListener("click", async () => {
     if (state.jobId) await api(`/api/jobs/${state.jobId}/cancel`, { method: "POST" });
   });
+  $("#procCancel").addEventListener("click", async () => {
+    if (state.jobId) await api(`/api/jobs/${state.jobId}/cancel`, { method: "POST" });
+  });
+
+  checkWizard();
 }
 
 boot();

@@ -79,6 +79,20 @@
         <pre id="doctorOut" class="muted" style="display:none;margin:var(--s4) 0 0"></pre>
       </div>
 
+      <!-- Progress proses yang sedang berjalan -->
+      <div class="processing-card" id="processingCard">
+        <div class="processing-head">
+          <div class="spinner"></div>
+          <div class="processing-title" id="procTitle">Memproses…</div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="procFill"></div></div>
+        <div class="processing-meta">
+          <span class="stage-pill" id="procStage">Menyiapkan</span>
+          <span class="muted" id="procElapsed">0 detik</span>
+          <button class="mini" id="procCancel" data-i18n="common.cancel">Batal</button>
+        </div>
+      </div>
+
       <h2 data-i18n="home.recent">Proyek terakhir</h2>
       <div id="homeProjects" class="grid-clips"></div>
     </section>
@@ -238,6 +252,17 @@
 </div>
 
 <aside class="panel" id="editPanel"></aside>
+
+<!-- Wizard setup pertama (model lokal) -->
+<div id="wizardOverlay" class="wizard-overlay" hidden>
+  <div class="wizard" role="dialog" aria-modal="true">
+    <img class="wizard-logo" src="/assets/logo.png" alt="Studio ZAI" />
+    <h1 class="wizard-title" id="wizardTitle">Selamat datang</h1>
+    <p class="wizard-sub" id="wizardSub"></p>
+    <div id="wizardBody"></div>
+    <div class="wizard-actions" id="wizardActions"></div>
+  </div>
+</div>
 <div id="jobbar">
   <span id="jobStage" class="muted"></span>
   <div class="bar"><span id="jobFill"></span></div>

@@ -27,8 +27,11 @@ UI = ROOT / "ui"
 datas = [
     (str(CORE / "studiozai" / "models" / "registry.json"), "studiozai/models"),
     (str(UI), "ui"),
+    (str(ROOT / "assets" / "logo.png"), "assets"),
 ]
-binaries = []
+binaries = [
+    (str(ROOT / "desktop" / "packaging" / "icons" / "studiozai.ico"), "."),
+]
 
 ff_dir = os.environ.get("STUDIOZAI_FFMPEG_DIR")
 if ff_dir:

@@ -17,9 +17,18 @@ from .utils.text import clock, human_size, sanitize_filename
 Report = Callable[[float, str, str], None]
 
 
-def _report(job: Job | None, progress: float, stage: str, message: str = "") -> None:
-    if job is not None:
-        job.report(progress, stage, message)
+def _emit_progress(sse: Any, prog: float, msg: str) -> None:
+    """Emit a progress SSE event without touching a job dict."""
+    try:
+        sse.send({"type": "progress", "progress": round(min(99.0, max(0.0, prog)), 1), "message": msg})
+    except Exception:
+        pass
+
+
+def _report(job: Job | None, prog: float, stage: str, message: str = "") -> None:
+    if job is None:
+        return
+    job.report(prog, stage, message)
 
 
 # --------------------------------------------------------------------------- doctor
@@ -196,6 +205,7 @@ def generate_clips(
     media = project.media_path()
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
+    floor, ceiling = highlight.clip_count_targets(project.duration or 0, count)
 
     transcript = None
     if use_transcript and transcribe.asr_available():
@@ -211,6 +221,7 @@ def generate_clips(
         count=count,
         min_len=min_len,
         max_len=max_len,
+        video_duration=project.duration or 0,
         progress_cb=lambda p, m: _report(job, 78 + p * 0.12, "menganalisis", m),
     )
 

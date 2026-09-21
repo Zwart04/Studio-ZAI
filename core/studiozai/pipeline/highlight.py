@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Sequence
@@ -20,9 +21,11 @@ DEFAULT_MIN_LEN = 15.0
 DEFAULT_MAX_LEN = 60.0
 HOP_SECONDS = 0.5
 
-WEIGHT_LOUDNESS = 0.55
-WEIGHT_DENSITY = 0.35
+WEIGHT_LOUDNESS_AVG = 0.28
+WEIGHT_LOUDNESS_PEAK = 0.22
+WEIGHT_DENSITY = 0.30
 WEIGHT_SILENCE = 0.10
+WEIGHT_BOUNDARY = 0.10
 
 ProgressCb = Callable[[float, str], None]
 
@@ -54,6 +57,13 @@ class ClipCandidate:
 # --------------------------------------------------------------------------- audio
 
 
+def _no_window_flags() -> int:
+    """On Windows, prevent child process consoles from flashing on screen."""
+    if sys.platform == "win32":
+        return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    return 0
+
+
 def decode_pcm(path: str | Path, sample_rate: int = 16000) -> np.ndarray:
     """Decode any media file to mono float32 PCM using ffmpeg."""
     cmd = [
@@ -71,7 +81,7 @@ def decode_pcm(path: str | Path, sample_rate: int = 16000) -> np.ndarray:
         "f32le",
         "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True, check=False)
+    proc = subprocess.run(cmd, capture_output=True, check=False, creationflags=_no_window_flags())
     if proc.returncode != 0:
         raise RuntimeError(f"gagal mendekode audio: {proc.stderr[-300:].decode('utf-8', 'replace')}")
     return np.frombuffer(proc.stdout, dtype=np.float32)
@@ -228,6 +238,76 @@ def snap_to_words(
     return float(snapped_start), float(snapped_end)
 
 
+def snap_clip_to_pauses(
+    start: float,
+    end: float,
+    words: Sequence[dict[str, Any]],
+    silences: Sequence[tuple[float, float]],
+    duration: float,
+    min_len: float = DEFAULT_MIN_LEN,
+    max_len: float = DEFAULT_MAX_LEN,
+    search_window: float = 1.5,
+    max_lead: float = 0.35,
+    max_tail: float = 0.45,
+) -> tuple[float, float]:
+    """Snap a clip onto word boundaries and breathe into the surrounding pauses.
+
+    Adapted from openshorts' snap_clip_to_words: land cuts in silence so the
+    clip never starts/ends mid-word. Falls back to the raw span if nothing fits.
+    """
+    original = (round(float(start), 3), round(float(end), 3))
+    if not words:
+        return original
+
+    starts = [float(w.get("start", 0)) for w in words]
+    ends = [float(w.get("end", 0)) for w in words]
+
+    new_start = float(start)
+    candidates = [s for s in starts if abs(s - new_start) <= search_window]
+    if candidates:
+        word_start = min(candidates, key=lambda s: abs(s - new_start))
+        previous_ends = [e for e in ends if e <= word_start]
+        gap = max(0.0, word_start - max(previous_ends)) if previous_ends else max_lead
+        new_start = max(0.0, word_start - min(max_lead, gap / 2))
+
+    new_end = float(end)
+    candidates = [e for e in ends if abs(e - new_end) <= search_window]
+    if candidates:
+        word_end = min(candidates, key=lambda e: abs(e - new_end))
+        next_starts = [s for s in starts if s >= word_end]
+        gap = max(0.0, min(next_starts) - word_end) if next_starts else max_tail
+        new_end = min(float(duration), word_end + min(max_tail, gap / 2))
+
+    if new_end - new_start < min_len:
+        later = sorted(e for e in ends if e >= new_start + min_len)
+        if later and later[0] - new_start <= max_len:
+            new_end = min(float(duration), later[0] + 0.2)
+        else:
+            return original
+    if new_end - new_start > max_len:
+        earlier = [e for e in ends if new_start < e <= new_start + max_len]
+        new_end = (max(earlier) + 0.2) if earlier else new_start + max_len
+        new_end = min(new_end, new_start + max_len, float(duration))
+
+    if new_end <= new_start or new_end - new_start < min_len:
+        return original
+    return round(new_start, 3), round(new_end, 3)
+
+
+def clip_count_targets(video_duration: float, requested: int) -> tuple[int, int]:
+    """Floor/ceiling for clip count, scaling with source length (openshorts-style).
+
+    Longer sources deserve more clips, but never more than the user asked for.
+    """
+    requested = max(1, int(requested))
+    if video_duration <= 0:
+        return 1, requested
+    minutes = video_duration / 60.0
+    low = max(1, min(requested, int(minutes // 15) + 1))
+    high = max(low, requested)
+    return low, high
+
+
 def title_from_text(text: str, max_words: int = 7) -> str:
     words = [w for w in text.split() if w]
     if not words:
@@ -239,12 +319,20 @@ def title_from_text(text: str, max_words: int = 7) -> str:
 # --------------------------------------------------------------------------- scoring
 
 
+def _nearest_silence_gap(silences: Sequence[tuple[float, float]], point: float) -> float:
+    """Distance (s) from a point to the nearest silence edge; big when none."""
+    best = float("inf")
+    for start, end in silences:
+        best = min(best, abs(point - start), abs(point - end))
+    return best if best != float("inf") else 999.0
+
+
 def score_windows(
     windows: Sequence[dict[str, Any]],
     envelope: tuple[np.ndarray, np.ndarray] | None,
     silences: Sequence[tuple[float, float]],
 ) -> list[dict[str, Any]]:
-    """Attach normalised loudness / word-density / silence features and a score."""
+    """Attach normalised loudness / word-density / silence / boundary features and a score."""
     if envelope is not None:
         times, rms = envelope
         peak_rms = float(np.max(rms)) if rms.size else 1.0
@@ -258,42 +346,68 @@ def score_windows(
     for window, density in zip(windows, densities):
         if envelope is not None and times.size:
             mask = (times >= window["start"]) & (times < window["end"])
-            loudness = float(np.mean(rms[mask])) if np.any(mask) else 0.0
+            if np.any(mask):
+                avg_loudness = float(np.mean(rms[mask]))
+                peak_loudness = float(np.max(rms[mask]))
+            else:
+                avg_loudness = peak_loudness = 0.0
         else:
-            loudness = 0.0
-        loudness_norm = loudness / peak_rms if peak_rms else 0.0
+            avg_loudness = peak_loudness = 0.0
+        avg_norm = avg_loudness / peak_rms if peak_rms else 0.0
+        peak_norm = peak_loudness / peak_rms if peak_rms else 0.0
         density_norm = density / peak_density if peak_density else 0.0
         silent = overlap_seconds(silences, window["start"], window["end"])
         silence_ratio = min(1.0, silent / max(1.0, window["duration"]))
+        # Natural cut bonus: boundaries that land on/near a pause cut cleaner.
+        gap_start = _nearest_silence_gap(silences, window["start"])
+        gap_end = _nearest_silence_gap(silences, window["end"])
+        boundary = max(0.0, 1.0 - (gap_start + gap_end) / 3.0)
+
         score = (
-            WEIGHT_LOUDNESS * loudness_norm
+            WEIGHT_LOUDNESS_AVG * avg_norm
+            + WEIGHT_LOUDNESS_PEAK * peak_norm
             + WEIGHT_DENSITY * density_norm
             + WEIGHT_SILENCE * (1.0 - silence_ratio)
+            + WEIGHT_BOUNDARY * boundary
         )
         scored.append(
             {
                 **window,
                 "score": float(score),
-                "loudness": round(loudness_norm, 4),
+                "loudness": round(avg_norm, 4),
+                "peak": round(peak_norm, 4),
                 "density": round(density_norm, 4),
                 "silence_ratio": round(silence_ratio, 4),
+                "boundary": round(boundary, 4),
             }
         )
     return scored
 
 
 def _reason(window: dict[str, Any]) -> str:
-    parts = [f"loudness {window['loudness']:.2f}"]
+    parts = [f"energi {window['loudness']:.2f}"]
+    if window.get("peak"):
+        parts.append(f"puncak {window['peak']:.2f}")
     if window.get("density"):
-        parts.append(f"kepadatan kata {window['density']:.2f}")
+        parts.append(f"kata padat {window['density']:.2f}")
+    if window.get("boundary"):
+        parts.append(f"potongan rapi {window['boundary']:.2f}")
     if window.get("silence_ratio"):
         parts.append(f"sunyi {window['silence_ratio'] * 100:.0f}%")
     return ", ".join(parts)
 
 
 def select_top(
-    scored: Sequence[dict[str, Any]], count: int, overlap_tolerance: float = 1.0
+    scored: Sequence[dict[str, Any]],
+    requested_count: int = 5,
+    overlap_tolerance: float = 1.0,
+    video_duration: float = 0.0,
 ) -> list[dict[str, Any]]:
+    """Best-k selection, openshorts-style: longer sources deserve more clips."""
+    count = requested_count
+    if video_duration > 0:
+        _, ceiling = clip_count_targets(video_duration, requested_count)
+        count = max(1, min(count, ceiling))
     chosen: list[dict[str, Any]] = []
     for window in sorted(scored, key=lambda w: (-w["score"], w["start"])):
         if len(chosen) >= count:
@@ -324,10 +438,16 @@ def pick_clips(
     if not windows:
         windows = slide_windows(duration, min_len, max_len)
     scored = score_windows(windows, envelope, silences)
-    chosen = select_top(scored, count)
+    chosen = select_top(scored, count, video_duration=duration)
     candidates: list[ClipCandidate] = []
     for window in chosen:
-        start, end = snap_to_words(window["start"], window["end"], window.get("words") or [])
+        words = window.get("words") or []
+        if words:
+            start, end = snap_clip_to_pauses(
+                window["start"], window["end"], words, silences, duration, min_len, max_len
+            )
+        else:
+            start, end = window["start"], window["end"]
         candidates.append(
             ClipCandidate(
                 start=start,
@@ -335,7 +455,7 @@ def pick_clips(
                 score=window["score"],
                 reason=_reason(window),
                 title=title_from_text(window.get("text", "")),
-                words=list(window.get("words") or []),
+                words=list(words),
             )
         )
     return candidates
@@ -347,6 +467,7 @@ def analyze_media(
     count: int = 5,
     min_len: float = DEFAULT_MIN_LEN,
     max_len: float = DEFAULT_MAX_LEN,
+    video_duration: float = 0.0,
     progress_cb: ProgressCb | None = None,
 ) -> list[ClipCandidate]:
     """End-to-end heuristic analysis of a media file (no AI unless transcript is given)."""
@@ -354,6 +475,8 @@ def analyze_media(
         progress_cb(5.0, "mendekode audio")
     samples = decode_pcm(media_path)
     duration = samples.size / 16000.0
+    if video_duration > 0:
+        duration = video_duration
     if progress_cb:
         progress_cb(45.0, "mengukur loudness & jeda")
     envelope = rms_envelope(samples, 16000)
