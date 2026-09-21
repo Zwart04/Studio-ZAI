@@ -12,7 +12,6 @@ import '../services/media_tools.dart';
 import '../services/model_manager.dart';
 import '../services/pipeline.dart';
 import '../services/speech.dart';
-import '../services/subtitle_builder.dart';
 
 enum JobState { idle, running, done, error }
 
@@ -44,8 +43,6 @@ class AppState extends ChangeNotifier {
   String jobStage = '';
   String jobMessage = '';
   String? lastOutput;
-
-  bool ytDlpReady = false;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -203,7 +200,6 @@ class AppState extends ChangeNotifier {
       File media;
       if (project.sourceIsUrl) {
         media = await Downloader.download(source, directory, _report);
-        ytDlpReady = true;
       } else {
         media = File(source);
         if (!media.existsSync()) throw Exception('Berkas tidak ditemukan: $source');

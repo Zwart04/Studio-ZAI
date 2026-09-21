@@ -4,29 +4,31 @@ publish_to: none
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
-  path_provider: ^2.1.4
-  shared_preferences: ^2.3.2
-  permission_handler: ^11.3.1
-  device_info_plus: ^10.1.2
-  http: ^1.2.2
-  archive: ^3.6.0
-  file_picker: ^8.1.2
-  share_plus: ^10.0.2
+  cupertino_icons: ^1.0.9
+  path_provider: ^2.1.6
+  shared_preferences: ^2.5.5
+  device_info_plus: ^13.2.0
+  http: ^1.6.0
+  archive: ^3.6.1
+  file_picker: ^13.1.0
+  share_plus: ^13.3.0
   # Media & speech (all on-device)
-  youtubedl_android: ^0.17.1
-  ffmpeg_kit_flutter_new: ^1.6.0
-  sherpa_onnx: ^1.11.0
+  ffmpeg_kit_flutter_new: ^4.6.2
+  sherpa_onnx: ^1.13.8
+  # Video sources: direct URLs via http, YouTube via pure Dart (no native code).
+  # TikTok/Instagram downloads run through yt-dlp on the desktop app instead —
+  # the Android yt-dlp plugins are not yet compatible with AGP 9 / Gradle 9.
+  youtube_explode_dart: ^3.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

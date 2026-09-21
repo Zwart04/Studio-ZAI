@@ -43,8 +43,8 @@ Desktop memakai `piper-tts`; Android memakai model VITS yang sama via `sherpa-on
 |---|---|---|---|---|---|
 | `chatterbox-base` | EN | ~1.5GB | Desktop | MIT | Zero-shot clone, watermark PerTh otomatis |
 | `chatterbox-id-finetune` | ID | +~600MB (di atas base) | Desktop | Apache-2.0 | [grandhigh/Chatterbox-TTS-Indonesian](https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian) — checkpoint `t3_cfg.safetensors` |
-| `zipvoice-zh-en` | EN (+zh) | ~250–400MB | Android/Desktop | Apache-2.0 | Via sherpa-onnx; butuh reference audio + teksnya |
-| `chatterbox-gguf-q4` *(eksperimental)* | ID/EN | ~400–700MB | Android | MIT | [calcuis/chatterbox-gguf](https://huggingface.co/calcuis/chatterbox-gguf) + S3Gen ONNX; hanya tampil jika benchmark RTF ≤ 8 |
+| `zipvoice-zh-en` | EN (+zh) | ~250–400MB | Android/Desktop | Apache-2.0 | Via sherpa-onnx (`OfflineTtsZipVoiceModelConfig`); butuh reference audio **dan** transkripnya. Terpasang penuh di aplikasi Android |
+| `chatterbox-gguf-q4` *(eksperimental)* | ID/EN | ~400–700MB | Android | MIT | [calcuis/chatterbox-gguf](https://huggingface.co/calcuis/chatterbox-gguf) + S3Gen ONNX — **belum diimplementasikan** di aplikasi (butuh integrasi native llama.cpp); masih roadmap |
 
 ### Fallback tambahan
 

@@ -31,8 +31,8 @@ class SectionCard extends StatelessWidget {
   }
 }
 
-class Badge extends StatelessWidget {
-  const Badge(this.text, {super.key, this.tone = 'neutral'});
+class Pill extends StatelessWidget {
+  const Pill(this.text, {super.key, this.tone = 'neutral'});
 
   final String text;
   final String tone;
@@ -40,9 +40,10 @@ class Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (tone) {
-      'ok' => Tokens.success,
-      'warn' => Tokens.warn,
-      'danger' => Tokens.danger,
+      'ok' => Tokens.green,
+      'warn' => Tokens.orange,
+      'danger' => Tokens.red,
+      'info' => Tokens.accent,
       _ => Tokens.textDim,
     };
     return Container(
@@ -95,7 +96,7 @@ class EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: Tokens.space8, horizontal: Tokens.space4),
       decoration: BoxDecoration(
-        border: Border.all(color: Tokens.border),
+        border: Border.all(color: Tokens.separator),
         borderRadius: BorderRadius.circular(Tokens.radius),
       ),
       child: Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Tokens.textDim)),
@@ -157,9 +158,9 @@ class ClipTile extends StatelessWidget {
                     style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
                 const SizedBox(height: Tokens.space2),
                 Row(children: [
-                  Badge(ready ? _labels['ready'] ?? 'siap' : _labels['draft'] ?? 'draft', tone: ready ? 'ok' : 'warn'),
+                  Pill(ready ? _labels['ready'] ?? 'siap' : _labels['draft'] ?? 'draft', tone: ready ? 'ok' : 'warn'),
                   const SizedBox(width: Tokens.space2),
-                  Badge(clip.crop),
+                  Pill(clip.crop),
                 ]),
                 const SizedBox(height: Tokens.space3),
                 Wrap(spacing: Tokens.space2, children: [

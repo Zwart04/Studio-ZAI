@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
 <title>Studio ZAI</title>
 <link rel="stylesheet" href="/tokens.css" />
 <link rel="stylesheet" href="/styles.css" />
@@ -19,7 +20,10 @@
       <button data-page="settings" data-i18n="nav.settings">Pengaturan</button>
     </nav>
     <div class="nav-foot">
-      <button class="mini" id="langToggle">EN</button>
+      <div class="segmented" id="langSeg">
+        <button data-lang="id" class="active">ID</button>
+        <button data-lang="en">EN</button>
+      </div>
       <span class="hint" id="versionHint"></span>
     </div>
   </aside>
@@ -31,17 +35,13 @@
       <p class="lead" data-i18n="home.lead">Tempel link YouTube / TikTok / Instagram atau pilih berkas video lokal. Klip 9:16, subtitle otomatis, dan voiceover dibuat lokal di perangkatmu.</p>
 
       <div class="card">
+        <label for="source" data-i18n="home.source">Link atau lokasi berkas</label>
         <div class="prompt">
-          <div>
-            <label for="source" data-i18n="home.source">Link atau lokasi berkas</label>
-            <input type="text" id="source" placeholder="https://youtube.com/watch?v=…  atau  D:\video\podcast.mp4" />
-          </div>
-          <div style="align-self:end">
-            <button class="ghost" id="pickFile" data-i18n="home.pick">Pilih berkas</button>
-          </div>
+          <input type="text" id="source" placeholder="https://youtube.com/watch?v=…  ·  D:\video\podcast.mp4" />
+          <button class="ghost" id="pickFile" data-i18n="home.pick">Pilih berkas</button>
         </div>
 
-        <div class="grid-2" style="margin-top:16px">
+        <div class="grid-2" style="margin-top:20px">
           <div>
             <label for="count" data-i18n="home.count">Jumlah klip</label>
             <input type="number" id="count" value="5" min="1" max="20" />
@@ -63,16 +63,20 @@
           </div>
         </div>
 
-        <div class="row" style="margin-top:16px">
-          <label class="row" style="margin:0"><input type="checkbox" id="useTranscript" checked /> <span data-i18n="home.transcript">Transkrip otomatis (subtitle)</span></label>
-          <label class="row" style="margin:0"><input type="checkbox" id="useLlm" /> <span data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span></label>
+        <div class="stack" style="margin-top:var(--s5); gap:var(--s2)">
+          <label style="margin:0">
+            <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useTranscript" checked /> <span data-i18n="home.transcript">Transkrip otomatis (subtitle)</span></span>
+          </label>
+          <label style="margin:0">
+            <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useLlm" /> <span data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span></span>
+          </label>
         </div>
 
-        <div class="row" style="margin-top:24px">
+        <div class="row" style="margin-top:var(--s6)">
           <button class="primary" id="startBtn" data-i18n="home.start">Mulai buat klip</button>
           <button class="ghost" id="doctorBtn" data-i18n="home.doctor">Cek perangkat</button>
         </div>
-        <pre id="doctorOut" class="muted" style="display:none;white-space:pre-wrap"></pre>
+        <pre id="doctorOut" class="muted" style="display:none;margin:var(--s4) 0 0"></pre>
       </div>
 
       <h2 data-i18n="home.recent">Proyek terakhir</h2>
@@ -98,7 +102,7 @@
             <button class="ghost" id="backBtn" data-i18n="common.back">Kembali</button>
           </div>
         </div>
-        <div id="clipGrid" class="grid-clips"></div>
+        <div id="clipGrid" class="grid-clips" style="margin-top:var(--s5)"></div>
       </div>
     </section>
 
@@ -109,9 +113,8 @@
 
       <div class="card">
         <h3 data-i18n="voice.tts">Text to speech</h3>
-        <label for="ttsText" data-i18n="voice.text">Teks</label>
         <textarea id="ttsText" placeholder="Halo, ini narasi untuk konten saya…"></textarea>
-        <div class="grid-2" style="margin-top:16px">
+        <div class="grid-2" style="margin-top:var(--s4)">
           <div>
             <label for="ttsLang" data-i18n="voice.lang">Bahasa</label>
             <select id="ttsLang"><option value="id">Indonesia</option><option value="en">English</option></select>
@@ -121,14 +124,14 @@
             <select id="ttsVoice"></select>
           </div>
         </div>
-        <div class="row" style="margin-top:16px">
+        <div class="row" style="margin-top:var(--s4)">
           <button class="primary" id="ttsBtn" data-i18n="voice.generate">Buat suara</button>
         </div>
       </div>
 
       <div class="card">
         <h3 data-i18n="voice.clone">Kloning suara</h3>
-        <p class="muted" data-i18n="voice.cloneNote">Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. Output otomatis mengandung watermark PerTh.</p>
+        <p class="muted" data-i18n="voice.cloneNote" style="margin:0 0 var(--s4)">Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. Output otomatis mengandung watermark PerTh.</p>
         <div class="grid-2">
           <div>
             <label for="cloneSample" data-i18n="voice.sample">Contoh rekaman (wav/mp3, 10-30 detik)</label>
@@ -139,22 +142,24 @@
             <select id="cloneLang"><option value="id">Indonesia</option><option value="en">English</option></select>
           </div>
         </div>
-        <label for="cloneText" style="margin-top:12px" data-i18n="voice.text">Teks</label>
-        <textarea id="cloneText" placeholder="Teks yang akan diucapkan dengan suara kloningan…"></textarea>
-        <div class="row" style="margin-top:16px">
+        <div style="margin-top:var(--s4)">
+          <label for="cloneText" data-i18n="voice.text">Teks</label>
+          <textarea id="cloneText" placeholder="Teks yang akan diucapkan dengan suara kloningan…"></textarea>
+        </div>
+        <div class="row" style="margin-top:var(--s4)">
           <button class="ghost" id="pickSample" data-i18n="home.pick">Pilih berkas</button>
           <button class="primary" id="cloneBtn" data-i18n="voice.cloneRun">Kloning</button>
         </div>
-        <p class="muted" id="cloneHint"></p>
+        <p class="muted" id="cloneHint" style="margin:var(--s3) 0 0"></p>
       </div>
 
       <div class="card" id="voiceResultCard" style="display:none">
         <h3 data-i18n="voice.result">Hasil</h3>
-        <audio id="voicePlayer" controls style="width:100%"></audio>
+        <audio id="voicePlayer" controls></audio>
       </div>
     </section>
 
-    <!-- --------------------------------------------------------- models -->
+    <!-- -------------------------------------------------------- models -->
     <section id="page-models" class="page">
       <h1 data-i18n="models.title">Model</h1>
       <p class="lead" data-i18n="models.lead">Model tidak dibundel dalam aplikasi. Studio ZAI mendeteksi perangkatmu dan menyarankan model paling ringan yang cocok.</p>
@@ -165,41 +170,40 @@
     <!-- ------------------------------------------------------ settings -->
     <section id="page-settings" class="page">
       <h1 data-i18n="settings.title">Pengaturan</h1>
-      <div class="card">
-        <div class="grid-2">
-          <div>
-            <label for="setLang" data-i18n="settings.lang">Bahasa antarmuka</label>
-            <select id="setLang"><option value="id">Indonesia</option><option value="en">English</option></select>
-          </div>
-          <div>
-            <label for="setAsr" data-i18n="settings.asr">Model transkripsi default</label>
-            <select id="setAsr"></select>
-          </div>
-          <div>
-            <label for="setTts" data-i18n="settings.tts">Suara Indonesia default</label>
-            <select id="setTts"></select>
-          </div>
-          <div>
-            <label for="setClone" data-i18n="settings.clone">Model kloning default</label>
-            <select id="setClone"></select>
-          </div>
-          <div>
-            <label for="setCrop" data-i18n="settings.crop">Mode crop default</label>
-            <select id="setCrop">
-              <option value="center">Center</option>
-              <option value="blur">Blur background</option>
-            </select>
-          </div>
-          <div>
-            <label for="setCookies" data-i18n="settings.cookies">cookies.txt (opsional, untuk video privat)</label>
-            <input type="text" id="setCookies" placeholder="D:\cookies.txt" />
-          </div>
+
+      <div class="card tight">
+        <div class="row settings">
+          <span data-i18n="settings.lang">Bahasa antarmuka</span>
+          <select id="setLang" style="width:150px"><option value="id">Indonesia</option><option value="en">English</option></select>
+        </div>
+        <div class="row settings">
+          <span data-i18n="settings.asr">Model transkripsi default</span>
+          <select id="setAsr" style="width:200px"></select>
+        </div>
+        <div class="row settings">
+          <span data-i18n="settings.tts">Suara Indonesia default</span>
+          <select id="setTts" style="width:200px"></select>
+        </div>
+        <div class="row settings">
+          <span data-i18n="settings.clone">Model kloning default</span>
+          <select id="setClone" style="width:200px"></select>
+        </div>
+        <div class="row settings">
+          <span data-i18n="settings.crop">Mode crop default</span>
+          <select id="setCrop" style="width:150px">
+            <option value="center">Center</option>
+            <option value="blur">Blur background</option>
+          </select>
+        </div>
+        <div class="row settings">
+          <span data-i18n="settings.cookies">cookies.txt (opsional)</span>
+          <input type="text" id="setCookies" style="width:220px" placeholder="D:\cookies.txt" />
         </div>
       </div>
 
+      <h2 data-i18n="settings.llm">LLM lokal (opsional)</h2>
       <div class="card">
-        <h3 data-i18n="settings.llm">LLM lokal (opsional)</h3>
-        <p class="muted" data-i18n="settings.llmNote">Untuk pemilihan momen yang lebih pintar. Contoh Ollama: http://127.0.0.1:11434/v1</p>
+        <p class="muted" data-i18n="settings.llmNote" style="margin:0 0 var(--s4)">Untuk pemilihan momen yang lebih pintar. Contoh Ollama: http://127.0.0.1:11434/v1</p>
         <div class="grid-2">
           <div>
             <label for="setLlmUrl">Base URL</label>
@@ -217,9 +221,11 @@
       </div>
 
       <div class="card">
-        <label class="row" style="margin:0">
-          <input type="checkbox" id="setConsent" />
-          <span data-i18n="settings.consent">Saya hanya mengkloning suara milik saya atau yang saya punya izin.</span>
+        <label style="margin:0">
+          <span class="row" style="gap:var(--s2)">
+            <input type="checkbox" id="setConsent" />
+            <span data-i18n="settings.consent">Saya hanya mengkloning suara milik saya atau yang saya punya izin.</span>
+          </span>
         </label>
       </div>
 

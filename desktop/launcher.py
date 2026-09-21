@@ -1,6 +1,8 @@
 """Studio ZAI desktop shell: a pywebview window around the local server.
 
 Falls back to the default browser when pywebview is unavailable.
+All startup diagnostics go to <data dir>/launcher.log so problems are visible
+even though the packaged app runs without a console.
 """
 
 from __future__ import annotations
@@ -11,7 +13,34 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import webbrowser
+from datetime import datetime
+from pathlib import Path
+
+
+def data_dir() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    directory = base / "StudioZAI"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+LOG_FILE = data_dir() / "launcher.log"
+
+
+def log(message: str) -> None:
+    try:
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{stamp}] {message}\n")
+    except OSError:
+        pass
 
 
 def free_port(preferred: int = 8737) -> int:
@@ -26,7 +55,7 @@ def free_port(preferred: int = 8737) -> int:
     raise RuntimeError("tidak ada port kosong yang tersedia")
 
 
-def wait_ready(port: int, timeout: float = 20.0) -> bool:
+def wait_ready(port: int, timeout: float = 45.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -48,6 +77,19 @@ def open_folder(path: str) -> None:
         subprocess.Popen(["xdg-open", path])
 
 
+def serve(port: int) -> None:
+    """Run the FastAPI server, logging any startup failure."""
+    try:
+        log(f"server: importing (frozen={getattr(sys, 'frozen', False)})")
+        from studiozai.server import app, run as run_server
+
+        log(f"server: starting uvicorn on 127.0.0.1:{port}")
+        run_server(host="127.0.0.1", port=port)
+        log("server: uvicorn returned")
+    except Exception:  # noqa: BLE001 - diagnostics are the whole point here
+        log("server: FAILED\n" + traceback.format_exc())
+
+
 class Bridge:
     """JS API exposed to the web UI (file picker, open folder)."""
 
@@ -64,7 +106,8 @@ class Bridge:
                     "Semua berkas (*.*)",
                 ),
             )
-        except (ImportError, IndexError, AttributeError):
+        except (ImportError, IndexError, AttributeError) as exc:
+            log(f"bridge.pick_file gagal: {exc!r}")
             return ""
         if not result:
             return ""
@@ -78,21 +121,33 @@ class Bridge:
         open_folder(os.path.dirname(path))
         return True
 
+    def app_log(self, message: str) -> bool:
+        log(f"ui: {message}")
+        return True
+
 
 def main() -> int:
+    log("=== Studio ZAI launcher start ===")
     port = free_port()
-    from studiozai.server import run as run_server
+    log(f"launcher: port {port}")
 
-    threading.Thread(target=run_server, args=("127.0.0.1", port), daemon=True).start()
+    threading.Thread(target=serve, args=(port,), daemon=True).start()
     url = f"http://127.0.0.1:{port}"
-    if not wait_ready(port):
-        print("Server gagal start.", file=sys.stderr)
-        return 1
 
+    if not wait_ready(port, timeout=60.0):
+        log("launcher: server tidak siap, membuka browser sebagai fallback")
+        webbrowser.open(url)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            return 1
+
+    log("launcher: server siap")
     try:
         import webview
 
-        window = webview.create_window(
+        webview.create_window(
             "Studio ZAI",
             url,
             js_api=Bridge(),
@@ -100,16 +155,26 @@ def main() -> int:
             height=880,
             min_size=(900, 620),
         )
+        log("launcher: membuka jendela")
         webview.start()
+        log("launcher: jendela ditutup")
         return 0
     except ImportError:
-        print(f"pywebview tidak terpasang - membuka {url} di browser.")
+        log("launcher: pywebview tidak ada, memakai browser")
         webbrowser.open(url)
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
             return 0
+    except Exception:  # noqa: BLE001
+        log("launcher: webview gagal\n" + traceback.format_exc())
+        webbrowser.open(url)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            return 1
 
 
 if __name__ == "__main__":

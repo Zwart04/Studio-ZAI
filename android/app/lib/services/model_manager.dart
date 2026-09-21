@@ -150,7 +150,7 @@ class ModelManager {
     return candidates.isEmpty ? null : candidates.first;
   }
 
-  File? directoryWith(ModelInfo model, String name) {
+  Directory? directoryWith(ModelInfo model, String name) {
     final dir = Directory('${modelsDir.path}/${model.id}');
     if (!dir.existsSync()) return null;
     for (final entity in dir.listSync(recursive: true)) {

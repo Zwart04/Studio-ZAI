@@ -97,14 +97,14 @@ class ClipsScreen extends StatelessWidget {
   Future<void> _share(Clip clip) async {
     final path = clip.files['mp4'];
     if (path == null || !File(path).existsSync()) return;
-    await Share.shareXFiles([XFile(path)], text: clip.title);
+    await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: clip.title));
   }
 
   Future<void> _export(BuildContext context, Project project) async {
     try {
       await state.exportProject();
       if (context.mounted && state.lastOutput != null) {
-        await Share.shareXFiles([XFile(state.lastOutput!)]);
+        await SharePlus.instance.share(ShareParams(files: [XFile(state.lastOutput!)]));
       }
     } catch (error) {
       if (context.mounted) {

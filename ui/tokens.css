@@ -1,36 +1,62 @@
+/* Studio ZAI design tokens - Apple-ish (iOS/macOS dark) */
 :root {
-  --bg: #0b0e14;
-  --surface: #141824;
-  --surface-2: #1c2230;
-  --border: #252c3b;
-  --text: #e8eaf0;
-  --text-dim: #9aa3b5;
-  --accent: #6c5ce7;
-  --accent-press: #5a4bd1;
-  --success: #2ecc71;
-  --warn: #f1c40f;
-  --danger: #e74c3c;
+  /* surfaces */
+  --bg: #000000;
+  --bg-elevated: #0b0b0d;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --separator: rgba(255, 255, 255, 0.09);
+  --separator-strong: rgba(255, 255, 255, 0.16);
+  --fill: rgba(120, 120, 128, 0.24);
 
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-pill: 999px;
+  /* text */
+  --text: #ffffff;
+  --text-2: #ebebf5;
+  --text-dim: #8e8e93;
+  --text-dim-2: #636366;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
+  /* accents (iOS system colors, dark variants) */
+  --accent: #0a84ff;
+  --accent-press: #0071e3;
+  --accent-soft: rgba(10, 132, 255, 0.16);
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --red: #ff453a;
+  --purple: #bf5af2;
+  --teal: #40c8e0;
 
-  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --text-2xl: 28px;
+  /* radii */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
 
-  --nav-width: 220px;
-  --motion: 150ms ease-out;
+  /* spacing */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+
+  /* type (SF-like) */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+    "Segoe UI", Inter, Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  --t-caption: 12px;
+  --t-footnote: 13px;
+  --t-body: 15px;
+  --t-callout: 16px;
+  --t-title3: 20px;
+  --t-title2: 24px;
+  --t-title1: 30px;
+
+  /* layout & motion */
+  --sidebar: 240px;
+  --row-height: 48px;
+  --motion: 220ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --blur: saturate(180%) blur(20px);
 }

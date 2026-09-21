@@ -1,21 +1,27 @@
 # BUILD — Studio ZAI
 ### Cara Build & Menjalankan
 
-> **EN TL;DR** — Prereqs: Python 3.11-3.13, FFmpeg in PATH. Desktop dev: `pip install -e .[dev]` then `studiozai serve`. Windows package: PyInstaller (one-folder). Linux: PyInstaller + AppImage. Android: Flutter SDK + Android SDK, `flutter build apk`. Troubleshooting table at the end.
+> **EN TL;DR** — Prereqs: Python 3.11-3.13, FFmpeg in PATH; for Android: Flutter 3.47+, JDK 17 and Android SDK platform `android-37.0`. Desktop dev: `pip install -e .[dev]` then `studiozai serve`. Windows: PyInstaller one-folder with FFmpeg bundled. Android: `flutter build apk --release --split-per-abi` (targetSdk 37 = Android 17). Publish artifacts with `gh release create`.
 
 ---
 
-## 0. Prasyarat Umum
+## 0. Toolchain yang sudah diverifikasi
 
-| Kebutuhan | Windows | Linux | Cek |
-|---|---|---|---|
-| Python 3.11–3.13 *(disarankan)* | python.org / `winget install Python.Python.3.12` | `apt install python3 python3-venv` | `python --version` |
-| FFmpeg ≥ 6 | `winget install Gyan.FFmpeg` | `sudo apt install ffmpeg` | `ffmpeg -version` |
-| Git | `winget install Git.Git` | `apt install git` | `git --version` |
-| GitHub CLI *(untuk push)* | `winget install GitHub.cli` | `apt install gh` | `gh --version` |
-| Flutter 3.x + Android SDK *(khusus Android)* | lihat flutter.dev | idem | `flutter doctor` |
+Konfigurasi ini yang dipakai untuk membangun artefak rilis (Windows 10 x64, September 2026):
 
-> Python 3.14+: didukung **jika** semua wheel (ctranslate2, piper, dll.) tersedia. Jika ada kegagalan instalasi, pakai 3.12/3.13 lalu buat venv.
+| Kebutuhan | Versi terverifikasi | Pasang di Windows |
+|---|---|---|
+| Python (build EXE) | **3.12.10** | `winget install Python.Python.3.12` |
+| FFmpeg (dibundel ke EXE) | 8.1.1 (Gyan build) | `winget install Gyan.FFmpeg` |
+| Flutter SDK | **3.47.5 stable** | unduh `flutter_windows_3.47.5-stable.zip` dari storage.googleapis.com/flutter_infra_release |
+| JDK | **17.0.20** (Microsoft OpenJDK) | `winget install Microsoft.OpenJDK.17` |
+| Android cmdline-tools | 15859902 (`latest`) | dl.google.com/android/repository/commandlinetools-win-15859902_latest.zip |
+| Android SDK platform | **`platforms;android-37.0`** (Android 17) | `sdkmanager --sdk_root=C:\Android\Sdk "platforms;android-37.0"` |
+| Android build-tools | **37.0.0** | `sdkmanager ... "build-tools;37.0.0"` |
+| GitHub CLI | 2.91+ | `winget install GitHub.cli` |
+
+> **Catatan penamaan SDK Android:** sejak API 36/37 platform memakai **versi minor** (`android-37.0`, `android-37.1`, …). Paket `platforms;android-37` tanpa suffix **tidak ada** — selalu pakai `android-37.0`.
+> **Python 3.14** belum punya wheel lengkap untuk ctranslate2/piper → gunakan 3.12/3.13 untuk build EXE.
 
 ---
 
@@ -26,8 +32,8 @@ cd core
 python -m venv .venv
 # Windows: .venv\Scripts\activate     Linux: source .venv/bin/activate
 pip install -e ".[dev]"          # inti + test
+pip install -e ".[media,asr,tts]"  # yt-dlp, faster-whisper, Piper
 pip install -e ".[clone]"        # opsional: torch + chatterbox (~2GB)
-pip install -e ".[face]"         # opsional: mediapipe untuk face-track (uji)
 
 studiozai doctor                  # cek ffmpeg, GPU, disk, model
 studiozai serve                   # http://127.0.0.1:8737 (UI terbuka)
@@ -45,17 +51,22 @@ studiozai models list
 studiozai models download whisper-small-int8 piper-id_ID-news_tts-medium
 ```
 
-## 2. Paket Windows
+## 2. Paket Windows (EXE)
 
 ```bat
 cd desktop\packaging
 build_windows.bat
 ```
-Menghasilkan `dist\StudioZAI\StudioZAI.exe` (one-folder, tanpa model). Opsional: kompres ZIP atau buat installer dengan Inno Setup (script di folder yang sama).
+Menghasilkan **`dist\StudioZAI\StudioZAI.exe`** (one-folder). Script otomatis memakai Python 3.12 + PyInstaller.
 
-Isi build:
-- PyInstaller spec sudah termasuk `ui/`, `core/studiozai/models/registry.json`.
-- FFmpeg **tidak** dibundel (biar ringan & legal) — app mendeteksi ffmpeg di PATH; jika tidak ada, tampilkan instruksi instalasi di UI (`doctor`).
+Yang ikut dibundel:
+- `ui/` (web UI), `core/studiozai/models/registry.json`
+- `ctranslate2`, `faster_whisper`, `av`, `onnxruntime`, `tokenizers`, `piper`, `yt_dlp` (via `collect_all`)
+- **FFmpeg + FFprobe** — script mengisi `STUDIOZAI_FFMPEG_DIR` dari PATH sehingga EXE **mandiri tanpa instal ffmpeg terpisah**. Aplikasi mencari binary itu lebih dulu (`utils/ffmpeg.py: bundled_bin_dir()`), baru PATH.
+
+Model AI tetap diunduh saat dipakai (lihat MODELS.md §4), jadi folder aplikasi tetap ~400–600 MB.
+
+Distribusi: ZIP-kan `dist\StudioZAI` → `StudioZAI-1.0.0-windows-x64.zip` (lihat §5), atau buat installer dengan Inno Setup.
 
 ## 3. Paket Linux
 
@@ -65,49 +76,85 @@ chmod +x build_linux.sh && ./build_linux.sh
 ```
 Menghasilkan `dist/studio-zai.tar.gz`; jika `linuxdeploy` tersedia → `StudioZAI-x86_64.AppImage`.
 
-## 4. Android
+## 4. Android (APK, target Android 17 / API 37)
 
 ```bash
 cd android/app
 flutter pub get
-flutter doctor                      # pastikan Android toolchain OK
 flutter build apk --release --split-per-abi
-# hasil: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+# hasil (terverifikasi):
+#   app-arm64-v8a-release.apk     42.5 MB  <- untuk HP modern (Android 17)
+#   app-armeabi-v7a-release.apk   60.4 MB
+#   app-x86_64-release.apk        44.7 MB
 ```
-- APK **tidak berisi model** (diunduh dari dalam app).
-- Debug cepat ke perangkat: `flutter run --release`.
-- Jika butuh mendowngrade ABI ffmpeg-kit: edit `android/app/android/app/build.gradle` (paket `ffmpeg_kit_flutter_new`).
 
-## 5. Push ke GitHub (private)
+> **Jangan** menambahkan `ndk { abiFilters }` di `build.gradle.kts` — Flutter sudah mengaturnya dari
+> `--split-per-abi`/`--target-platform`, dan Gradle menolak keduanya sekaligus
+> (*"Conflicting configuration … cannot be present when splits abi filters are set"*).
+> APK arm64 di atas sudah **hanya** berisi `arm64-v8a`.
+
+Jika folder `android/` belum ada (clone bersih), generate dulu lalu salin override:
 
 ```powershell
+# Windows
+flutter create --platforms=android --org com.zwart04 --project-name studiozai C:\dev\wrapper\studiozai
+Copy-Item -Recurse C:\dev\wrapper\studiozai\android .\android
+Copy-Item -Recurse -Force .\android_overrides\* .\android\
+```
+> `android_overrides/` berisi `MainActivity.kt` (channel `studiozai/device` untuk RAM/disk) dan `AndroidManifest.xml` (izin internet + baca media, label "Studio ZAI").
+
+konfigurasi penting di `android/app/android/app/build.gradle.kts` (sudah di-set di repo):
+`compileSdk = 37`, **`compileSdkMinor = 0`** (wajib: platform Android 17 bernama `android-37.0`, tanpa minor AGP mencari `android-37` dan gagal), `targetSdk = 37`, `minSdk = 26`, `jniLibs.useLegacyPackaging = true` (untuk ffmpeg-kit & sherpa-onnx).
+
+- APK **tidak berisi model** (diunduh dari halaman Model) → tetap ringan.
+- Uji cepat ke HP: `flutter run --release` (HP dengan USB debugging).
+- **Signing**: rilis default memakai debug key agar bisa langsung di-*sideload*. Untuk kunci rilis sendiri:
+  `keytool -genkey -v -keystore studiozai.jks -keyalg RSA -keysize 2048 -validity 10000 -alias studiozai`
+  lalu buat `key.properties` + `signingConfigs { create("release") { … } }` dan ganti `signingConfig` di `buildTypes.release`. **Jangan commit** keystore/`key.properties`.
+
+## 5. Push kode & publikasi artefak ke GitHub
+
+```powershell
+# 1. Kode
 cd "C:\Users\Zwart\Downloads\Coding AI\Studio ZAI"
 powershell -ExecutionPolicy Bypass -File scripts\push_github.ps1
+
+# 2. Rilis + unggah EXE & APK (repo private)
+gh auth switch --user Zwart04          # pastikan akun benar
+gh release create v1.0.0 `
+  "dist\StudioZAI-1.0.0-windows-x64.zip" `
+  "android\app\build\app\outputs\flutter-apk\app-release.apk#StudioZAI-1.0.0-android-arm64.apk" `
+  --title "Studio ZAI 1.0.0" `
+  --notes "EXE Windows mandiri (ffmpeg terbundel) + APK Android 17 (API 37, arm64). Model diunduh dari dalam aplikasi."
 ```
-Script akan: `git init` → commit → cek login `gh` → `gh repo create Zwart04/Studio-ZAI --private --source . --push`.
-Jika akun aktif bukan Zwart04: `gh auth switch --user Zwart04` (script menawarkan otomatis).
 
 ---
 
 ## 6. Struktur Artefak
 
-| Platform | Artefak | Ukuran perkiraan (tanpa model) |
+| Platform | Artefak | Ukuran terverifikasi |
 |---|---|---|
-| Windows | `dist/StudioZAI/` one-folder + ZIP | 150–250MB |
-| Linux | `studio-zai.tar.gz` / AppImage | 150–250MB |
-| Android | APK arm64 (split-per-abi) | 60–120MB |
+| Windows | `StudioZAI-1.0.0-windows-x64.zip` (one-folder, ffmpeg ikut) | **213 MB** (511 MB setelah diekstrak) |
+| Linux | `studio-zai.tar.gz` / AppImage | ~200 MB (ffmpeg dari sistem) |
+| Android | `app-arm64-v8a-release.apk` | **42.5 MB** |
 
-Model tersimpan di folder data pengguna (lihat MODELS.md §4), bukan di artefak.
+Model tersimpan di folder data pengguna (MODELS.md §4), bukan di artefak.
 
 ## 7. Troubleshooting
 
 | Gejala | Penyebab & solusi |
 |---|---|
-| `ffmpeg not found` | Instal ffmpeg dan pastikan di PATH; jalankan `studiozai doctor` |
-| `pip install` gagal (ctranslate2/piper) | Kamu memakai Python versi terlalu baru → pakai 3.12/3.13 |
-| Transkrip lambat | Turunkan model ASR di halaman Model (tiny/base) atau aktifkan GPU bila ada CUDA |
-| Cloning sangat lambat di CPU | Normal (RTF bisa 1–3×). Gunakan GPU (CUDA) atau teks pendek; mode Piper tetap tersedia |
-| TikTok gagal diunduh | Coba `cookies.txt` (Pengaturan → Download) atau update yt-dlp (`pip install -U yt-dlp`) |
-| Build Android gagal di ffmpeg-kit | Ganti varian paket (`ffmpeg_kit_flutter_new` ↔ `_full`) dan `flutter clean` lalu ulangi |
-| APK tidak bisa unduh model | Izin jaringan/storage; cek koneksi & ruang kosong ≥ 2GB |
-| UI blank di desktop | Jalankan `studiozai serve` lalu buka manual `http://127.0.0.1:8737` |
+| PyInstaller: `script '…launcher.py' not found` | Spec dipindah dari struktur repo → spec kini mencari root otomatis (folder yang punya `core/` dan `ui/`) |
+| `Failed to find package 'platforms;android-37'` | Nama paket benar: **`platforms;android-37.0`** (versi minor) |
+| `Failed to find target with hash string 'android-37'` | Set `compileSdkMinor = 0` di `build.gradle.kts` (platform Android 17 = `android-37.0`) |
+| Gradle: `Android SDK file not found: adb` | `sdkmanager ... "platform-tools"` belum jalan |
+| APK gagal di plugin yt-dlp Android | Plugin `flutter_yt_dlp` belum kompatibel dengan AGP 9/Gradle 9 → di repo ini sudah dilepas; TikTok/IG diunduh dari desktop |
+| PyInstaller EXE: server tidak listen | Lihat `%LOCALAPPDATA%\StudioZAI\launcher.log` (launcher menulis traceback ke sana) |
+| Gradle lambat pertama kali | Normal: AGP 9.1 + Kotlin 2.4 + dependensi plugin diunduh sekali |
+| `ffmpeg not found` (mode dev) | Instal ffmpeg; EXE hasil build sudah membawa ffmpeg sendiri |
+| `pip install` gagal (ctranslate2/piper) | Python terlalu baru → pakai 3.12/3.13 |
+| Transkrip lambat | Turunkan model ASR di halaman Model (tiny/base) atau pakai GPU (CUDA) |
+| Cloning desktop lambat di CPU | Normal (RTF 1–3×). Pakai GPU, teks pendek, atau Piper (tanpa cloning) |
+| TikTok gagal diunduh (desktop) | Isi `cookies.txt` (Pengaturan) atau `pip install -U yt-dlp` |
+| Halaman Model: unduhan 404 | Model dipindah di upstream → perbarui URL di `core/studiozai/models/registry.json` & `android/app/lib/services/model_registry.dart` |
+| UI blank di desktop | Jalankan `studiozai serve` lalu buka `http://127.0.0.1:8737` |

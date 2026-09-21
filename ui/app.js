@@ -83,7 +83,9 @@ function applyI18n() {
     el.textContent = t(el.dataset.i18n);
   });
   document.documentElement.lang = state.lang;
-  $("#langToggle").textContent = state.lang === "id" ? "EN" : "ID";
+  $$("#langSeg button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.lang === state.lang);
+  });
 }
 
 async function api(path, options = {}) {
@@ -268,17 +270,17 @@ async function renderProjects() {
       list.innerHTML = `<div class="empty">${t("projects.empty")}</div>`;
       return;
     }
-    list.innerHTML = projects.map((project) => `
-      <div class="card spread">
-        <div>
-          <h3>${project.title}</h3>
-          <span class="muted">${project.clips} klip · ${project.duration_label || ""} · ${new Date(project.updated * 1000).toLocaleString()}</span>
+    list.innerHTML = `<div class="card tight">${projects.map((project) => `
+      <div class="row settings">
+        <div style="display:grid;gap:2px;min-width:0">
+          <span style="font-weight:600">${project.title}</span>
+          <span class="muted">${project.clips} klip · ${project.duration_label || ""} · ${new Date(project.updated * 1000).toLocaleDateString()}</span>
         </div>
-        <div class="row">
-          <button class="ghost" data-open="${project.id}">${t("common.edit")}</button>
-          <button class="danger" data-delete="${project.id}">${t("common.delete")}</button>
+        <div class="row" style="gap:var(--s2)">
+          <button class="mini" data-open="${project.id}">${t("common.edit")}</button>
+          <button class="mini" data-delete="${project.id}">${t("common.delete")}</button>
         </div>
-      </div>`).join("");
+      </div>`).join("")}</div>`;
     list.querySelectorAll("[data-open]").forEach((node) => node.addEventListener("click", () => openProject(node.dataset.open)));
     list.querySelectorAll("[data-delete]").forEach((node) =>
       node.addEventListener("click", async () => {
@@ -515,20 +517,33 @@ async function renderModels() {
     const hardware = data.hardware;
     const tier = data.tier;
     $("#hardwareCard").innerHTML = `
-      <h3>${hardware.os} / ${hardware.arch}</h3>
-      <p class="muted">RAM ${hardware.ram_gb ?? "?"} GB · CPU ${hardware.cpu_count} core · GPU ${(hardware.gpu && hardware.gpu.name) || "-"} · Disk ${hardware.disk_free_gb} GB</p>
-      <p class="muted">Rekomendasi: <span class="badge ok">${tier.asr}</span> <span class="badge ok">${tier.tts}</span> ${tier.clone ? `<span class="badge ok">${tier.clone}</span>` : ""}</p>
-      <p class="muted">${tier.reasons.join(" · ")}</p>`;
+      <div class="row settings" style="border-bottom:1px solid var(--separator)">
+        <span style="font-weight:600">${hardware.os} / ${hardware.arch}</span>
+        <span class="muted">Python ${hardware.python}</span>
+      </div>
+      <div class="row settings">
+        <span class="muted">RAM ${hardware.ram_gb ?? "?"} GB · CPU ${hardware.cpu_count} core · GPU ${(hardware.gpu && hardware.gpu.name) || "—"} · Disk ${hardware.disk_free_gb} GB</span>
+      </div>
+      <div class="row settings" style="border-bottom:0">
+        <span class="muted">${tier.reasons.join(" · ")}</span>
+      </div>
+      <div class="row" style="gap:var(--s2);margin-top:var(--s3)">
+        <span class="badge info">${tier.asr}</span>
+        <span class="badge info">${tier.tts}</span>
+        ${tier.clone ? `<span class="badge info">${tier.clone}</span>` : ""}
+      </div>`;
     $("#modelList").innerHTML = data.models.map((model) => `
-      <div class="card spread">
-        <div>
-          <h3>${model.id}</h3>
-          <span class="muted">${model.kind} · ${model.size_mb ?? "?"} MB · ${model.license} · ${model.note || ""}</span>
-        </div>
-        <div class="row">
-          ${model.installed ? `<span class="badge ok">${t("models.installed")}</span>` : (model.requires_pip ? `<span class="badge">${t("models.pip")}</span>` : "")}
-          ${model.installed ? `<button class="danger" data-remove-model="${model.id}">${t("models.remove")}</button>`
+      <div class="card tight">
+        <div class="row settings">
+          <div style="display:grid;gap:2px;min-width:0">
+            <span style="font-weight:600">${model.id}</span>
+            <span class="muted">${model.kind} · ${model.size_mb ?? "?"} MB · ${model.license}${model.note ? " · " + model.note : ""}</span>
+          </div>
+          <div class="row" style="gap:var(--s2)">
+            ${model.installed ? `<span class="badge ok">${t("models.installed")}</span>` : (model.requires_pip ? `<span class="badge">${t("models.pip")}</span>` : "")}
+            ${model.installed ? `<button class="mini" data-remove-model="${model.id}">${t("models.remove")}</button>`
     : `<button class="primary" data-download="${model.id}">${t("models.download")}</button>`}
+          </div>
         </div>
       </div>`).join("");
     $$("[data-download]").forEach((node) =>
@@ -646,8 +661,10 @@ async function boot() {
     const button = event.target.closest("button[data-page]");
     if (button) setPage(button.dataset.page);
   });
-  $("#langToggle").addEventListener("click", () => {
-    state.lang = state.lang === "id" ? "en" : "id";
+  $("#langSeg").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-lang]");
+    if (!button) return;
+    state.lang = button.dataset.lang;
     localStorage.setItem("studiozai.lang", state.lang);
     applyI18n();
     refreshAll();

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,24 +21,51 @@ class FFmpegNotFound(RuntimeError):
     pass
 
 
+def bundled_bin_dir() -> Path | None:
+    """Directory holding the ffmpeg/ffprobe shipped with the packaged app."""
+    env = os.environ.get("STUDIOZAI_BIN")
+    if env and Path(env).is_dir():
+        return Path(env)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        for candidate in (Path(meipass) / "bin", Path(meipass)):
+            if (candidate / "ffmpeg.exe").exists() or (candidate / "ffmpeg").exists():
+                return candidate
+    exe_dir = Path(sys.executable).resolve().parent
+    for candidate in (exe_dir / "bin", exe_dir):
+        if (candidate / "ffmpeg.exe").exists() or (candidate / "ffmpeg").exists():
+            return candidate
+    return None
+
+
+def _find_tool(name: str) -> str | None:
+    bundled = bundled_bin_dir()
+    if bundled:
+        for candidate in (bundled / f"{name}.exe", bundled / name):
+            if candidate.exists():
+                return str(candidate)
+    return shutil.which(name)
+
+
 def ffmpeg_path() -> str:
-    path = shutil.which("ffmpeg")
+    path = _find_tool("ffmpeg")
     if not path:
         raise FFmpegNotFound(
-            "ffmpeg tidak ditemukan di PATH. Instal ffmpeg lalu jalankan 'studiozai doctor'."
+            "ffmpeg tidak ditemukan (versi bundel maupun di PATH). "
+            "Instal ffmpeg lalu jalankan 'studiozai doctor'."
         )
     return path
 
 
 def ffprobe_path() -> str:
-    path = shutil.which("ffprobe")
+    path = _find_tool("ffprobe")
     if not path:
-        raise FFmpegNotFound("ffprobe tidak ditemukan di PATH (biasanya satu paket dengan ffmpeg).")
+        raise FFmpegNotFound("ffprobe tidak ditemukan (biasanya satu paket dengan ffmpeg).")
     return path
 
 
 def ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+    return _find_tool("ffmpeg") is not None and _find_tool("ffprobe") is not None
 
 
 def detect_h264_encoder() -> str:

@@ -20,20 +20,24 @@ class VoiceScreen extends StatefulWidget {
 class _VoiceScreenState extends State<VoiceScreen> {
   final _text = TextEditingController();
   final _sample = TextEditingController();
+  final _sampleText = TextEditingController();
   String _modelId = '';
   String _language = 'id';
   String? _lastFile;
+  bool _cloning = false;
 
   @override
   void dispose() {
     _text.dispose();
     _sample.dispose();
+    _sampleText.dispose();
     super.dispose();
   }
 
   Future<void> _pickSample() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    final path = result?.files.single.path;
+    final files = await FilePicker.pickFiles(type: FileType.audio);
+    if (files.isEmpty) return;
+    final path = files.first.path;
     if (path != null) setState(() => _sample.text = path);
   }
 
@@ -115,7 +119,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   const SizedBox(width: Tokens.space2),
                   Expanded(child: Text(File(_lastFile!).uri.pathSegments.last, style: const TextStyle(fontSize: 12))),
                   TextButton(
-                    onPressed: () => Share.shareXFiles([XFile(_lastFile!)]),
+                    onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(_lastFile!)])),
                     child: Text(state.translate('clips.share')),
                   ),
                 ]),
@@ -130,18 +134,29 @@ class _VoiceScreenState extends State<VoiceScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Di Android, kloning suara masih tahap eksperimental: model ZipVoice (EN) butuh '
-                'verifikasi performa di perangkat, dan Chatterbox (ID/EN) disarankan di desktop. '
-                'Detail: docs/MODELS.md.',
+                'Kloning memakai ZipVoice (Bahasa Inggris) sepenuhnya di HP. Siapkan rekaman bersih '
+                '10-30 detik dalam format WAV/MP3 dan tuliskan teks yang diucapkan pada rekaman itu — '
+                'ZipVoice mencocokkan keduanya untuk meniru timbre suaramu.',
                 style: TextStyle(color: Tokens.textDim, fontSize: 12),
               ),
               const SizedBox(height: Tokens.space3),
-              TextField(controller: _sample, decoration: InputDecoration(labelText: state.translate('voice.sample'))),
+              TextField(
+                controller: _sample,
+                decoration: InputDecoration(labelText: state.translate('voice.sample')),
+              ),
               const SizedBox(height: Tokens.space2),
               OutlinedButton.icon(
                 onPressed: _pickSample,
                 icon: const Icon(Icons.audiotrack, size: 18),
                 label: Text(state.translate('home.pick')),
+              ),
+              const SizedBox(height: Tokens.space2),
+              TextField(
+                controller: _sampleText,
+                decoration: const InputDecoration(
+                  labelText: 'Transkrip rekaman contoh',
+                  hintText: 'teks yang diucapkan di rekaman contoh',
+                ),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -154,19 +169,37 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     ? null
                     : () async {
                         try {
-                          await state.speech.cloneWithZipVoice(
+                          setState(() => _cloning = true);
+                          final file = await state.speech.cloneWithZipVoice(
                             text: _text.text,
                             referenceWav: _sample.text,
-                            referenceText: '',
-                            outputPath: '${state.dataDir.path}/voices/clone.wav',
+                            referenceText: _sampleText.text,
+                            outputPath: '${state.dataDir.path}/voices/clone-'
+                                '${DateTime.now().millisecondsSinceEpoch}.wav',
                           );
+                          if (mounted) {
+                            setState(() {
+                              _cloning = false;
+                              _lastFile = file.path;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(state.translate('common.done'))),
+                            );
+                          }
                         } catch (error) {
                           if (mounted) {
+                            setState(() => _cloning = false);
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
                           }
                         }
                       },
-                child: Text(state.translate('voice.clone')),
+                child: _cloning
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(state.translate('voice.clone')),
               ),
             ],
           ),

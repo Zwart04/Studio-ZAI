@@ -36,7 +36,7 @@ class ModelsScreen extends StatelessWidget {
                     Wrap(
                       spacing: Tokens.space2,
                       runSpacing: Tokens.space2,
-                      children: device.recommendations().map((r) => Badge(r)).toList(),
+                      children: device.recommendations().map((r) => Pill(r)).toList(),
                     ),
                   ],
                 ),
@@ -72,7 +72,7 @@ class ModelsScreen extends StatelessWidget {
                 Expanded(
                   child: Text(model.id, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
-                if (model.experimental) const Badge('eksperimental', tone: 'warn'),
+                if (model.experimental) const Pill('eksperimental', tone: 'warn'),
               ],
             ),
             const SizedBox(height: Tokens.space1),
@@ -84,7 +84,7 @@ class ModelsScreen extends StatelessWidget {
             Row(
               children: [
                 if (model.installed)
-                  const Badge('terpasang', tone: 'ok')
+                  const Pill('terpasang', tone: 'ok')
                 else
                   FilledButton(
                     onPressed: busy

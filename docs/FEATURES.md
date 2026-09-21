@@ -33,7 +33,7 @@
 | ID | Fitur | Catatan | Status |
 |---|---|---|---|
 | F-17 | **Voice cloning desktop** (Chatterbox): ID (fine-tune) & EN, sampel 10-30 dtk | Auto-detect CUDA; peringatan RTF di CPU | ✅ kode, 🟡 uji |
-| F-18 | **Voice cloning Android EN** (ZipVoice via sherpa-onnx) | Butuh reference audio + teksnya | ✅ kode |
+| F-18 | **Voice cloning Android (ZipVoice, EN)** via `OfflineTtsZipVoiceModelConfig` — butuh rekaman contoh + transkripnya | Jalan on-device; ID tetap di desktop | ✅ kode, 🟡 uji HP |
 | F-19 | **Highlight dengan LLM lokal opsional** (Ollama/LM Studio/OpenRouter, kirim transkrip saja) | Mati default; UI input base URL + model | ✅ |
 | F-20 | **Face-track crop** (mediapipe, extra opsional desktop) | Kunci ke `object` di FFmpeg | 🔵 |
 | F-21 | **Hook title overlay** (teks pembuka 2 dtk) | Preset + edit manual | ✅ |
@@ -44,7 +44,7 @@
 
 | ID | Fitur | Catatan | Status |
 |---|---|---|---|
-| F-24 | **Chatterbox Q4 di Android** (ID/EN) | Auto-benchmark; jika RTF > 8 → tidak ditampilkan | ✅ kode, 🔵 uji HP nyata |
+| F-24 | **Chatterbox Q4 di Android** (ID/EN) | Belum diimplementasikan: perlu integrasi native llama.cpp + S3Gen ONNX. Untuk kloning ID di HP belum tersedia | 🔵 |
 | F-25 | **Voice Pack**: fine-tune VITS kecil di desktop dari sampel user → sync ke Android | Inference super ringan semua platform | 🔵 |
 | F-26 | **Batch & folder watch** | Antrean multi-video | 🔵 |
 | F-27 | **Publish langsung** ke TikTok/YouTube | Butuh API pihak ketiga (Upload-Post dsb.) | 🔵 |

@@ -460,4 +460,14 @@ mount_ui()
 def run(host: str = "127.0.0.1", port: int = 8737) -> None:
     import uvicorn
 
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    # In a windowed build (PyInstaller console=False) sys.stdout/sys.stderr are
+    # None, which makes uvicorn's default logging config crash on isatty().
+    # Skipping it keeps the server usable from a GUI-only executable.
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        log_config=None,
+        log_level=None,
+        access_log=False,
+    )

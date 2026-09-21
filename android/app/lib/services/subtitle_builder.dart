@@ -1,4 +1,5 @@
-/// Subtitle builders: SRT and ASS (burned-in), ported from core/studiozai/pipeline/subtitle.py.
+// Subtitle builders: SRT and ASS (burned-in), ported from
+// core/studiozai/pipeline/subtitle.py.
 
 class Caption {
   Caption(this.start, this.end, this.text, [this.words = const []]);

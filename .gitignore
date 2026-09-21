@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.venv-build/
 .pytest_cache/
 .mypy_cache/
 dist/
@@ -24,10 +25,13 @@ android/app/.dart_tool/
 android/app/.flutter-plugins
 android/app/.flutter-plugins-dependencies
 android/app/build/
-android/app/.gradle/
 android/app/android/.gradle/
+android/app/android/local.properties
+android/app/android/app/build/
+**/*.apk
+**/*.aab
 **/*.keystore
-**/local.properties
+**/key.properties
 
 # OS / editors
 .DS_Store

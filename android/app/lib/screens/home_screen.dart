@@ -28,8 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
-    final path = result?.files.single.path;
+    final files = await FilePicker.pickFiles(type: FileType.video);
+    if (files.isEmpty) return;
+    final path = files.first.path;
     if (path != null) {
       setState(() => _sourceController.text = path);
     }
@@ -151,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Wrap(
                       spacing: Tokens.space2,
                       runSpacing: Tokens.space2,
-                      children: device.recommendations().map((r) => Badge(r)).toList(),
+                      children: device.recommendations().map((r) => Pill(r)).toList(),
                     ),
                   ],
                 ),
@@ -173,11 +174,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               )),
-        if (state.ytDlpReady)
-          const Padding(
-            padding: EdgeInsets.only(top: Tokens.space3),
-            child: Text('yt-dlp siap', style: TextStyle(color: Tokens.textDim, fontSize: 12)),
-          ),
       ],
     );
   }

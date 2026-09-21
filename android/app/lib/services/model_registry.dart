@@ -5,7 +5,7 @@ import '../models.dart';
 /// All entries are downloaded on demand from official release assets
 /// (k2-fsa/sherpa-onnx for speech models, HuggingFace for Piper voices).
 class ModelRegistry {
-  static const whisperTiny = ModelInfo(
+  static final whisperTiny = ModelInfo(
     id: 'whisper-tiny',
     kind: 'asr',
     langs: ['id', 'en'],
@@ -16,7 +16,7 @@ class ModelRegistry {
     tier: 0,
   );
 
-  static const whisperBase = ModelInfo(
+  static final whisperBase = ModelInfo(
     id: 'whisper-base',
     kind: 'asr',
     langs: ['id', 'en'],
@@ -27,7 +27,7 @@ class ModelRegistry {
     tier: 1,
   );
 
-  static const piperId = ModelInfo(
+  static final piperId = ModelInfo(
     id: 'piper-id_ID-news_tts-medium',
     kind: 'tts',
     langs: ['id'],
@@ -38,7 +38,7 @@ class ModelRegistry {
     tier: 0,
   );
 
-  static const piperEn = ModelInfo(
+  static final piperEn = ModelInfo(
     id: 'piper-en_US-lessac-medium',
     kind: 'tts',
     langs: ['en'],
@@ -49,7 +49,7 @@ class ModelRegistry {
     tier: 0,
   );
 
-  static const zipVoice = ModelInfo(
+  static final zipVoice = ModelInfo(
     id: 'zipvoice-zh-en',
     kind: 'clone',
     langs: ['en'],
@@ -60,7 +60,7 @@ class ModelRegistry {
     tier: 1,
   );
 
-  static const chatterboxQ4 = ModelInfo(
+  static final chatterboxQ4 = ModelInfo(
     id: 'chatterbox-gguf-q4',
     kind: 'clone',
     langs: ['id', 'en'],
@@ -73,7 +73,7 @@ class ModelRegistry {
     experimental: true,
   );
 
-  static const vad = ModelInfo(
+  static final vad = ModelInfo(
     id: 'silero-vad',
     kind: 'asr',
     langs: ['multi'],
@@ -85,7 +85,7 @@ class ModelRegistry {
     tier: 0,
   );
 
-  static const all = <ModelInfo>[
+  static final all = <ModelInfo>[
     whisperTiny,
     whisperBase,
     piperId,
