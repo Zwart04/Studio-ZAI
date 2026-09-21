@@ -1,0 +1,76 @@
+import pytest
+
+from studiozai import models
+from studiozai.pipeline import crop
+
+
+def test_registry_integrity():
+    registry = models.manager.load_registry()
+    assert registry
+    ids = [m["id"] for m in registry]
+    assert len(ids) == len(set(ids))
+    for model in registry:
+        assert {"id", "kind", "size_mb", "license", "download"} <= set(model)
+        assert model["kind"] in {"asr", "tts", "clone"}
+
+
+def test_get_model_unknown():
+    with pytest.raises(KeyError):
+        models.manager.get_model("tidak-ada")
+
+
+def test_resolve_tier_android_low_ram():
+    tier = models.manager.resolve_tier({"android": True, "ram_gb": 4.0}, "id")
+    assert tier["asr"] == "whisper-tiny-int8"
+    assert tier["clone"] is None
+    assert tier["tts"].startswith("piper-id")
+
+
+def test_resolve_tier_android_capable():
+    tier = models.manager.resolve_tier({"android": True, "ram_gb": 8.0}, "en")
+    assert tier["asr"] == "whisper-base-int8"
+    assert tier["clone"] == "zipvoice-zh-en"
+    assert tier["tts"].startswith("piper-en")
+
+
+def test_resolve_tier_desktop():
+    desktop = models.manager.resolve_tier({"android": False, "ram_gb": 16.0, "gpu": {"name": "RTX 4060", "vram_gb": 8}}, "id")
+    assert desktop["asr"] == "whisper-small-int8"
+    assert desktop["clone"] == "chatterbox-base"
+    weak = models.manager.resolve_tier({"android": False, "ram_gb": 4.0}, "id")
+    assert weak["asr"] == "whisper-base-int8"
+
+
+def test_status_and_kinds():
+    rows = models.manager.status()
+    assert len(rows) == len(models.manager.load_registry())
+    assert models.manager.models_by_kind("tts")
+    assert models.manager.models_by_kind("clone")
+
+
+def test_crop_target_size_is_even_and_vertical():
+    width, height = crop.target_size(1920, 1080)
+    assert width % 2 == 0 and height % 2 == 0
+    assert height > width
+    assert abs(width / height - 9 / 16) < 0.02
+
+
+def test_crop_center_chain_stays_inside_source():
+    chain = crop.center_crop_chain(1920, 1080, 1080, 1920)
+    assert chain.startswith("crop=")
+    parts = chain.split(",")[0].replace("crop=", "").split(":")
+    crop_w, crop_h, x, y = (int(p) for p in parts)
+    assert crop_w <= 1920 and crop_h <= 1080
+    assert x >= 0 and y >= 0
+
+
+def test_crop_blur_graph_uses_overlay():
+    plan = crop.plan("blur", 1920, 1080)
+    assert plan.is_complex
+    assert "overlay=" in plan.complex_graph
+    assert "gblur" in plan.complex_graph
+
+
+def test_crop_none_plan():
+    plan = crop.plan("none", 1920, 1080)
+    assert plan.simple_chain and plan.simple_chain.startswith("scale=")

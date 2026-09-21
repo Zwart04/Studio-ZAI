@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+
+# App data / outputs
+output/
+projects/
+models/
+*.log
+
+# Samples (large media, keep folder)
+samples/*
+!samples/.gitkeep
+
+# Flutter / Android
+android/app/.dart_tool/
+android/app/.flutter-plugins
+android/app/.flutter-plugins-dependencies
+android/app/build/
+android/app/.gradle/
+android/app/android/.gradle/
+**/*.keystore
+**/local.properties
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,267 @@
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import '../models.dart';
+import 'media_tools.dart';
+import 'model_manager.dart';
+import 'speech.dart';
+import 'subtitle_builder.dart';
+
+class ClipCandidate {
+  ClipCandidate(this.start, this.end, this.score, this.reason);
+
+  final double start;
+  final double end;
+  final double score;
+  final String reason;
+
+  double get duration => end - start;
+}
+
+/// Auto-clip pipeline for Android: audio → transcript → scoring → render.
+class Pipeline {
+  Pipeline({required this.models, required this.speech, required this.projectDir});
+
+  final ModelManager models;
+  final SpeechService speech;
+  final Directory projectDir;
+
+  static const hopSeconds = 0.5;
+  static const weightLoudness = 0.55;
+  static const weightDensity = 0.35;
+  static const weightSilence = 0.10;
+
+  Directory get workDir {
+    final dir = Directory('${projectDir.path}/work');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  Directory clipDir(int index) {
+    final dir = Directory('${projectDir.path}/clips/$index');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  // ------------------------------------------------------------------ audio analysis
+
+  static List<double> rmsEnvelope(Float32List samples, int sampleRate) {
+    final hop = (sampleRate * hopSeconds).round();
+    if (samples.isEmpty || hop <= 0) return const [];
+    final frames = samples.length ~/ hop;
+    final rms = List<double>.filled(frames, 0);
+    for (var frame = 0; frame < frames; frame++) {
+      var sum = 0.0;
+      final offset = frame * hop;
+      for (var i = 0; i < hop; i++) {
+        final value = samples[offset + i];
+        sum += value * value;
+      }
+      rms[frame] = math.sqrt(sum / hop + 1e-12);
+    }
+    return rms;
+  }
+
+  /// [start, end] pairs of silence longer than [minSilence] seconds.
+  static List<List<double>> silenceIntervals(
+    Float32List samples,
+    int sampleRate, {
+    double thresholdDb = -38,
+    double minSilence = 0.4,
+  }) {
+    final rms = rmsEnvelope(samples, sampleRate);
+    if (rms.isEmpty) return const [];
+    final peak = rms.reduce(math.max);
+    final intervals = <List<double>>[];
+    double? start;
+    for (var i = 0; i < rms.length; i++) {
+      final db = 20 * (math.log(math.max(rms[i], 1e-9)) / math.ln10) - 20 * (math.log(math.max(peak, 1e-9)) / math.ln10);
+      final silent = db < thresholdDb;
+      if (silent && start == null) {
+        start = i * hopSeconds;
+      } else if (!silent && start != null) {
+        if (i * hopSeconds - start >= minSilence) intervals.add([start, i * hopSeconds]);
+        start = null;
+      }
+    }
+    if (start != null && rms.length * hopSeconds - start >= minSilence) {
+      intervals.add([start, rms.length * hopSeconds]);
+    }
+    return intervals;
+  }
+
+  static double _overlap(List<List<double>> intervals, double start, double end) {
+    var total = 0.0;
+    for (final interval in intervals) {
+      total += math.max(0.0, math.min(interval[1], end) - math.max(interval[0], start));
+    }
+    return total;
+  }
+
+  /// Pick top-N non-overlapping clips using loudness, speech density and silence.
+  static List<ClipCandidate> pickClips({
+    required Float32List samples,
+    required int sampleRate,
+    required double duration,
+    List<TranscriptSegment> segments = const [],
+    int count = 5,
+    double minLength = 15,
+    double maxLength = 60,
+  }) {
+    final windows = <List<double>>[];
+    if (segments.isNotEmpty) {
+      var currentStart = segments.first.start;
+      var currentEnd = segments.first.end;
+      for (final segment in segments.skip(1)) {
+        if (segment.end - currentStart > maxLength) {
+          windows.add([currentStart, currentEnd]);
+          currentStart = segment.start;
+          currentEnd = segment.end;
+        } else {
+          currentEnd = segment.end;
+          if (currentEnd - currentStart >= minLength) {
+            windows.add([currentStart, currentEnd]);
+            currentStart = segment.end;
+            currentEnd = segment.end;
+          }
+        }
+      }
+      if (currentEnd - currentStart > 1) windows.add([currentStart, currentEnd]);
+    }
+    if (windows.isEmpty) {
+      final length = math.min(maxLength, math.max(minLength, duration));
+      final step = math.max(minLength, length / 2);
+      var start = 0.0;
+      while (start + length <= duration + 1e-6) {
+        windows.add([start, start + length]);
+        start += step;
+      }
+      if (windows.isEmpty) windows.add([0, duration]);
+    }
+
+    final rms = rmsEnvelope(samples, sampleRate);
+    final peak = rms.isEmpty ? 1.0 : rms.reduce(math.max);
+    final silences = silenceIntervals(samples, sampleRate);
+    final densities = windows.map((w) {
+      final words = segments
+          .where((s) => s.end > w[0] && s.start < w[1])
+          .fold<int>(0, (sum, s) => sum + s.text.split(' ').length);
+      return words / math.max(1.0, w[1] - w[0]);
+    }).toList();
+    final peakDensity = densities.isEmpty ? 0.0 : densities.reduce(math.max);
+
+    final scored = <List<double>>[];
+    final reasons = <String>[];
+    for (var i = 0; i < windows.length; i++) {
+      final window = windows[i];
+      var loudness = 0.0;
+      if (rms.isNotEmpty) {
+        final first = (window[0] / hopSeconds).floor().clamp(0, rms.length - 1);
+        final last = (window[1] / hopSeconds).ceil().clamp(0, rms.length);
+        var sum = 0.0;
+        var n = 0;
+        for (var f = first; f < last; f++) {
+          sum += rms[f];
+          n++;
+        }
+        loudness = n == 0 ? 0 : (sum / n) / math.max(peak, 1e-9);
+      }
+      final density = peakDensity == 0 ? 0.0 : densities[i] / peakDensity;
+      final silenceRatio = (_overlap(silences, window[0], window[1]) / math.max(1.0, window[1] - window[0])).clamp(0.0, 1.0);
+      final score = weightLoudness * loudness + weightDensity * density + weightSilence * (1 - silenceRatio);
+      scored.add([window[0], window[1], score]);
+      reasons.add('loudness ${loudness.toStringAsFixed(2)}'
+          '${density > 0 ? ', kepadatan ${density.toStringAsFixed(2)}' : ''}'
+          '${silenceRatio > 0 ? ', sunyi ${(silenceRatio * 100).round()}%' : ''}');
+    }
+
+    final order = List.generate(scored.length, (i) => i)
+      ..sort((a, b) => scored[b][2] == scored[a][2] ? scored[a][0].compareTo(scored[b][0]) : scored[b][2].compareTo(scored[a][2]));
+
+    final chosen = <List<double>>[];
+    final chosenReasons = <String>[];
+    for (final index in order) {
+      if (chosen.length >= count) break;
+      final candidate = scored[index];
+      final overlaps = chosen.any((c) => _overlap([c], candidate[0], candidate[1]) > 1.0);
+      if (overlaps) continue;
+      chosen.add(candidate);
+      chosenReasons.add(reasons[index]);
+    }
+
+    final result = <ClipCandidate>[];
+    final pairs = List.generate(chosen.length, (i) => i)..sort((a, b) => chosen[a][0].compareTo(chosen[b][0]));
+    for (final index in pairs) {
+      final window = chosen[index];
+      result.add(ClipCandidate(window[0], window[1], window[2], chosenReasons[index]));
+    }
+    return result;
+  }
+
+  /// Captions for a clip window, with clip-relative timings.
+  static List<Caption> captionsForRange(List<TranscriptSegment> segments, double start, double end) {
+    final rows = <Map<String, dynamic>>[];
+    for (final segment in segments) {
+      if (segment.end <= start || segment.start >= end) continue;
+      rows.add({
+        'start': math.max(0.0, segment.start - start),
+        'end': math.max(0.2, segment.end - start),
+        'text': segment.text,
+      });
+    }
+    return SubtitleBuilder.captionsFromSegments(rows);
+  }
+
+  // ------------------------------------------------------------------ rendering
+
+  Future<Clip> renderClip(Project project, Clip clip, void Function(double, String) onProgress) async {
+    final directory = clipDir(clip.index);
+    final resolution = await MediaTools.resolution(project.source);
+
+    String? assPath;
+    if (clip.captions.isNotEmpty) {
+      final captions = clip.captions.map((c) => Caption.fromJson(c)).toList();
+      final ass = File('${directory.path}/subs.ass');
+      ass.writeAsStringSync(SubtitleBuilder.toAss(captions, preset: clip.subtitlePreset));
+      final srt = File('${directory.path}/subs.srt');
+      srt.writeAsStringSync(SubtitleBuilder.toSrt(captions));
+      assPath = ass.path;
+    }
+
+    final output = '${directory.path}/clip_${clip.index.toString().padLeft(3, '0')}.mp4';
+    onProgress(20, 'merender klip ${clip.index + 1}');
+    await MediaTools.renderClip(
+      input: project.source,
+      output: output,
+      start: clip.start,
+      end: clip.end,
+      crop: clip.crop,
+      width: resolution['width'] ?? 0,
+      height: resolution['height'] ?? 0,
+      subtitlesPath: assPath,
+      audioMode: clip.audioMode,
+      voicePath: clip.files['voice'],
+      originalVolume: clip.originalVolume,
+    );
+    final thumb = '${directory.path}/thumb.jpg';
+    await MediaTools.thumbnail(output, thumb, clip.duration / 2);
+    clip.files = {...clip.files, 'mp4': output, 'thumb': thumb, if (assPath != null) 'ass': assPath};
+    clip.status = 'rendered';
+    onProgress(100, 'klip ${clip.index + 1} selesai');
+    return clip;
+  }
+
+  Future<File> export(Project project, void Function(double, String) onProgress) async {
+    final inputs = project.clips
+        .where((c) => (c.files['mp4'] ?? '').isNotEmpty && File(c.files['mp4']!).existsSync())
+        .map((c) => c.files['mp4']!)
+        .toList();
+    if (inputs.isEmpty) throw Exception('Belum ada klip yang dirender.');
+    final output = '${projectDir.path}/gabungan-${project.id}.mp4';
+    onProgress(30, 'menggabungkan ${inputs.length} klip');
+    await MediaTools.concat(inputs, output);
+    onProgress(100, 'selesai');
+    return File(output);
+  }
+}

@@ -1,0 +1,32 @@
+name: studiozai
+description: Studio ZAI - auto clip, subtitle & voiceover studio (Android, on-device)
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  permission_handler: ^11.3.1
+  device_info_plus: ^10.1.2
+  http: ^1.2.2
+  archive: ^3.6.0
+  file_picker: ^8.1.2
+  share_plus: ^10.0.2
+  # Media & speech (all on-device)
+  youtubedl_android: ^0.17.1
+  ffmpeg_kit_flutter_new: ^1.6.0
+  sherpa_onnx: ^1.11.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

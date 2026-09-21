@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "studiozai"
+version = "1.0.0"
+description = "Studio ZAI - cross-platform auto clip, subtitle and voiceover studio (local-first)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Zwart04" }]
+dependencies = [
+  "numpy>=1.26",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+media = ["yt-dlp>=2025.1.1"]
+asr = ["faster-whisper>=1.1.0"]
+tts = ["piper-tts>=1.2.0"]
+clone = ["chatterbox-tts", "torch", "torchaudio", "safetensors", "huggingface_hub"]
+face = ["mediapipe", "opencv-python"]
+desktop = ["pywebview>=5.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+all = [
+  "yt-dlp>=2025.1.1",
+  "faster-whisper>=1.1.0",
+  "piper-tts>=1.2.0",
+]
+
+[project.scripts]
+studiozai = "studiozai.cli:main"
+
+[tool.setuptools]
+packages = ["studiozai", "studiozai.pipeline", "studiozai.models", "studiozai.utils"]
+
+[tool.setuptools.package-data]
+"studiozai.models" = ["registry.json"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

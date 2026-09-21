@@ -1,0 +1,36 @@
+:root {
+  --bg: #0b0e14;
+  --surface: #141824;
+  --surface-2: #1c2230;
+  --border: #252c3b;
+  --text: #e8eaf0;
+  --text-dim: #9aa3b5;
+  --accent: #6c5ce7;
+  --accent-press: #5a4bd1;
+  --success: #2ecc71;
+  --warn: #f1c40f;
+  --danger: #e74c3c;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  --nav-width: 220px;
+  --motion: 150ms ease-out;
+}
