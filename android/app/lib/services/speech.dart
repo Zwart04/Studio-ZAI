@@ -42,10 +42,17 @@ class SpeechService {
   bool get ttsReady => _tts != null;
 
   void reset() {
-    _recognizer?.free();
+    // Urutan bebas yang aman: stream dulu (tidak ada di sini), lalu
+    // recognizer/tts. Bungkus try/catch per objek: free() native bisa
+    // throw bila objek setengah jadi -> itu yang bikin "ke close sendiri".
+    try {
+      _recognizer?.free();
+    } catch (_) {}
     _recognizer = null;
     _loadedAsr = null;
-    _tts?.free();
+    try {
+      _tts?.free();
+    } catch (_) {}
     _tts = null;
     _loadedTts = null;
   }
@@ -117,19 +124,30 @@ class SpeechService {
       );
       vad.acceptWaveform(samples);
       vad.flush();
-      while (!vad.isEmpty()) {
-        final speech = vad.front();
-        final text = _decode(recognizer, speech.samples);
-        if (text.trim().isNotEmpty) {
-          segments.add(TranscriptSegment(
-            speech.start / 16000.0,
-            (speech.start + speech.samples.length) / 16000.0,
-            text.trim(),
-          ));
+      try {
+        while (!vad.isEmpty()) {
+          final speech = vad.front();
+          String text = '';
+          try {
+            text = _decode(recognizer, speech.samples);
+          } finally {
+            try {
+              vad.pop();
+            } catch (_) {}
+          }
+          if (text.trim().isNotEmpty) {
+            segments.add(TranscriptSegment(
+              speech.start / 16000.0,
+              (speech.start + speech.samples.length) / 16000.0,
+              text.trim(),
+            ));
+          }
         }
-        vad.pop();
+      } finally {
+        try {
+          vad.free();
+        } catch (_) {}
       }
-      vad.free();
     } else {
       final text = _decode(recognizer, samples);
       if (text.trim().isNotEmpty) {
@@ -141,12 +159,16 @@ class SpeechService {
 
   String _decode(sherpa.OfflineRecognizer recognizer, Float32List samples) {
     final stream = recognizer.createStream();
-    stream.acceptWaveform(samples: samples, sampleRate: 16000);
-    recognizer.decode(stream);
-    final result = recognizer.getResult(stream);
-    final text = result.text;
-    stream.free();
-    return text;
+    try {
+      stream.acceptWaveform(samples: samples, sampleRate: 16000);
+      recognizer.decode(stream);
+      final result = recognizer.getResult(stream);
+      return result.text;
+    } finally {
+      try {
+        stream.free();
+      } catch (_) {}
+    }
   }
 
   // ------------------------------------------------------------------- tts

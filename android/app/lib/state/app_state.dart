@@ -328,20 +328,61 @@ class AppState extends ChangeNotifier {
   // ------------------------------------------------------------------ models
 
   Future<void> downloadModel(ModelInfo model) async {
+    if (jobState == JobState.running) return;
     setJob(JobState.running, progress: 1, stage: 'mengunduh ${model.id}');
     try {
       await models.download(model, _report);
       await refreshModels();
+      // Verifikasi akhir: model harus benar-benar bisa dipakai, bukan sekadar file ada.
+      final ok = await _verifyModelUsable(model);
+      if (!ok) {
+        throw Exception('Model selesai diunduh tapi verifikasi gagal. Coba hapus lalu unduh ulang.');
+      }
+      await refreshModels();
       setJob(JobState.done, progress: 100, stage: 'terpasang', message: model.id);
     } catch (error) {
+      await refreshModels();
       setJob(JobState.error, stage: 'error', message: error.toString());
       rethrow;
     }
   }
 
+  /// Cek model bisa dipakai: file inti ada dan marker .installed tertulis.
+  /// (Pemeriksaan ringan agar selesai unduh = langsung siap, tanpa crash misterius.)
+  Future<bool> _verifyModelUsable(ModelInfo model) async {
+    final dirOk = models.dirFor(model.id).existsSync();
+    if (!dirOk) return false;
+    if (!models.isInstalled(model)) return false;
+    switch (model.kind) {
+      case 'asr':
+        if (model.id.startsWith('whisper-')) {
+          return models.fileWith(model, ['encoder.onnx', 'encoder.int8.onnx']) != null &&
+              models.fileWith(model, ['decoder.onnx', 'decoder.int8.onnx']) != null &&
+              models.fileWith(model, ['tokens.txt']) != null;
+        }
+        if (model.id == 'silero-vad') {
+          return models.fileWith(model, ['silero_vad.onnx']) != null;
+        }
+        return true;
+      case 'tts':
+        return models.fileWith(model, ['.onnx']) != null && models.fileWith(model, ['tokens.txt']) != null;
+      case 'clone':
+        if (model.id.startsWith('zipvoice')) {
+          return models.fileWith(model, ['encoder.onnx', 'encoder.int8.onnx']) != null &&
+              models.fileWith(model, ['decoder.onnx', 'decoder.int8.onnx']) != null;
+        }
+        return models.fileWith(model, ['.gguf', '.onnx', '.safetensors']) != null;
+      default:
+        return true;
+    }
+  }
+
   Future<void> removeModel(ModelInfo model) async {
-    await models.remove(model);
+    // Bebaskan handle native DULU (sherpa mmap mengunci file .onnx),
+    // baru hapus folder — urutan terbalik = crash "file in use".
     speech.reset();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await models.remove(model);
     await refreshModels();
   }
 

@@ -119,14 +119,26 @@ def main() -> None:
     ico_src.save(ico_dir / "studiozai.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     ico_src.resize((256, 256), Image.LANCZOS).save(ico_dir / "studiozai.png", "PNG", optimize=True)
 
-    # ---- Android mipmaps ----
+    # ---- Android mipmaps: logo BESAR di atas background putih ----
     res = root / "android" / "app" / "android" / "app" / "src" / "main" / "res"
     sizes = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
     for bucket, px in sizes.items():
         mipmap = res / f"mipmap-{bucket}"
         mipmap.mkdir(parents=True, exist_ok=True)
-        save_square(Image.open(logo_path).convert("RGBA"), mipmap / "ic_launcher.png", px, BG, 0.84)
-        save_round(Image.open(logo_path).convert("RGBA"), mipmap / "ic_launcher_round.png", px, BG, 0.80)
+        # legacy icon: full-bleed putih + logo 88% (tanpa padding raksasa)
+        canvas = Image.new("RGBA", (px, px), BG)
+        mark = fit_logo(src, px, pad_ratio=0.06)
+        canvas.alpha_composite(mark, ((px - mark.size[0]) // 2, (px - mark.size[1]) // 2))
+        canvas.convert("RGB").save(mipmap / "ic_launcher.png", "PNG", optimize=True)
+        # round icon: sama tapi di-mask lingkaran (padding sedikit lebih lega)
+        base = Image.new("RGBA", (px, px), BG)
+        mark2 = fit_logo(src, px, pad_ratio=0.10)
+        base.alpha_composite(mark2, ((px - mark2.size[0]) // 2, (px - mark2.size[1]) // 2))
+        mask = Image.new("L", (px, px), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, px, px), fill=255)
+        out = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+        out.paste(base, (0, 0), mask)
+        out.save(mipmap / "ic_launcher_round.png", "PNG", optimize=True)
 
     # adaptive icon (API 26+): background + foreground layers
     adaptive = res / "mipmap-anydpi-v26"

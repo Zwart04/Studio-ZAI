@@ -60,7 +60,6 @@ class ModelsScreen extends StatelessWidget {
   }
 
   Widget _modelCard(BuildContext context, ModelInfo model) {
-    final busy = state.jobState == JobState.running;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(Tokens.space4),
@@ -85,19 +84,24 @@ class ModelsScreen extends StatelessWidget {
               children: [
                 if (model.installed)
                   const Pill('terpasang', tone: 'ok')
+                else if (state.jobState == JobState.running)
+                  const Pill('menunggu…', tone: 'info')
                 else
                   FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () async {
-                            try {
-                              await state.downloadModel(model);
-                            } catch (error) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
-                              }
-                            }
-                          },
+                    onPressed: () async {
+                      try {
+                        await state.downloadModel(model);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('${model.id} terpasang dan siap dipakai')),
+                          );
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                        }
+                      }
+                    },
                     child: Text(state.translate('models.download')),
                   ),
                 const Spacer(),
