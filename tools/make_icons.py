@@ -7,14 +7,26 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 BG = (255, 255, 255, 255)          # clean white background for icons
 BG_DARK = (11, 11, 13, 255)        # dark variant if ever needed
 
 
+LOGO_PAD = 0.03  # padding di sekitar konten logo (fraksi sisi terpanjang) — biar icon besar & jelas
+
+
+def load_logo(logo_path: Path) -> Image.Image:
+    """Muat logo dan crop ke bounding box kontennya (buang padding transparan)."""
+    src = Image.open(logo_path).convert("RGBA")
+    bbox = src.split()[-1].getbbox()
+    if bbox:
+        src = src.crop(bbox)
+    return src
+
+
 def with_background(src: Image.Image, size: int, background=BG, scale: float = 0.82, radius_ratio: float = 0.0) -> Image.Image:
-    """Logo centered on a background, scaled down (padding) for safe zones."""
+    """Logo centered on a background, scaled up (padding tipis) for safe zones."""
     canvas = Image.new("RGBA", (size, size), background)
     if radius_ratio > 0:
         mask = Image.new("L", (size, size), 0)
@@ -27,6 +39,19 @@ def with_background(src: Image.Image, size: int, background=BG, scale: float = 0
     offset = (size - side) // 2
     canvas.alpha_composite(logo, (offset, offset))
     return canvas
+
+
+def fit_logo(src: Image.Image, box: int, pad_ratio: float = LOGO_PAD) -> Image.Image:
+    """Resize konten logo (non-square ok) agar memenuhi kotak `box` dengan padding tipis.
+
+    Tidak dipaksa square: konten 833x617 tetap 833x617 proporsional, lalu
+    ditempatkan di tengah kanvas transparan bila pemanggil butuh kanvas square.
+    """
+    longest = max(src.size)
+    target_longest = int(box * (1 - pad_ratio * 2))
+    scale = target_longest / longest
+    new_size = (max(1, int(src.size[0] * scale)), max(1, int(src.size[1] * scale)))
+    return src.resize(new_size, Image.LANCZOS)
 
 
 def save_square(src: Image.Image, path: Path, size: int, background=BG, scale: float = 0.82) -> None:
@@ -47,26 +72,48 @@ def save_round(src: Image.Image, path: Path, size: int, background=BG, scale: fl
 def main() -> None:
     logo_path = Path(sys.argv[1])
     root = Path(sys.argv[2])
-    src = Image.open(logo_path).convert("RGBA")
+    src = load_logo(logo_path)
 
     assets = root / "assets"
     assets.mkdir(parents=True, exist_ok=True)
 
     # ---- shared assets (README + web UI) ----
-    src.thumbnail((512, 512), Image.LANCZOS)
-    src.save(assets / "logo.png", "PNG", optimize=True)
+    # logo.png: konten asli yang sudah di-crop (proporsional, BUKAN square paksa)
+    logo_full = fit_logo(src, 512)
+    logo_full.save(assets / "logo.png", "PNG", optimize=True)
     with_background(Image.open(logo_path).convert("RGBA"), 512, BG, 0.86).convert("RGB").save(
         assets / "logo-icon.png", "PNG", optimize=True
     )
-    # banner: logo on white, wide, for README top
-    banner = Image.new("RGBA", (1200, 400), BG)
-    mark = Image.open(logo_path).convert("RGBA").resize((300, 300), Image.LANCZOS)
-    banner.alpha_composite(mark, (60, 50))
+    # banner: robot BESAR di kiri + teks judul di kanan (proporsional, tanpa ruang kosong raksasa)
+    bw, bh = 1200, 380
+    banner = Image.new("RGBA", (bw, bh), BG)
+    mark = fit_logo(src, int(bh * 0.92), pad_ratio=0.04)
+    mark_x = 70
+    mark_y = (bh - mark.size[1]) // 2
+    banner.alpha_composite(mark, (mark_x, mark_y))
     draw = ImageDraw.Draw(banner)
+    try:
+        font_title = ImageFont.truetype("arialbd.ttf", 118)
+        font_sub = ImageFont.truetype("arial.ttf", 46)
+    except OSError:
+        font_title = ImageFont.load_default()
+        font_sub = ImageFont.load_default()
+    tx = mark_x + mark.size[0] + 60
+    title = "Studio ZAI"
+    sub = "Auto Clip  •  Subtitle  •  Voiceover"
+    tb = draw.textbbox((0, 0), title, font=font_title)
+    sb = draw.textbbox((0, 0), sub, font=font_sub)
+    total_h = (tb[3] - tb[1]) + 18 + (sb[3] - sb[1])
+    ty = (bh - total_h) // 2
+    draw.text((tx, ty), title, fill=(20, 20, 20, 255), font=font_title)
+    draw.text((tx, ty + (tb[3] - tb[1]) + 18), sub, fill=(110, 110, 110, 255), font=font_sub)
     banner.convert("RGB").save(assets / "logo-banner.png", "PNG", optimize=True)
 
-    # ---- Windows ICO (multi-size, white background) ----
-    ico_src = with_background(Image.open(logo_path).convert("RGBA"), 512, BG, 0.86).convert("RGB")
+    # ---- Windows ICO (multi-size, white background, logo BESAR) ----
+    ico_canvas = with_background(Image.new("RGBA", (10, 10), (0, 0, 0, 0)), 512, BG, 1.0)
+    ico_mark = fit_logo(src, 512, pad_ratio=0.06)
+    ico_canvas.alpha_composite(ico_mark, ((512 - ico_mark.size[0]) // 2, (512 - ico_mark.size[1]) // 2))
+    ico_src = ico_canvas.convert("RGB")
     ico_dir = root / "desktop" / "packaging" / "icons"
     ico_dir.mkdir(parents=True, exist_ok=True)
     ico_src.save(ico_dir / "studiozai.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
@@ -113,18 +160,19 @@ def main() -> None:
         grad.line([(0, y), (432, y)], fill=(shade, shade, min(255, shade + 4), 255))
     bg.save(drawable / "ic_launcher_background.png", "PNG", optimize=True)
 
-    # foreground: logo centered in the safe zone (~66% of canvas)
+    # foreground: logo BESAR di safe zone (padding tipis, bukan 60% kecil)
     fg = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
-    mark = Image.open(logo_path).convert("RGBA").resize((int(432 * 0.60), int(432 * 0.60)), Image.LANCZOS)
-    off = (432 - mark.size[0]) // 2
-    fg.alpha_composite(mark, (off, off))
+    mark = fit_logo(src, 432, pad_ratio=0.08)
+    off_x = (432 - mark.size[0]) // 2
+    off_y = (432 - mark.size[1]) // 2
+    fg.alpha_composite(mark, (off_x, off_y))
     for bucket, px in sizes.items():
         (res / f"mipmap-{bucket}").mkdir(parents=True, exist_ok=True)
         fg.resize((px, px), Image.LANCZOS).save(res / f"mipmap-{bucket}" / "ic_launcher_foreground.png", "PNG", optimize=True)
 
     # monochrome (Android 13+ themed icon): alpha silhouette of the logo
     mono = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
-    logo = Image.open(logo_path).convert("RGBA").resize((int(432 * 0.60), int(432 * 0.60)), Image.LANCZOS)
+    logo = fit_logo(src, 432, pad_ratio=0.08)
     alpha = logo.split()[-1].point(lambda a: 255 if a > 32 else 0)
     solid = Image.new("RGBA", logo.size, (255, 255, 255, 255))
     solid.putalpha(alpha)
@@ -156,12 +204,11 @@ def main() -> None:
     # ---- web UI favicon + logo ----
     ui_assets = root / "ui" / "assets"
     ui_assets.mkdir(parents=True, exist_ok=True)
-    with_background(Image.open(logo_path).convert("RGBA"), 180, BG, 0.9).convert("RGB").save(
-        ui_assets / "icon-180.png", "PNG", optimize=True
-    )
-    Image.open(logo_path).convert("RGBA").resize((96, 96), Image.LANCZOS).save(
-        ui_assets / "logo.png", "PNG", optimize=True
-    )
+    ui_canvas = with_background(Image.new("RGBA", (10, 10), (0, 0, 0, 0)), 180, BG, 1.0)
+    ui_mark = fit_logo(src, 180, pad_ratio=0.06)
+    ui_canvas.alpha_composite(ui_mark, ((180 - ui_mark.size[0]) // 2, (180 - ui_mark.size[1]) // 2))
+    ui_canvas.convert("RGB").save(ui_assets / "icon-180.png", "PNG", optimize=True)
+    logo_full.resize((96, 54), Image.LANCZOS).save(ui_assets / "logo.png", "PNG", optimize=True)
     ico_src.resize((64, 64), Image.LANCZOS).save(ui_assets / "favicon.png", "PNG", optimize=True)
 
     print("Ikon dibuat:")

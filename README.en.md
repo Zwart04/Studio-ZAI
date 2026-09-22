@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-icon.png" alt="Studio ZAI" width="160" />
+  <img src="assets/logo-banner.png" alt="Studio ZAI — Auto Clip • Subtitle • Voiceover" width="720" />
 </p>
 
 <h1 align="center">Studio ZAI</h1>
