@@ -129,6 +129,7 @@ def ingest(
     cookies: str | None = None,
     job: Job | None = None,
     format_id: str | None = None,
+    audio_lang: str | None = None,
 ) -> Path:
     """Bring the source video into the project (download for URLs, copy for local files)."""
     project.source_dir.mkdir(parents=True, exist_ok=True)
@@ -139,6 +140,7 @@ def ingest(
             project.source_dir,
             cookies=cookies or None,
             format_id=format_id,
+            audio_lang=audio_lang,
             progress_cb=lambda p, m: _report(job, 3 + p * 0.32, "mengunduh", m),
         )
         project.source = info["path"]

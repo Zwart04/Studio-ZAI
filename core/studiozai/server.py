@@ -37,6 +37,9 @@ class ProcessRequest(BaseModel):
     quality: str = "720p"
     format_id: str | None = None
     subtitle_position: str = "bottom"  # bottom | middle | top | off
+    audio_lang: str | None = None  # pilih track audio multi-bahasa (mis. "id")
+    audio_mode: str = "original"  # original | voice (ganti) | mix (campur)
+    voice_id: str | None = None  # model suara untuk sulih suara TTS
 
 
 class LinkInfoRequest(BaseModel):
@@ -242,6 +245,22 @@ def process_project(project_id: str, payload: ProcessRequest) -> dict[str, Any]:
     return job.as_dict()
 
 
+def _narration_text(project: Any, clip: Any) -> str:
+    """Gabungkan transkrip yang jatuh di rentang klip -> teks narasi sulih suara."""
+    parts: list[str] = []
+    for segment in project.transcript or []:
+        try:
+            start = float(segment.get("start", 0.0))
+            end = float(segment.get("end", 0.0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if end > clip.start and start < clip.end:
+            text = str(segment.get("text", "")).strip()
+            if text:
+                parts.append(text)
+    return " ".join(parts).strip()
+
+
 def _process_task(project_id: str, payload: ProcessRequest):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
@@ -253,6 +272,7 @@ def _process_task(project_id: str, payload: ProcessRequest):
                 cookies=config.load_settings().get("cookies_path") or None,
                 job=job,
                 format_id=fmt,
+                audio_lang=payload.audio_lang,
             )
         service.generate_clips(
             project,
@@ -265,6 +285,19 @@ def _process_task(project_id: str, payload: ProcessRequest):
         )
         for clip in list(project.clips):
             clip.subtitle_position = payload.subtitle_position
+            if payload.audio_mode != "original":
+                # Sulih suara: buat narasi TTS dari transkrip klip lalu ganti/campur audio.
+                text = _narration_text(project, clip)
+                if text:
+                    out_path = project.clip_dir(clip.index) / "voice.wav"
+                    try:
+                        voice.synthesize(text, out_path, voice_id=payload.voice_id or None)
+                        clip.files["voice"] = str(out_path)
+                        clip.audio_mode = payload.audio_mode
+                        if payload.voice_id:
+                            clip.voice_id = payload.voice_id
+                    except Exception as exc:  # noqa: BLE001 - narasi opsional, tetap render klipnya
+                        job.report(60.0, "sulih suara gagal", str(exc)[:140])
             project.save()
             service.render_clip(project, clip, job=job)
         return {"clips": len(project.clips), "project": projects.load_project(project_id).as_dict()}

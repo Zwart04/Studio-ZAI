@@ -96,6 +96,19 @@
                 <option value="off">Tanpa subtitle — video sudah punya sendiri</option>
               </select>
             </div>
+            <div>
+              <label for="audioMode">Audio klip</label>
+              <select id="audioMode">
+                <option value="original">Asli dari video</option>
+                <option value="voice">Sulih suara TTS — ganti audio</option>
+                <option value="mix">Sulih suara TTS — campur (video pelan)</option>
+              </select>
+            </div>
+            <div id="audioTrackWrap" style="display:none">
+              <label for="audioTrack">Track audio sumber</label>
+              <select id="audioTrack"></select>
+              <p class="muted" id="audioTrackHint" style="margin:8px 0 0"></p>
+            </div>
           </div>
 
           <div class="stack" style="margin-top:var(--s4); gap:var(--s3)">

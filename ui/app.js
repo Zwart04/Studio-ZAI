@@ -300,6 +300,24 @@ function showLinkPreview(info) {
   wrap.style.display = "flex";
   qwrap.style.display = "block";
   linkInfoCache = info;
+  // Track audio multi-bahasa (video YouTube dengan dub resmi): tampilkan pilihan
+  // hanya kalau memang ada lebih dari satu track.
+  const tracks = info.audio_tracks || [];
+  const trackWrap = $("#audioTrackWrap");
+  const trackSelect = $("#audioTrack");
+  if (trackWrap && trackSelect) {
+    if (tracks.length > 1) {
+      trackSelect.innerHTML = tracks
+        .map((t) => `<option value="${t.lang || t.format_id}">${t.label || t.lang}</option>`)
+        .join("");
+      trackWrap.style.display = "block";
+      const hintEl = $("#audioTrackHint");
+      if (hintEl) hintEl.textContent = `${tracks.length} track audio terdeteksi — pilih bahasa yang dipakai klip.`;
+    } else {
+      trackWrap.style.display = "none";
+      trackSelect.innerHTML = "";
+    }
+  }
   const hint = $("#qualityHint");
   const best = (info.formats || []).filter((f) => f.has_video);
   const perSize = {};
@@ -388,6 +406,8 @@ async function startClipping() {
         use_llm: $("#useLlm").checked,
         quality: $("#quality").value || "720p",
         subtitle_position: ($("#subPos") || {}).value || "bottom",
+        audio_mode: ($("#audioMode") || {}).value || "original",
+        audio_lang: (($("#audioTrack") || {}).value || "") || null,
       }),
     });
     trackJob(job);

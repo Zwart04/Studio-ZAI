@@ -96,7 +96,37 @@ def fetch_info(
         "webpage_url": info.get("webpage_url") or url,
         "thumbnail": info.get("thumbnail") or "",
         "formats": formats,
+        "audio_tracks": audio_tracks(info),
     }
+
+
+def audio_tracks(info: dict[str, Any]) -> list[dict[str, str]]:
+    """Track audio yang bisa dipilih (video YouTube multi-bahasa / dub resmi).
+
+    yt-dlp menandai track suara terpisah dengan `language` (mis. "id", "en")
+    atau `format_note`. Dipakai UI untuk menampilkan pilihan bahasa audio.
+    """
+    tracks: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for fmt in info.get("formats") or []:
+        if fmt.get("acodec") in (None, "none"):
+            continue
+        if fmt.get("vcodec") not in (None, "none"):
+            continue  # hanya track audio murni
+        lang = str(fmt.get("language") or "").strip()
+        note = str(fmt.get("format_note") or "").strip()
+        key = lang or note
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        tracks.append(
+            {
+                "lang": lang,
+                "label": (note or lang) + (f" ({lang})" if lang and note else ""),
+                "format_id": str(fmt.get("format_id") or ""),
+            }
+        )
+    return tracks
 
 
 def pick_format_id(formats: list[dict[str, Any]], quality: str) -> str:
@@ -117,6 +147,7 @@ def download(
     max_height: int = 1080,
     progress_cb: ProgressCb | None = None,
     format_id: str | None = None,
+    audio_lang: str | None = None,
 ) -> dict[str, Any]:
     """Download a video and return {path, title, duration, webpage_url}."""
     if not is_url(url):
@@ -154,6 +185,13 @@ def download(
             progress_cb(0.0, "gagal mengunduh")
 
     fmt = format_id or f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
+    if audio_lang and not format_id:
+        # Pilih track audio bahasa tertentu bila tersedia (YouTube multi-audio),
+        # kalau tidak ada jatuh kembali ke audio terbaik.
+        fmt = (
+            f"bv*[height<={max_height}]+ba[language={audio_lang}]"
+            f"/bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
+        )
     options: dict[str, Any] = {
         "outtmpl": str(out_dir / "%(title).80s.%(ext)s"),
         "format": fmt,
