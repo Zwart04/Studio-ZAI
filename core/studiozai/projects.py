@@ -41,6 +41,9 @@ class Clip:
     captions: list[dict[str, Any]] = field(default_factory=list)
     files: dict[str, str] = field(default_factory=dict)
     status: str = "draft"
+    # Editor timeline multi-track (video/media/teks/audio). None = proyek lama,
+    # dirender lewat jalur tunggal seperti sebelumnya.
+    timeline: dict[str, Any] | None = None
 
     @property
     def duration(self) -> float:

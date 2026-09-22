@@ -1,7 +1,7 @@
 name: studiozai
 description: Studio ZAI - auto clip, subtitle & voiceover studio (Android, on-device)
 publish_to: none
-version: 1.4.2+8
+version: 1.5.0+9
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -17,6 +17,8 @@ dependencies:
   archive: ^3.6.1
   file_picker: ^13.1.0
   share_plus: ^13.3.0
+  # Putar hasil pratinjau di dalam app (editor timeline).
+  video_player: ^2.9.2
   # Media & speech (all on-device)
   ffmpeg_kit_flutter_new: ^4.6.2
   sherpa_onnx: ^1.13.8

@@ -17,9 +17,12 @@
   --text-dim-2: #636366;
 
   /* accents (iOS system colors, dark variants) */
+  /* aksen utama tetap biru; merah dipakai hemat (rekam/hapus/brand) */
   --accent: #0a84ff;
   --accent-press: #0071e3;
   --accent-soft: rgba(10, 132, 255, 0.16);
+  --accent-2: #ff453a;
+  --accent-2-soft: rgba(255, 69, 58, 0.12);
   --green: #30d158;
   --orange: #ff9f0a;
   --red: #ff453a;

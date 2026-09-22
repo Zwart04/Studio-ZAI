@@ -85,20 +85,96 @@ class ModelManager {
     final target = File('${dir.path}/$rawName');
 
     try {
+      await _fetch(model, target, onProgress);
+
+      if (model.archive) {
+        onProgress(96, 'mengekstrak ${model.id}');
+        // Ekstrak dulu ke folder sementara; kalau gagal, folder model tetap bersih.
+        try {
+          final tmpDir = Directory('${dir.path}/.extract_tmp');
+          if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+          tmpDir.createSync(recursive: true);
+          try {
+            await _extract(target, tmpDir);
+            _verifyExtracted(model, tmpDir);
+            _moveExtracted(tmpDir, dir);
+          } finally {
+            if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+          }
+        } catch (_) {
+          // Arsip terbukti tidak bisa dipakai: buang supaya percobaan berikutnya
+          // mengunduh ulang dari nol, bukan mengulang ekstraksi yang sama.
+          try {
+            if (target.existsSync()) target.deleteSync();
+          } catch (_) {}
+          rethrow;
+        }
+        target.deleteSync();
+        _pruneStrayArchives(dir, keep: null);
+      } else {
+        _verifySingleFile(model, target);
+      }
+      File('${dir.path}/.installed').writeAsStringSync(model.toJson().toString());
+      onProgress(100, 'terpasang');
+    } catch (e) {
+      // Jangan pernah menandai terpasang bila gagal. Berkas setengah unduh
+      // sengaja dipertahankan agar percobaan berikutnya bisa melanjutkan (resume).
+      try {
+        final marker = File('${dir.path}/.installed');
+        if (marker.existsSync()) marker.deleteSync();
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
+  /// Unduh (atau lanjutkan) berkas model ke [target].
+  ///
+  /// Resume memakai header `Range`. Kalau server membalas **416**, hampir selalu
+  /// karena berkas lokal sudah terunduh penuh pada percobaan sebelumnya (kasus
+  /// "unduhan selesai tapi gagal diekstrak, lalu diklik Unduh lagi"). Dulu itu
+  /// dilempar sebagai error "HTTP 416" dan pengguna terjebak mengulang selamanya;
+  /// sekarang berkas dianggap lengkap dan proses lanjut ke ekstrak.
+  Future<void> _fetch(ModelInfo model, File target, void Function(double, String) onProgress) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
       final existing = target.existsSync() ? target.lengthSync() : 0;
       final request = http.Request('GET', Uri.parse(model.url));
       if (existing > 0) request.headers['Range'] = 'bytes=$existing-';
 
       final response = await request.send().timeout(const Duration(seconds: 30));
-      if (response.statusCode >= 400) {
-        throw Exception('Unduhan gagal (HTTP ${response.statusCode}). Cek koneksi.');
+
+      if (response.statusCode == 416) {
+        await response.stream.drain<void>();
+        if (existing == 0) {
+          throw Exception('Unduhan ditolak server (HTTP 416). Coba lagi.');
+        }
+        final expectedBytes = model.sizeMb * 1024 * 1024;
+        if (expectedBytes > 0 && existing > expectedBytes * 4) {
+          // Jauh lebih besar dari perkiraan -> hampir pasti berkas rusak.
+          try {
+            target.deleteSync();
+          } catch (_) {}
+          if (attempt == 0) continue;
+        }
+        onProgress(90, 'berkas sudah lengkap');
+        return;
       }
+
+      if (response.statusCode >= 400) {
+        await response.stream.drain<void>();
+        if (existing > 0 && attempt == 0) {
+          // Berkas parsial kedaluwarsa/rusak: buang, lalu coba sekali dari nol.
+          try {
+            target.deleteSync();
+          } catch (_) {}
+          continue;
+        }
+        throw Exception('Unduhan gagal (HTTP ${response.statusCode}). Cek koneksi lalu coba lagi.');
+      }
+
       // Server menolak resume (200 padahal kita minta lanjut) -> mulai dari nol.
       final resumed = response.statusCode == 206 && existing > 0;
       final total = (response.contentLength ?? 0) + (resumed ? existing : 0);
-      final sink = target.openWrite(
-        mode: resumed ? FileMode.append : FileMode.write,
-      );
+      final sink = target.openWrite(mode: resumed ? FileMode.append : FileMode.write);
       var received = resumed ? existing : 0;
       try {
         await for (final chunk in response.stream.timeout(const Duration(seconds: 60))) {
@@ -112,39 +188,7 @@ class ModelManager {
       } finally {
         await sink.close();
       }
-
-      if (model.archive) {
-        onProgress(96, 'mengekstrak ${model.id}');
-        // Ekstrak dulu ke folder sementara; kalau gagal, folder model tetap bersih.
-        final tmpDir = Directory('${dir.path}/.extract_tmp');
-        if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
-        tmpDir.createSync(recursive: true);
-        try {
-          await _extract(target, tmpDir);
-          _verifyExtracted(model, tmpDir);
-          _moveExtracted(tmpDir, dir);
-        } finally {
-          if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
-        }
-        target.deleteSync();
-        _pruneStrayArchives(dir, keep: null);
-      } else {
-        _verifySingleFile(model, target);
-      }
-      File('${dir.path}/.installed').writeAsStringSync(model.toJson().toString());
-      onProgress(100, 'terpasang');
-    } catch (e) {
-      // Jangan pernah menandai terpasang bila gagal; bersihkan file setengah jadi.
-      try {
-        if (target.existsSync()) {
-          // Pertahankan resume HANYA bila file terlihat sehat (tumbuh normal);
-          // untuk kasus rusak/404 simpan agar retry bisa lanjut — kecuali arsip.
-          if (model.archive && target.lengthSync() < 1024) target.deleteSync();
-        }
-        final marker = File('${dir.path}/.installed');
-        if (marker.existsSync()) marker.deleteSync();
-      } catch (_) {}
-      rethrow;
+      return;
     }
   }
 
@@ -161,15 +205,49 @@ class ModelManager {
     }
   }
 
+  /// Pindahkan isi folder ekstrak ke folder model.
+  ///
+  /// Memakai `rename` (bukan `copy`) karena keduanya berada di volume yang sama:
+  /// jauh lebih cepat dan puncak pemakaian disk tidak berlipat — penting untuk
+  /// arsip besar seperti ZipVoice (350 MB) di HP.
   void _moveExtracted(Directory tmpDir, Directory dir) {
-    for (final entity in tmpDir.listSync(recursive: true)) {
-      final rel = entity.path.substring(tmpDir.path.length + 1);
+    dir.createSync(recursive: true);
+    for (final entity in tmpDir.listSync()) {
+      final name = entity.path.substring(tmpDir.path.length + 1);
+      final destination = '${dir.path}/$name';
+      try {
+        if (entity is Directory) {
+          final target = Directory(destination);
+          if (target.existsSync()) target.deleteSync(recursive: true);
+          entity.renameSync(destination);
+        } else if (entity is File) {
+          final target = File(destination);
+          if (target.existsSync()) target.deleteSync();
+          entity.renameSync(destination);
+        }
+      } on FileSystemException {
+        // Lintas volume: rename gagal, jatuh ke salin.
+        if (entity is Directory) {
+          _copyDirectory(entity, Directory(destination));
+        } else if (entity is File) {
+          final target = File(destination);
+          target.parent.createSync(recursive: true);
+          entity.copySync(destination);
+        }
+      }
+    }
+  }
+
+  void _copyDirectory(Directory source, Directory target) {
+    target.createSync(recursive: true);
+    for (final entity in source.listSync(recursive: true)) {
+      final rel = entity.path.substring(source.path.length + 1);
       if (entity is Directory) {
-        Directory('${dir.path}/$rel').createSync(recursive: true);
+        Directory('${target.path}/$rel').createSync(recursive: true);
       } else if (entity is File) {
-        final target = File('${dir.path}/$rel');
-        target.parent.createSync(recursive: true);
-        entity.copySync(target.path);
+        final file = File('${target.path}/$rel');
+        file.parent.createSync(recursive: true);
+        entity.copySync(file.path);
       }
     }
   }
@@ -223,8 +301,9 @@ class ModelManager {
   /// per blok 64 KB dan ditulis ke disk.
   Future<void> _extractTarStreaming(File archive, Directory dir) async {
     final tempTar = File('${archive.parent.path}/.tmp-${archive.uri.pathSegments.last}.tar');
-    final free = await _freeDiskMb(archive.parent);
-    final neededMb = (archive.lengthSync() * 3 / 1048576).round();
+    final free = await freeSpaceMb();
+    // Puncak pemakaian: arsip + .tar hasil dekompresi (≈3x) + hasil ekstrak (≈3x).
+    final neededMb = (archive.lengthSync() * 3 / 1048576).round() + 128;
     if (free > 0 && free < neededMb) {
       throw Exception('Ruang penyimpanan kurang untuk mengekstrak. Butuh sekitar $neededMb MB, tersedia ${free.round()} MB.');
     }
@@ -314,13 +393,21 @@ class ModelManager {
     return File('${dir.path}/$normalized');
   }
 
-  Future<double> _freeDiskMb(Directory dir) async {
+  /// Ruang bebas (MB) di penyimpanan aplikasi, ditanyakan lewat `StatFs` native.
+  ///
+  /// Versi lama memakai `FileStat.stat(dir).size`; di Android `stat` pada sebuah
+  /// FOLDER selalu bernilai 0, sehingga unduhan apa pun langsung ditolak dengan
+  /// pesan "Ruang penyimpanan kurang … tersedia 0 MB" walau penyimpanan masih
+  /// puluhan GB (bug yang dilaporkan). Kembalikan 0 hanya bila benar-benar tidak
+  /// diketahui — pemanggil memperlakukan 0 sebagai "lewati pemeriksaan".
+  Future<double> freeSpaceMb() async {
     try {
-      final stat = await FileStat.stat(dir.path);
-      return stat.size / 1048576; // tidak semua platform mengisi ini
+      final value = await _channel.invokeMethod<num>('freeDiskMb');
+      if (value != null && value > 0) return value.toDouble();
     } catch (_) {
-      return 0;
+      // plugin/channel tidak tersedia -> diperlakukan sebagai tidak diketahui
     }
+    return 0;
   }
 
   /// Arsip .zip (dipakai desktop; di Android jarang) dengan batas ukuran.

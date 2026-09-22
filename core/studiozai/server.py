@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from . import __version__, config, jobs, models, projects, service
 from .pipeline import download as download_pipeline
-from .pipeline import voice
+from .pipeline import subtitle, voice
 from .utils.text import clock
 
 app = FastAPI(title="Studio ZAI", version=__version__)
@@ -52,11 +52,19 @@ class ClipUpdate(BaseModel):
     end: float | None = None
     title: str | None = None
     crop: str | None = None
+    canvas: str | None = None
     subtitle_preset: str | None = None
+    subtitle_position: str | None = None
     audio_mode: str | None = None
     original_volume: float | None = None
     voice_volume: float | None = None
     captions: list[dict[str, Any]] | None = None
+    # Editor timeline multi-track (video/media/teks/audio).
+    timeline: dict[str, Any] | None = None
+
+
+class AssetRequest(BaseModel):
+    path: str
 
 
 class TtsRequest(BaseModel):
@@ -364,6 +372,43 @@ def _render_task(project_id: str, index: int):
         return {"files": files}
 
     return run
+
+
+@app.post("/api/projects/{project_id}/clips/{index}/preview")
+def preview_clip(project_id: str, index: int) -> dict[str, Any]:
+    """Render draf cepat klip (540x960) untuk pratinjau di editor."""
+    project = _project(project_id)
+    try:
+        project.clip(index)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    job = jobs.MANAGER.submit("preview", f"Pratinjau klip {index + 1}", _preview_task(project_id, index))
+    return job.as_dict()
+
+
+def _preview_task(project_id: str, index: int):
+    def run(job: jobs.Job) -> dict[str, Any]:
+        project = projects.load_project(project_id)
+        return service.render_preview(project, project.clip(index), job=job)
+
+    return run
+
+
+@app.get("/api/subtitle-presets")
+def subtitle_presets() -> list[dict[str, str]]:
+    """Daftar template tipografi untuk galeri di editor."""
+    return subtitle.preset_list()
+
+
+@app.post("/api/projects/{project_id}/assets")
+def add_project_asset(project_id: str, payload: AssetRequest) -> dict[str, Any]:
+    """Salin berkas media pengguna ke folder proyek (dipakai timeline)."""
+    project = _project(project_id)
+    try:
+        path = service.add_asset(project, payload.path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"path": path}
 
 
 @app.post("/api/projects/{project_id}/export")

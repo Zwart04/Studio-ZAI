@@ -111,6 +111,43 @@ String formatClock(double seconds) {
   return '$minutes:${rest.toString().padLeft(2, '0')}';
 }
 
+/// Tombol aksi ringkas untuk kartu klip: ikon + label.
+///
+/// Label panjang tidak lagi dipaksa masuk tombol ikon bulat (yang membuat teks
+/// meluber keluar tombol), tapi memakai lebar otomatis dan teks yang diringkas.
+class ClipActionButton extends StatelessWidget {
+  const ClipActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? Tokens.danger : Tokens.accent;
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 17),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: TextButton.styleFrom(
+        foregroundColor: color,
+        backgroundColor: color.withValues(alpha: 0.10),
+        padding: const EdgeInsets.symmetric(horizontal: Tokens.space3, vertical: Tokens.space1),
+        minimumSize: const Size(0, 34),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Tokens.radiusSm)),
+      ),
+    );
+  }
+}
+
 class ClipTile extends StatelessWidget {
   const ClipTile({
     super.key,
@@ -119,6 +156,7 @@ class ClipTile extends StatelessWidget {
     required this.onRender,
     required this.onShare,
     required this.onDelete,
+    this.onPreview,
     required Map<String, String> labels,
   }) : _labels = labels;
 
@@ -127,6 +165,7 @@ class ClipTile extends StatelessWidget {
   final VoidCallback onRender;
   final VoidCallback onShare;
   final VoidCallback onDelete;
+  final VoidCallback? onPreview;
   final Map<String, String> _labels;
 
   @override
@@ -151,26 +190,39 @@ class ClipTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(clip.title.isEmpty ? 'Klip ${clip.index + 1}' : clip.title,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                // Judul panjang dibungkus maksimal 2 baris lalu dipotong, bukan
+                // dibiarkan menabrak tepi kartu.
+                Text(
+                  clip.title.isEmpty ? 'Klip ${clip.index + 1}' : clip.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
                 const SizedBox(height: 2),
                 Text('${formatClock(clip.start)}–${formatClock(clip.end)} · ${clip.score.toStringAsFixed(2)}',
                     style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
                 const SizedBox(height: Tokens.space2),
-                Row(children: [
+                Wrap(spacing: Tokens.space2, runSpacing: Tokens.space1, children: [
                   Pill(ready ? _labels['ready'] ?? 'siap' : _labels['draft'] ?? 'draft', tone: ready ? 'ok' : 'warn'),
-                  const SizedBox(width: Tokens.space2),
                   Pill(clip.crop),
+                  if ((clip.timeline ?? const {}).isNotEmpty) const Pill('timeline', tone: 'info'),
                 ]),
                 const SizedBox(height: Tokens.space3),
-                Wrap(spacing: Tokens.space2, children: [
-                  TextButton(onPressed: onEdit, child: Text(_labels['edit'] ?? 'Edit')),
-                  TextButton(onPressed: onRender, child: Text(_labels['render'] ?? 'Render')),
-                  TextButton(onPressed: onShare, child: Text(_labels['share'] ?? 'Share')),
-                  TextButton(
+                Wrap(spacing: Tokens.space2, runSpacing: Tokens.space2, children: [
+                  if (onPreview != null)
+                    ClipActionButton(
+                      icon: Icons.play_arrow_rounded,
+                      label: _labels['preview'] ?? 'Pratinjau',
+                      onPressed: ready ? onPreview : null,
+                    ),
+                  ClipActionButton(icon: Icons.edit_outlined, label: _labels['edit'] ?? 'Edit', onPressed: onEdit),
+                  ClipActionButton(icon: Icons.refresh_rounded, label: _labels['render'] ?? 'Render', onPressed: onRender),
+                  ClipActionButton(icon: Icons.ios_share_rounded, label: _labels['share'] ?? 'Share', onPressed: onShare),
+                  ClipActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    label: _labels['delete'] ?? 'Hapus',
+                    danger: true,
                     onPressed: onDelete,
-                    style: TextButton.styleFrom(foregroundColor: Tokens.danger),
-                    child: Text(_labels['delete'] ?? 'Delete'),
                   ),
                 ]),
               ],

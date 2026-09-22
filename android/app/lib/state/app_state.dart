@@ -12,6 +12,7 @@ import '../services/media_tools.dart';
 import '../services/model_manager.dart';
 import '../services/pipeline.dart';
 import '../services/speech.dart';
+import '../services/timeline.dart';
 
 enum JobState { idle, running, done, error }
 
@@ -272,6 +273,73 @@ class AppState extends ChangeNotifier {
       setJob(JobState.error, stage: 'error', message: error.toString());
       rethrow;
     }
+  }
+
+  /// Timeline untuk sebuah klip: yang tersimpan kalau ada, kalau tidak disusun
+  /// dari klip (dipakai editor saat pertama kali dibuka).
+  Timeline timelineForClip(Clip clip) {
+    final project = currentProject;
+    if (project == null) throw Exception('Tidak ada proyek aktif.');
+    return Pipeline(models: models, speech: speech, projectDir: projectDir(project)).timelineFor(project, clip);
+  }
+
+  /// Render draf cepat untuk pratinjau di editor (tidak menimpa hasil render).
+  Future<File> previewClip(Clip clip) async {
+    final project = currentProject;
+    if (project == null) throw Exception('Tidak ada proyek aktif.');
+    final pipeline = Pipeline(models: models, speech: speech, projectDir: projectDir(project));
+    setJob(JobState.running, progress: 5, stage: 'pratinjau');
+    try {
+      final file = await pipeline.renderPreview(project, clip, _report);
+      setJob(JobState.done, progress: 100, stage: 'selesai');
+      return file;
+    } catch (error) {
+      setJob(JobState.error, stage: 'error', message: error.toString());
+      rethrow;
+    }
+  }
+
+  /// Hapus satu klip beserta berkas hasil rendernya.
+  ///
+  /// Sebelumnya UI hanya memutasi daftar lalu menyimpan, tanpa menghapus berkas
+  /// dan tanpa umpan balik — makanya terasa "tidak terhapus". Sekarang folder
+  /// klip dibuang lebih dulu, indeks dirapikan, lalu proyek disimpan
+  /// (yang otomatis memicu rebuild daftar).
+  Future<void> deleteClip(Clip clip) async {
+    final project = currentProject;
+    if (project == null) return;
+    final folder = Directory('${projectDir(project).path}/clips/${clip.index}');
+    if (folder.existsSync()) {
+      try {
+        folder.deleteSync(recursive: true);
+      } catch (_) {
+        // Berkas mungkin masih dipakai pemutar; yang penting klip hilang dari daftar.
+      }
+    }
+    project.clips.removeWhere((c) => c.index == clip.index);
+    for (var i = 0; i < project.clips.length; i++) {
+      project.clips[i].index = i;
+    }
+    await saveProject(project);
+  }
+
+  /// Simpan perubahan pada klip aktif (dipakai editor).
+  Future<void> saveClip(Clip clip) async {
+    final project = currentProject;
+    if (project == null) return;
+    await saveProject(project);
+  }
+
+  /// Salin media pilihan pengguna ke folder proyek agar timeline tetap valid
+  /// walau berkas aslinya dipindah atau dihapus.
+  Future<String> addAsset(String sourcePath) async {
+    final project = currentProject;
+    if (project == null) throw Exception('Tidak ada proyek aktif.');
+    final dir = Directory('${projectDir(project).path}/assets')..createSync(recursive: true);
+    final name = sourcePath.split(RegExp(r'[\\/]')).last;
+    final target = File('${dir.path}/${DateTime.now().millisecondsSinceEpoch}-$name');
+    await File(sourcePath).copy(target.path);
+    return target.path;
   }
 
   Future<File> exportProject() async {

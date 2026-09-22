@@ -56,6 +56,19 @@ def center_crop_chain(src_w: int, src_h: int, out_w: int, out_h: int) -> str:
     return f"crop={crop_w}:{crop_h}:{x}:{y},scale={out_w}:{out_h}:flags=lanczos,setsar=1"
 
 
+def fit_chain(out_w: int, out_h: int) -> str:
+    """Tampilkan SELURUH frame tanpa memotong; sisa kanvas diisi hitam.
+
+    Dipakai kalau konten punya teks penting di tepi kiri/kanan yang hilang bila
+    di-crop 9:16 (mis. rekaman layar, slide presentasi). Kebalikan dari
+    `center_crop_chain` yang memang membuang sisi luar.
+    """
+    return (
+        f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+    )
+
+
 def blur_background_graph(src_w: int, out_w: int, out_h: int, sigma: int = 24) -> str:
     return (
         f"split=2[bg][fg];"
@@ -103,9 +116,12 @@ def canvas_size(shape: str, src_w: int, src_h: int) -> tuple[int, int]:
 def plan(mode: str = "center", src_w: int = 1920, src_h: int = 1080, out_size: tuple[int, int] | None = None) -> CropPlan:
     """Build the ffmpeg plan for the requested framing mode."""
     mode = (mode or "center").lower()
-    if mode == "none":
+    # "fit" dan "none" sama-sama menampilkan seluruh frame (letterbox), jadi tidak
+    # ada teks di tepi yang terpotong. Dulu "none" men-stretch gambar hingga
+    # gepeng, sekarang konsisten dengan "fit".
+    if mode in {"none", "fit"}:
         out_w, out_h = (out_size or target_size(src_w, src_h))
-        return CropPlan("none", out_w, out_h, simple_chain=f"scale={out_w}:{out_h}:flags=lanczos,setsar=1")
+        return CropPlan("fit", out_w, out_h, simple_chain=fit_chain(out_w, out_h))
 
     out_w, out_h = out_size or target_size(src_w, src_h)
     if mode == "blur":

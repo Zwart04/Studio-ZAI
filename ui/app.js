@@ -13,6 +13,12 @@ const I18N = {
     "home.linkReading": "Membaca link…", "home.linkReady": "Link siap", "home.linkFail": "Link tidak bisa dibaca",
     "home.localReady": "Berkas lokal siap",
     "projects.title": "Proyek", "projects.export": "Export gabungan", "projects.empty": "Belum ada proyek. Buat dari halaman Beranda.",
+    "projects.deleteConfirm": "Hapus proyek ini beserta semua klipnya?",
+    "clips.deleteConfirm": "Hapus klip ini? Berkas hasil rendernya ikut dihapus.",
+    "clips.deleted": "Klip dihapus.",
+    "editor.timeline": "Timeline", "editor.addText": "Tambah teks", "editor.addMedia": "Tambah media", "editor.addMusic": "Tambah musik",
+    "editor.template": "Template teks", "editor.previewDraft": "Pratinjau cepat", "editor.deleteItem": "Hapus item",
+    "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Teks", "timeline.audio": "Audio",
     "voice.title": "Suara otomatis",
     "voice.lead": "Buat voiceover Bahasa Indonesia atau Inggris dengan Piper (super ringan), atau kloning suaramu sendiri dengan Chatterbox.",
     "voice.tts": "Text to speech", "voice.text": "Teks", "voice.lang": "Bahasa", "voice.model": "Model suara",
@@ -50,6 +56,12 @@ const I18N = {
     "home.linkReading": "Reading link…", "home.linkReady": "Link ready", "home.linkFail": "Could not read link",
     "home.localReady": "Local file ready",
     "projects.title": "Projects", "projects.export": "Export combined", "projects.empty": "No projects yet. Create one from Home.",
+    "projects.deleteConfirm": "Delete this project and all its clips?",
+    "clips.deleteConfirm": "Delete this clip? Its rendered file is removed too.",
+    "clips.deleted": "Clip deleted.",
+    "editor.timeline": "Timeline", "editor.addText": "Add text", "editor.addMedia": "Add media", "editor.addMusic": "Add music",
+    "editor.template": "Text template", "editor.previewDraft": "Quick preview", "editor.deleteItem": "Delete item",
+    "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Text", "timeline.audio": "Audio",
     "voice.title": "Voice",
     "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with Chatterbox.",
     "voice.tts": "Text to speech", "voice.text": "Text", "voice.lang": "Language", "voice.model": "Voice model",
@@ -492,8 +504,14 @@ async function renderProjects() {
     list.querySelectorAll("[data-open]").forEach((node) => node.addEventListener("click", () => openProject(node.dataset.open)));
     list.querySelectorAll("[data-delete]").forEach((node) =>
       node.addEventListener("click", async () => {
-        await api(`/api/projects/${node.dataset.delete}`, { method: "DELETE" });
-        renderProjects();
+        if (!window.confirm(t("projects.deleteConfirm"))) return;
+        try {
+          await api(`/api/projects/${node.dataset.delete}`, { method: "DELETE" });
+          renderProjects();
+          toast(t("toast.done"), "ok");
+        } catch (error) {
+          toast(error.message, "error");
+        }
       })
     );
   } catch (error) {
@@ -550,9 +568,15 @@ function renderProjectDetail() {
   );
   grid.querySelectorAll("[data-remove]").forEach((node) =>
     node.addEventListener("click", async () => {
-      await api(`/api/projects/${project.id}/clips/${node.dataset.remove}`, { method: "DELETE" });
-      state.project = await api(`/api/projects/${project.id}`);
-      renderProjectDetail();
+      if (!window.confirm(t("clips.deleteConfirm"))) return;
+      try {
+        await api(`/api/projects/${project.id}/clips/${node.dataset.remove}`, { method: "DELETE" });
+        state.project = await api(`/api/projects/${project.id}`);
+        renderProjectDetail();
+        toast(t("clips.deleted"), "ok");
+      } catch (error) {
+        toast(error.message, "error");
+      }
     })
   );
   grid.querySelectorAll("[data-preview]").forEach((node) =>
@@ -581,93 +605,9 @@ function textToCaptions(text) {
   }).filter((c) => c.text);
 }
 
+/** Buka editor timeline (lihat timeline.js). */
 function openEditor(index) {
-  const clip = state.project.clips.find((c) => c.index === index);
-  if (!clip) return;
-  openPanel(`
-    <div class="spread"><h3>${clip.title || "Klip " + (index + 1)}</h3><button class="mini" data-close>${t("common.close")}</button></div>
-    <div class="grid-2">
-      <div><label>${t("editor.trim")} — mulai</label><input type="number" step="0.1" id="edStart" value="${clip.start}" /></div>
-      <div><label>${t("editor.trim")} — selesai</label><input type="number" step="0.1" id="edEnd" value="${clip.end}" /></div>
-      <div><label>${t("editor.crop")}</label>
-        <select id="edCrop">
-          <option value="center" ${clip.crop === "center" ? "selected" : ""}>Center 9:16</option>
-          <option value="blur" ${clip.crop === "blur" ? "selected" : ""}>Blur background</option>
-          <option value="none" ${clip.crop === "none" ? "selected" : ""}>Tanpa crop</option>
-        </select>
-      </div>
-      <div><label>${t("editor.subtitleStyle")}</label>
-        <select id="edPreset">
-          <option value="clean" ${clip.subtitle_preset === "clean" ? "selected" : ""}>Clean</option>
-          <option value="bold_highlight" ${clip.subtitle_preset === "bold_highlight" ? "selected" : ""}>Bold highlight</option>
-        </select>
-      </div>
-      <div><label>${t("editor.audio")}</label>
-        <select id="edAudio">
-          <option value="original" ${clip.audio_mode === "original" ? "selected" : ""}>${t("audio.original")}</option>
-          <option value="voice" ${clip.audio_mode === "voice" ? "selected" : ""}>${t("audio.voice")}</option>
-          <option value="mix" ${clip.audio_mode === "mix" ? "selected" : ""}>${t("audio.mix")}</option>
-        </select>
-      </div>
-      <div><label>Volume audio asli (0-1)</label><input type="number" step="0.05" min="0" max="1" id="edOrigVol" value="${clip.original_volume ?? 0.25}" /></div>
-    </div>
-    <label style="margin-top:16px">${t("editor.captions")}</label>
-    <textarea id="edCaptions" rows="8">${captionsToText(clip.captions)}</textarea>
-    <label style="margin-top:16px">${t("editor.narration")}</label>
-    <textarea id="edNarration" rows="3" placeholder="Teks narasi…"></textarea>
-    <div class="row" style="margin-top:12px">
-      <button class="ghost" id="edTts">${t("editor.ttsClip")}</button>
-      <button class="ghost" id="edClone">${t("editor.cloneClip")}</button>
-    </div>
-    <div class="row" style="margin-top:24px">
-      <button class="primary" id="edSave">${t("common.save")}</button>
-      <button class="ghost" id="edRender">${t("common.render")}</button>
-    </div>`);
-
-  $("#edSave").addEventListener("click", async () => {
-    const payload = {
-      start: Number($("#edStart").value),
-      end: Number($("#edEnd").value),
-      crop: $("#edCrop").value,
-      subtitle_preset: $("#edPreset").value,
-      audio_mode: $("#edAudio").value,
-      original_volume: Number($("#edOrigVol").value),
-      captions: textToCaptions($("#edCaptions").value),
-    };
-    await api(`/api/projects/${state.project.id}/clips/${index}`, { method: "PATCH", body: JSON.stringify(payload) });
-    state.project = await api(`/api/projects/${state.project.id}`);
-    toast(t("toast.saved"));
-    renderProjectDetail();
-  });
-
-  $("#edRender").addEventListener("click", async () => {
-    const job = await api(`/api/projects/${state.project.id}/clips/${index}/render`, { method: "POST" });
-    trackJob(job);
-    closePanel();
-  });
-
-  $("#edTts").addEventListener("click", async () => {
-    const text = $("#edNarration").value.trim();
-    if (!text) return toast(t("voice.text"), "error");
-    const job = await api(`/api/projects/${state.project.id}/tts`, {
-      method: "POST",
-      body: JSON.stringify({ text, lang: state.project.language || "id", clip: index }),
-    });
-    trackJob(job);
-    closePanel();
-  });
-
-  $("#edClone").addEventListener("click", async () => {
-    const text = $("#edNarration").value.trim();
-    const sample = state.settings.clone_sample || "";
-    if (!text || !sample) return toast(t("voice.sample"), "error");
-    const job = await api(`/api/projects/${state.project.id}/clone`, {
-      method: "POST",
-      body: JSON.stringify({ text, sample, lang: state.project.language || "id", clip: index }),
-    });
-    trackJob(job);
-    closePanel();
-  });
+  StudioTimeline.open(index);
 }
 
 function openPanel(html) {

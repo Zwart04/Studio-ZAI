@@ -60,7 +60,9 @@ Model AI **tidak** ikut di dalam paket. Saat pertama dibuka, wizard setup akan m
 - 📱 **Klip 9:16 siap posting** — crop center atau blur-background, 1080×1920, cocok untuk TikTok / Reels / Shorts.
 - 🎙️ **Voiceover otomatis** — ketik teks → suara Indonesia/Inggris natural (Piper, realtime di CPU).
 - 🧬 **Kloning suara** — dari rekaman 10–30 detik (desktop: Chatterbox ID+EN; Android: ZipVoice EN, on-device). Hanya untuk suaramu / yang kamu punya izin.
-- 🎛️ **Editor simpel** — trim, split, susun ulang, edit teks subtitle, atur volume, render ulang. Wizard setup pertama memandu dari nol sampai siap.
+- 🎛️ **Editor timeline (ala CapCut, ringkas)** — track Video, Media (tambah gambar/video), Teks, dan Audio. Geser blok untuk mengatur waktu, tarik tepinya untuk durasi, pratinjau cepat sebelum render. Ada di Android dan desktop.
+- 🔤 **8 template tipografi** — Clean, Bold highlight, TikTok pop, Karaoke fill, Title card, Minimal lower, Neon, Subtitle box. Bisa dipakai untuk caption otomatis maupun teks tambahan.
+- 🖼️ **Framing aman** — selain crop center 9:16 ada **Fit** (letterbox) dan **Blur background** supaya teks milik video sumber tidak terpotong, plus pilihan kanvas 9:16 / asli / 1:1 / 16:9.
 - 🌗 **UI gelap minimalis** — Bahasa Indonesia + English, bisa dipakai satu tangan di HP.
 
 ## ⚙️ Cara kerja

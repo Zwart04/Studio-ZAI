@@ -4,9 +4,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Android 14+: izinkan pilih sebagian foto/video tanpa akses penuh. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!--
+      Catatan: mengunduh model TIDAK butuh izin penyimpanan — model ditulis ke
+      penyimpanan internal aplikasi (getApplicationSupportDirectory()), bukan ke
+      kartu SD. Pesan "penyimpanan kurang" dulu muncul karena bug perhitungan
+      ruang bebas di Dart, bukan karena izin.
+    -->
 
     <application
         android:label="Studio ZAI"

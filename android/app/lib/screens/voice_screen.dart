@@ -133,11 +133,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Kloning memakai ZipVoice (Bahasa Inggris) sepenuhnya di HP. Siapkan rekaman bersih '
-                '10-30 detik dalam format WAV/MP3 dan tuliskan teks yang diucapkan pada rekaman itu — '
-                'ZipVoice mencocokkan keduanya untuk meniru timbre suaramu.',
-                style: TextStyle(color: Tokens.textDim, fontSize: 12),
+              const Pill('eksperimental', tone: 'warn'),
+              const SizedBox(height: Tokens.space2),
+              Text(
+                state.translate('voice.experimentalNote'),
+                style: const TextStyle(color: Tokens.textDim, fontSize: 12),
               ),
               const SizedBox(height: Tokens.space3),
               TextField(
@@ -148,13 +148,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
               OutlinedButton.icon(
                 onPressed: _pickSample,
                 icon: const Icon(Icons.audiotrack, size: 18),
-                label: Text(state.translate('home.pick')),
+                label: Text(state.translate('voice.pickSample')),
               ),
               const SizedBox(height: Tokens.space2),
               TextField(
                 controller: _sampleText,
-                decoration: const InputDecoration(
-                  labelText: 'Transkrip rekaman contoh',
+                decoration: InputDecoration(
+                  labelText: state.translate('voice.sampleText'),
                   hintText: 'teks yang diucapkan di rekaman contoh',
                 ),
               ),

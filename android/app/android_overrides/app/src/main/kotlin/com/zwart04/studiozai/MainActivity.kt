@@ -23,9 +23,22 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "memoryInfo" -> result.success(memoryInfo())
+                "freeDiskMb" -> result.success(freeDiskMb())
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /**
+     * Ruang bebas (MB) di penyimpanan internal aplikasi.
+     *
+     * Dipakai Model Manager sebelum mengekstrak arsip besar. Sebelumnya sisi Dart
+     * memakai FileStat.stat() pada sebuah folder — di Android itu selalu 0,
+     * sehingga unduhan selalu ditolak dengan "tersedia 0 MB".
+     */
+    private fun freeDiskMb(): Double {
+        val stat = StatFs(filesDir.absolutePath)
+        return stat.availableBytes / (1024.0 * 1024.0)
     }
 
     private fun memoryInfo(): Map<String, Double> {

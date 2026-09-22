@@ -11,6 +11,7 @@ from . import config, models, projects
 from .jobs import Job
 from .pipeline import crop as crop_mod
 from .pipeline import download, highlight, probe, render, subtitle, transcribe, voice
+from .pipeline import timeline as timeline_mod
 from .utils import ffmpeg
 from .utils.text import clock, human_size, sanitize_filename
 
@@ -318,11 +319,21 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
     files: dict[str, str] = {}
     src_w = project.width or 1920
     src_h = project.height or 1080
-    # Kanvas keluaran: potrait (default) / ukuran asli / kotak / landscape.
-    canvas = crop_mod.canvas_size(getattr(clip, "canvas", "portrait"), src_w, src_h)
-    if captions:
+    timeline = getattr(clip, "timeline", None) or None
+
+    # Kanvas & framing diambil dari item video pada timeline (kalau ada),
+    # kalau tidak dari field klip seperti biasa.
+    base_item: dict[str, Any] = {}
+    if timeline:
+        items = timeline_mod.track(timeline, "video")
+        base_item = items[0] if items else {}
+    canvas = crop_mod.canvas_size(
+        str(base_item.get("canvas") or getattr(clip, "canvas", "portrait")), src_w, src_h
+    )
+    text_items = timeline_mod.track(timeline, "text") if timeline else []
+
+    if captions or text_items:
         captions_objs = [subtitle.Caption(**c) for c in captions]
-        plan = crop_mod.plan(clip.crop, src_w, src_h, out_size=canvas)
         files.update(
             subtitle.write_subtitles(
                 captions_objs,
@@ -330,7 +341,8 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
                 "subs",
                 preset=clip.subtitle_preset,
                 position=getattr(clip, "subtitle_position", "bottom"),
-                play_res=(plan.out_w, plan.out_h),
+                play_res=(canvas[0], canvas[1]),
+                text_items=text_items,
             )
         )
 
@@ -348,21 +360,39 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
 
     out_path = directory / f"clip_{clip.index:03d}.mp4"
     _report(job, 60, "merender", f"klip {clip.index + 1}")
-    render.render_clip(
-        media,
-        out_path,
-        clip.start,
-        clip.end,
-        crop_mode=clip.crop,
-        src_size=(src_w, src_h),
-        out_size=canvas,
-        subtitles=files.get("ass"),
-        audio_mode=clip.audio_mode if voice_path else "original",
-        voice_path=voice_path,
-        original_volume=clip.original_volume,
-        voice_volume=clip.voice_volume,
-        progress_cb=lambda p, m: _report(job, 60 + p * 0.35, "merender", m),
-    )
+    if timeline:
+        # Volume audio asli: penuh saat "original", dikecilkan saat dicampur,
+        # nol saat hanya narasi.
+        base_volume = 1.0 if clip.audio_mode == "original" else clip.original_volume
+        if clip.audio_mode == "voice":
+            base_volume = 0.0
+        timeline_mod.render_timeline(
+            media,
+            out_path,
+            timeline,
+            src_size=(src_w, src_h),
+            subtitles=files.get("ass"),
+            voice_path=voice_path,
+            original_volume=base_volume,
+            voice_volume=clip.voice_volume,
+            progress_cb=lambda p, m: _report(job, 60 + p * 0.35, "merender", m),
+        )
+    else:
+        render.render_clip(
+            media,
+            out_path,
+            clip.start,
+            clip.end,
+            crop_mode=base_item.get("crop") or clip.crop,
+            src_size=(src_w, src_h),
+            out_size=canvas,
+            subtitles=files.get("ass"),
+            audio_mode=clip.audio_mode if voice_path else "original",
+            voice_path=voice_path,
+            original_volume=clip.original_volume,
+            voice_volume=clip.voice_volume,
+            progress_cb=lambda p, m: _report(job, 60 + p * 0.35, "merender", m),
+        )
     thumb = render.thumbnail(out_path, directory / "thumb.jpg", at=min(1.0, clip.duration / 2))
     files["mp4"] = str(out_path)
     files["thumb"] = str(thumb)
@@ -371,6 +401,95 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
     project.save()
     _report(job, 100, "selesai", f"klip {clip.index + 1} selesai")
     return files
+
+
+def render_preview(project: projects.Project, clip: projects.Clip, job: Job | None = None) -> dict[str, str]:
+    """Render draf cepat (540x960) untuk pratinjau di editor.
+
+    Hasilnya disimpan sebagai ``preview.mp4`` dan TIDAK menimpa klip final,
+    jadi pengguna bisa mengutak-atik timeline tanpa menunggu render penuh.
+    """
+    media = project.media_path()
+    if media is None:
+        raise FileNotFoundError("media sumber tidak ditemukan")
+    directory = project.clip_dir(clip.index)
+    src_w = project.width or 1920
+    src_h = project.height or 1080
+
+    timeline = getattr(clip, "timeline", None) or None
+    if not timeline:
+        timeline = timeline_mod.default_timeline(
+            clip.start,
+            clip.end,
+            str(media),
+            crop=clip.crop,
+            canvas=getattr(clip, "canvas", "portrait"),
+        )
+    text_items = timeline_mod.track(timeline, "text")
+    base_item = (timeline_mod.track(timeline, "video") or [{}])[0]
+    canvas = crop_mod.canvas_size(
+        str(base_item.get("canvas") or getattr(clip, "canvas", "portrait")), src_w, src_h
+    )
+
+    captions = clip.captions or refresh_captions(project, clip)
+    ass_path: str | None = None
+    if captions or text_items:
+        objs = [subtitle.Caption(**c) for c in captions]
+        files = subtitle.write_subtitles(
+            objs,
+            directory,
+            "preview",
+            preset=clip.subtitle_preset,
+            position=getattr(clip, "subtitle_position", "bottom"),
+            play_res=(canvas[0], canvas[1]),
+            text_items=text_items,
+        )
+        ass_path = files.get("ass")
+
+    voice_path = clip.files.get("voice")
+    if voice_path and not Path(voice_path).exists():
+        voice_path = None
+
+    base_volume = 1.0 if clip.audio_mode == "original" else clip.original_volume
+    if clip.audio_mode == "voice":
+        base_volume = 0.0
+
+    out = directory / "preview.mp4"
+    _report(job, 20, "pratinjau", "merender draf cepat")
+    timeline_mod.render_timeline(
+        media,
+        out,
+        timeline,
+        src_size=(src_w, src_h),
+        subtitles=ass_path,
+        voice_path=voice_path if clip.audio_mode != "original" else None,
+        original_volume=base_volume,
+        voice_volume=clip.voice_volume,
+        scale_to=(540, 960),
+        progress_cb=lambda p, m: _report(job, 20 + p * 0.75, "pratinjau", m),
+    )
+    _report(job, 100, "pratinjau siap")
+    return {"mp4": str(out)}
+
+
+def add_asset(project: projects.Project, source: str | Path) -> str:
+    """Salin berkas media pengguna ke folder proyek.
+
+    Timeline menyimpan path absolut, jadi berkas harus berada di dalam folder
+    proyek — kalau tidak, memindahkan atau menghapus berkas asli akan membuat
+    render gagal.
+    """
+    import time
+
+    src = Path(source)
+    if not src.exists():
+        raise FileNotFoundError(f"berkas tidak ditemukan: {source}")
+    target_dir = project.root / "assets"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    name = sanitize_filename(src.name, "media")
+    target = target_dir / f"{int(time.time() * 1000)}-{name}"
+    shutil.copy2(src, target)
+    return str(target)
 
 
 def export_all(project: projects.Project, job: Job | None = None) -> Path:

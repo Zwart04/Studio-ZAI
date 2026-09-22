@@ -5,6 +5,43 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 
+/// Kotak peringatan bergaris merah untuk kegagalan unduh/ekstrak model.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(Tokens.space3),
+      decoration: BoxDecoration(
+        color: Tokens.danger.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        border: Border.all(color: Tokens.danger.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, color: Tokens.danger, size: 18),
+          const SizedBox(width: Tokens.space2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Unduhan gagal', style: TextStyle(color: Tokens.danger, fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(message, style: const TextStyle(color: Tokens.text2, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ModelsScreen extends StatelessWidget {
   const ModelsScreen({super.key, required this.state});
 
@@ -44,6 +81,10 @@ class ModelsScreen extends StatelessWidget {
         if (state.jobState != JobState.idle) ...[
           const SizedBox(height: Tokens.space3),
           ProgressStrip(progress: state.jobProgress, label: '${state.jobStage} ${state.jobMessage}'),
+        ],
+        if (state.jobState == JobState.error) ...[
+          const SizedBox(height: Tokens.space3),
+          _ErrorBanner(message: state.jobMessage),
         ],
         const SizedBox(height: Tokens.space4),
         ...state.catalog.map((model) => Padding(

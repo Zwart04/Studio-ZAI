@@ -2,6 +2,48 @@
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-09-22
+
+### Added
+- **Editor timeline multi-track** (Android + Desktop): track Video, Media (overlay gambar/video),
+  Teks, dan Audio. Blok bisa digeser (ubah waktu) dan ditarik tepinya (ubah durasi).
+  Data timeline disimpan di `clip.timeline` dan dirender lewat graf FFmpeg yang sama di kedua platform
+  (`core/studiozai/pipeline/timeline.py` ↔ `android/.../services/timeline_render.dart`).
+- **8 template tipografi** — Clean, Bold highlight, TikTok pop, Karaoke fill, Title card,
+  Minimal lower, Neon, Subtitle box. Berlaku untuk caption otomatis maupun item track teks
+  (`GET /api/subtitle-presets`).
+- **Pratinjau cepat** (540×960) di editor — `POST /api/projects/{id}/clips/{index}/preview`,
+  tanpa menimpa hasil render final.
+- **Tambah media**: `POST /api/projects/{id}/assets` menyalin gambar/video/audio pilihan pengguna
+  ke folder proyek agar timeline tetap valid.
+- Mode framing **`fit`** (letterbox — seluruh frame tampil, tidak ada yang terpotong) dan pilihan
+  **ukuran klip** (potrait/asli/kotak/landscape) kini juga ada di Android.
+
+### Fixed
+- **"Ruang penyimpanan kurang … tersedia 0 MB" saat unduh model**: perhitungan ruang bebas di Dart
+  memakai `FileStat.stat()` pada sebuah FOLDER, yang di Android selalu bernilai 0. Sekarang memakai
+  `StatFs` lewat MethodChannel (`freeDiskMb`), dan bila ruang tidak diketahui pemeriksaan dilewati.
+  (Bukan masalah izin — model ditulis ke penyimpanan internal aplikasi.)
+- **"Unduhan gagal (HTTP 416)"**: unduhan yang sudah selesai tetapi gagal diekstrak membuat percobaan
+  berikutnya mengirim `Range` dari posisi akhir → server membalas 416. Sekarang 416 dengan berkas
+  lokal yang ada diperlakukan sebagai "sudah lengkap" dan langsung masuk tahap ekstraksi; berkas
+  parsial yang rusak dibuang lalu diunduh ulang sekali.
+- **Tombol/teks berantakan di kartu klip (desktop)**: `.icon-btn` dikunci 34 px padahal berisi label
+  teks, sehingga tombol meluber dan tombol Hapus tampak hilang. Sekarang lebar otomatis + ikon SVG
+  diberi ukuran; judul klip dibatasi 2 baris.
+- **Teks kepotong di klip**: caption diperpendek (28 karakter / 5 kata) dan margin diperlebar,
+  plus mode `fit`/`blur` agar teks milik video sumber tidak ikut terbuang oleh crop 9:16.
+- **Tombol hapus klip**: kini ada konfirmasi (Android & Desktop), menghapus berkas hasil render,
+  merapikan indeks, dan menampilkan umpan balik.
+- **Kunci terjemahan yang hilang** (`voice.text`, `voice.lang`, `voice.model`) tidak lagi tampil
+  sebagai teks mentah; versi aplikasi di layar Pengaturan disamakan dengan pubspec.
+
+### Changed
+- Ekstraksi arsip model memakai `rename` (bukan salin) sehingga puncak pemakaian disk lebih kecil
+  dan ekstraksi lebih cepat.
+- Aksen utama tetap biru; merah dipakai hemat untuk rekam/hapus/peringatan.
+- Versi: core `1.5.0`, APK `1.5.0+9`.
+
 ## [1.4.0] — 2026-09-22
 
 ### Fixed

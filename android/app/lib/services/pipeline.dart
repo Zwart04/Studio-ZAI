@@ -7,6 +7,8 @@ import 'media_tools.dart';
 import 'model_manager.dart';
 import 'speech.dart';
 import 'subtitle_builder.dart';
+import 'timeline.dart';
+import 'timeline_render.dart';
 
 class ClipCandidate {
   ClipCandidate(this.start, this.end, this.score, this.reason);
@@ -215,41 +217,127 @@ class Pipeline {
 
   // ------------------------------------------------------------------ rendering
 
+  /// Timeline klip: yang tersimpan kalau ada, kalau tidak disusun dari klip.
+  Timeline timelineFor(Project project, Clip clip) {
+    final saved = clip.timeline;
+    if (saved != null && saved.isNotEmpty) return Timeline.fromJson(saved);
+    return Timeline.fromClip(clip: clip, sourcePath: project.source);
+  }
+
+  /// Volume audio asli: penuh saat "original", dikecilkan saat dicampur,
+  /// nol saat hanya narasi.
+  static double _baseVolume(Clip clip) {
+    if (clip.audioMode == 'original') return 1.0;
+    if (clip.audioMode == 'voice') return 0.0;
+    return clip.originalVolume;
+  }
+
+  /// Tulis berkas ASS (caption + item track teks) dan kembalikan path-nya.
+  String? _writeAss(Clip clip, Directory directory, String stem, List<int> size, List<TimelineItem> textItems) {
+    if (clip.captions.isEmpty && textItems.isEmpty) return null;
+    final captions = clip.captions.map((c) => Caption.fromJson(c)).toList();
+    final ass = File('${directory.path}/$stem.ass');
+    ass.writeAsStringSync(SubtitleBuilder.toAss(
+      captions,
+      preset: clip.subtitlePreset,
+      width: size[0],
+      height: size[1],
+      textItems: textItems
+          .map((item) => <String, dynamic>{
+                'text': item.text,
+                'template': item.template,
+                'start': item.start,
+                'end': item.end,
+                'x': item.x,
+                'y': item.y,
+              })
+          .toList(),
+    ));
+    File('${directory.path}/$stem.srt').writeAsStringSync(SubtitleBuilder.toSrt(captions));
+    return ass.path;
+  }
+
+  static List<int> _canvasOf(Timeline timeline, Clip clip, int width, int height) {
+    final items = timeline.trackOf('video')?.items ?? const <TimelineItem>[];
+    final canvas = items.isEmpty ? clip.canvas : items.first.canvas;
+    return MediaTools.canvasSize(canvas, width, height);
+  }
+
   Future<Clip> renderClip(Project project, Clip clip, void Function(double, String) onProgress) async {
     final directory = clipDir(clip.index);
     final resolution = await MediaTools.resolution(project.source);
+    final sourceWidth = resolution['width'] ?? 0;
+    final sourceHeight = resolution['height'] ?? 0;
+    final timeline = timelineFor(project, clip);
+    final useTimeline = clip.timeline != null && clip.timeline!.isNotEmpty;
 
-    String? assPath;
-    if (clip.captions.isNotEmpty) {
-      final captions = clip.captions.map((c) => Caption.fromJson(c)).toList();
-      final ass = File('${directory.path}/subs.ass');
-      ass.writeAsStringSync(SubtitleBuilder.toAss(captions, preset: clip.subtitlePreset));
-      final srt = File('${directory.path}/subs.srt');
-      srt.writeAsStringSync(SubtitleBuilder.toSrt(captions));
-      assPath = ass.path;
-    }
+    final size = _canvasOf(timeline, clip, sourceWidth, sourceHeight);
+    final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
+    final assPath = _writeAss(clip, directory, 'subs', size, textItems);
 
     final output = '${directory.path}/clip_${clip.index.toString().padLeft(3, '0')}.mp4';
     onProgress(20, 'merender klip ${clip.index + 1}');
-    await MediaTools.renderClip(
-      input: project.source,
-      output: output,
-      start: clip.start,
-      end: clip.end,
-      crop: clip.crop,
-      width: resolution['width'] ?? 0,
-      height: resolution['height'] ?? 0,
-      subtitlesPath: assPath,
-      audioMode: clip.audioMode,
-      voicePath: clip.files['voice'],
-      originalVolume: clip.originalVolume,
-    );
+    if (useTimeline) {
+      await TimelineRender.renderClip(
+        source: project.source,
+        timeline: timeline,
+        output: output,
+        sourceWidth: sourceWidth,
+        sourceHeight: sourceHeight,
+        subtitlesPath: assPath,
+        voicePath: clip.audioMode != 'original' ? clip.files['voice'] : null,
+        originalVolume: _baseVolume(clip),
+        voiceVolume: clip.voiceVolume,
+      );
+    } else {
+      await MediaTools.renderClip(
+        input: project.source,
+        output: output,
+        start: clip.start,
+        end: clip.end,
+        crop: clip.crop,
+        canvas: clip.canvas,
+        width: sourceWidth,
+        height: sourceHeight,
+        subtitlesPath: assPath,
+        audioMode: clip.audioMode,
+        voicePath: clip.files['voice'],
+        originalVolume: clip.originalVolume,
+      );
+    }
     final thumb = '${directory.path}/thumb.jpg';
     await MediaTools.thumbnail(output, thumb, clip.duration / 2);
     clip.files = {...clip.files, 'mp4': output, 'thumb': thumb, if (assPath != null) 'ass': assPath};
     clip.status = 'rendered';
     onProgress(100, 'klip ${clip.index + 1} selesai');
     return clip;
+  }
+
+  /// Render draf cepat untuk pratinjau di editor (540x960, encoder ultrafast).
+  Future<File> renderPreview(Project project, Clip clip, void Function(double, String) onProgress) async {
+    final directory = clipDir(clip.index);
+    final resolution = await MediaTools.resolution(project.source);
+    final sourceWidth = resolution['width'] ?? 0;
+    final sourceHeight = resolution['height'] ?? 0;
+    final timeline = timelineFor(project, clip);
+    final size = _canvasOf(timeline, clip, sourceWidth, sourceHeight);
+    final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
+    final assPath = _writeAss(clip, directory, 'preview', size, textItems);
+
+    final output = '${directory.path}/preview.mp4';
+    onProgress(10, 'menyiapkan pratinjau');
+    await TimelineRender.renderPreview(
+      source: project.source,
+      timeline: timeline,
+      output: output,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      subtitlesPath: assPath,
+      voicePath: clip.files['voice'],
+      originalVolume: _baseVolume(clip),
+    );
+    onProgress(100, 'pratinjau siap');
+    return File(output);
   }
 
   Future<File> export(Project project, void Function(double, String) onProgress) async {

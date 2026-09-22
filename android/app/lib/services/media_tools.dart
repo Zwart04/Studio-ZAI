@@ -37,6 +37,17 @@ class MediaTools {
     return {'width': 0, 'height': 0};
   }
 
+  /// Apakah berkas punya stream audio (filter `[0:a]` gagal bila tidak ada).
+  static Future<bool> hasAudio(String path) async {
+    try {
+      final session = await FFprobeKit.getMediaInformation(path);
+      final streams = session.getMediaInformation()?.getStreams() ?? [];
+      return streams.any((stream) => stream.getType() == 'audio');
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Extract 16 kHz mono PCM used by ASR and the loudness heuristic.
   static Future<File> extractAudio(String input, String outputWav) async {
     final ok = await _run(
@@ -46,22 +57,72 @@ class MediaTools {
     return File(outputWav);
   }
 
-  static String cropFilter(String mode, int width, int height) {
-    const target = 9 / 16;
-    if (mode == 'none') return 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2';
-    final cropWidth = (height * target).round() & ~1;
-    final cropHeight = height & ~1;
-    final x = ((width - cropWidth) / 2).round().clamp(0, width);
-    final y = ((height - cropHeight) / 2).round().clamp(0, height);
+  /// Ukuran kanvas keluaran (mirror `core/pipeline/crop.py:canvas_size`).
+  static List<int> canvasSize(String canvas, int width, int height) {
+    if (canvas == 'original') {
+      if (width <= 0 || height <= 0) return const [1080, 1920];
+      var w = width - (width % 2);
+      var h = height - (height % 2);
+      final longest = w > h ? w : h;
+      if (longest > 1920) {
+        final ratio = 1920 / longest;
+        w = ((w * ratio) ~/ 2) * 2;
+        h = ((h * ratio) ~/ 2) * 2;
+      }
+      return [w < 2 ? 2 : w, h < 2 ? 2 : h];
+    }
+    switch (canvas) {
+      case 'square':
+        return const [1080, 1080];
+      case 'landscape':
+        return const [1920, 1080];
+      default:
+        // Cermin `crop.target_size`: sumber di bawah 720p tidak dipaksa naik
+        // ke 1920 supaya tidak menambah ukuran tanpa menambah detail.
+        if (height > 0 && height < 720) {
+          final h = height - (height % 2);
+          var w = (h * 9 / 16).round();
+          w -= w % 2;
+          return [w < 2 ? 2 : w, h < 2 ? 2 : h];
+        }
+        return const [1080, 1920];
+    }
+  }
+
+  static String cropFilter(String mode, int width, int height, {String canvas = 'portrait'}) {
+    final size = canvasSize(canvas, width, height);
+    final outW = size[0];
+    final outH = size[1];
+    final target = outW / outH;
+
+    // "fit"/"none": tampilkan SELURUH frame (letterbox). Ini yang dipakai kalau
+    // video sumber punya teks penting di tepi — crop 9:16 akan memotongnya.
+    final fit = 'scale=$outW:$outH:force_original_aspect_ratio=decrease,'
+        'pad=$outW:$outH:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1';
+    if (mode == 'none' || mode == 'fit') return fit;
+
     if (mode == 'blur') {
-      return 'split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,'
-          'crop=1080:1920,gblur=sigma=24[bgb];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fgs];'
+      return 'split=2[bg][fg];[bg]scale=$outW:$outH:force_original_aspect_ratio=increase,'
+          'crop=$outW:$outH,gblur=sigma=24[bgb];[fg]scale=$outW:$outH:force_original_aspect_ratio=decrease[fgs];'
           '[bgb][fgs]overlay=(W-w)/2:(H-h)/2';
     }
-    if (cropWidth >= width) {
-      return 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2';
+
+    // Crop terpusat ke rasio kanvas.
+    var cropHeight = height - (height % 2);
+    var cropWidth = (cropHeight * target).round();
+    cropWidth -= cropWidth % 2;
+    if (cropWidth > width) {
+      cropWidth = width - (width % 2);
+      cropHeight = (cropWidth / target).round();
+      cropHeight -= cropHeight % 2;
     }
-    return 'crop=$cropWidth:$cropHeight:$x:$y,scale=1080:1920,setsar=1';
+    if (cropWidth <= 0 || cropHeight <= 0 || (cropWidth >= width && cropHeight >= height)) {
+      // Sumber sudah sama atau lebih kecil dari kanvas -> jangan potong apa pun.
+      return fit;
+    }
+    final x = ((width - cropWidth) / 2).round().clamp(0, width);
+    final y = ((height - cropHeight) / 2).round().clamp(0, height);
+    return 'crop=$cropWidth:$cropHeight:$x:$y,scale=$outW:$outH,setsar=1';
   }
 
   static Future<String> renderClip({
@@ -72,12 +133,13 @@ class MediaTools {
     required String crop,
     required int width,
     required int height,
+    String canvas = 'portrait',
     String? subtitlesPath,
     String audioMode = 'original',
     String? voicePath,
     double originalVolume = 0.25,
   }) async {
-    final filter = cropFilter(crop, width, height);
+    final filter = cropFilter(crop, width, height, canvas: canvas);
     final complex = filter.contains(';');
     final duration = (end - start).clamp(0.5, 3600.0);
 

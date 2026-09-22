@@ -1,4 +1,10 @@
-"""Subtitle building: word grouping plus SRT / VTT / ASS (burned-in) output."""
+"""Subtitle building: word grouping plus SRT / VTT / ASS (burned-in) output.
+
+ASS dipakai untuk SEMUA teks di video (caption otomatis maupun item track teks
+dari editor timeline). Alasannya: satu berkas gaya bisa memuat banyak style
+(template tipografi), penempatan bebas lewat ``\\pos``, dan hasilnya identik di
+desktop maupun Android — tanpa perlu menyalin font lewat filter ``drawtext``.
+"""
 
 from __future__ import annotations
 
@@ -10,42 +16,162 @@ from typing import Any
 
 from ..utils.text import ass_timestamp, srt_timestamp, vtt_timestamp
 
-DEFAULT_MAX_WORDS = 6
-DEFAULT_MAX_CHARS = 42
+# Caption dibuat lebih pendek dan margin lebih lega daripada versi lama
+# (42 karakter / margin 60) — pada kanvas 1080x1920 teks sepanjang itu melebihi
+# area aman dan terlihat terpotong di tepi.
+DEFAULT_MAX_WORDS = 5
+DEFAULT_MAX_CHARS = 28
 DEFAULT_GAP = 0.7
 DEFAULT_MAX_DURATION = 3.5
+DEFAULT_MARGIN_H = 90
 
+# Template tipografi. Semua ukuran ditulis untuk kanvas tinggi 1920 lalu
+# diskalakan otomatis (lihat to_ass), jadi tetap proporsional di kanvas lain.
 PRESETS: dict[str, dict[str, Any]] = {
     "clean": {
+        "label": "Clean",
         "font": "Inter",
-        "size": 64,
+        "size": 56,
         "primary": "&H00FFFFFF",
         "secondary": "&H00FFFFFF",
         "outline_colour": "&H00101010",
         "bold": 0,
         "outline": 3,
         "shadow": 1,
-        "margin_v": 240,
+        "border_style": 1,
+        "margin_v": 220,
         "karaoke": False,
+        "anim": r"{\fad(120,120)}",
     },
     "bold_highlight": {
+        "label": "Bold highlight",
         "font": "Inter",
-        "size": 72,
+        "size": 68,
         "primary": "&H00FFFFFF",
         "secondary": "&H0000E1FF",
         "outline_colour": "&H00101010",
         "bold": -1,
         "outline": 4,
         "shadow": 1,
-        "margin_v": 260,
+        "border_style": 1,
+        "margin_v": 250,
         "karaoke": True,
+        "anim": "",
+    },
+    "tiktok_pop": {
+        "label": "TikTok pop",
+        "font": "Inter",
+        "size": 76,
+        "primary": "&H00FFFFFF",
+        "secondary": "&H0000E1FF",
+        "outline_colour": "&H00000000",
+        "bold": -1,
+        "outline": 5,
+        "shadow": 2,
+        "border_style": 1,
+        "margin_v": 300,
+        "karaoke": True,
+        "anim": r"{\fad(80,80)\fscx94\fscy94\t(0,150,\fscx100\fscy100)}",
+    },
+    "karaoke_fill": {
+        "label": "Karaoke fill",
+        "font": "Inter",
+        "size": 66,
+        "primary": "&H00FFFFFF",
+        "secondary": "&H0000D158",
+        "outline_colour": "&H00101010",
+        "bold": -1,
+        "outline": 3,
+        "shadow": 1,
+        "border_style": 1,
+        "margin_v": 250,
+        "karaoke": True,
+        "anim": "",
+    },
+    "title_card": {
+        "label": "Title card",
+        "font": "Inter",
+        "size": 96,
+        "primary": "&H00FFFFFF",
+        "secondary": "&H00FFFFFF",
+        "outline_colour": "&H00101010",
+        "bold": -1,
+        "outline": 4,
+        "shadow": 2,
+        "border_style": 1,
+        "margin_v": 0,
+        "karaoke": False,
+        "anim": r"{\fad(160,160)}",
+    },
+    "minimal_lower": {
+        "label": "Minimal lower",
+        "font": "Inter",
+        "size": 44,
+        "primary": "&H00F2F2F7",
+        "secondary": "&H00F2F2F7",
+        "outline_colour": "&H00101010",
+        "bold": 0,
+        "outline": 2,
+        "shadow": 0,
+        "border_style": 1,
+        "margin_v": 140,
+        "karaoke": False,
+        "anim": r"{\fad(100,100)}",
+    },
+    "neon": {
+        "label": "Neon",
+        "font": "Inter",
+        "size": 70,
+        "primary": "&H00FFFFFF",
+        "secondary": "&H00FF453A",
+        "outline_colour": "&H00FF453A",
+        "bold": -1,
+        "outline": 5,
+        "shadow": 4,
+        "border_style": 1,
+        "margin_v": 260,
+        "karaoke": False,
+        "anim": r"{\fad(120,120)}",
+    },
+    "subtitle_box": {
+        "label": "Subtitle box",
+        "font": "Inter",
+        "size": 54,
+        "primary": "&H00FFFFFF",
+        "secondary": "&H00FFFFFF",
+        "outline_colour": "&H99000000",
+        "bold": 0,
+        "outline": 12,
+        "shadow": 0,
+        "border_style": 3,
+        "margin_v": 220,
+        "karaoke": False,
+        "anim": r"{\fad(120,120)}",
     },
 }
+
+DEFAULT_PRESET = "clean"
 
 # Posisi subtitle. "off" = jangan bakar subtitle sama sekali (dipakai kalau
 # video sumber sudah punya subtitle bawaan, mis. dari YouTube).
 POSITIONS: dict[str, int] = {"bottom": 2, "middle": 5, "top": 8}
 POSITION_CHOICES = ("bottom", "middle", "top", "off")
+
+
+def preset_list() -> list[dict[str, str]]:
+    """Daftar template untuk galeri di UI."""
+    return [{"id": key, "label": value.get("label", key)} for key, value in PRESETS.items()]
+
+
+def template_id(name: Any) -> str:
+    """Nama template yang aman dipakai sebagai nama style ASS.
+
+    Dipakai di dua tempat (pembuatan style dan event Dialogue) supaya keduanya
+    selalu menunjuk style yang sama — kalau tidak, event bisa merujuk style yang
+    tidak pernah dibuat dan libass diam-diam memakai Default.
+    """
+    text = str(name or DEFAULT_PRESET)
+    return text if text in PRESETS else DEFAULT_PRESET
 
 
 @dataclass
@@ -186,25 +312,83 @@ def _karaoke_text(caption: Caption, preset: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _style_line(name: str, style: dict[str, Any], scale: float, alignment: int, margin_v: int) -> str:
+    # Nilai ditulis satu per satu (bukan **style) karena style juga memuat
+    # "margin_v" dari preset — menyebarnya bersama margin_v hasil hitungan
+    # membuat str.format menerima argumen ganda.
+    values = {
+        "name": name,
+        "font": style.get("font", "Inter"),
+        "size": style.get("size", 56),
+        "primary": style.get("primary", "&H00FFFFFF"),
+        "secondary": style.get("secondary", "&H00FFFFFF"),
+        "outline_colour": style.get("outline_colour", "&H00101010"),
+        "bold": style.get("bold", 0),
+        "border": style.get("border_style", 1),
+        "outline": style.get("outline", 3),
+        "shadow": style.get("shadow", 1),
+        "align": alignment,
+        "margin_h": int(DEFAULT_MARGIN_H * scale),
+        "margin_v": margin_v,
+    }
+    return (
+        "Style: {name},{font},{size},{primary},{secondary},{outline_colour},&H80000000,"
+        "{bold},0,0,0,100,100,0,0,{border},{outline},{shadow},{align},"
+        "{margin_h},{margin_h},{margin_v},1"
+    ).format(**values)
+
+
+def text_item_events(text_items: Sequence[dict[str, Any]], width: int, height: int) -> list[str]:
+    """Event ASS untuk item track teks pada timeline.
+
+    ``x``/``y`` adalah rasio 0..1 terhadap kanvas; dikonversi ke ``\\pos`` agar
+    penempatan tetap sama di resolusi apa pun.
+    """
+    events: list[str] = []
+    for item in text_items or []:
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        template = template_id(item.get("template"))
+        start = float(item.get("start", 0.0))
+        end = max(start + 0.2, float(item.get("end", start + 2.0)))
+        x = int(max(0.0, min(1.0, float(item.get("x", 0.5)))) * width)
+        y = int(max(0.0, min(1.0, float(item.get("y", 0.5)))) * height)
+        anim = PRESETS[template].get("anim", "")
+        events.append(
+            f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},Tpl_{template},,0,0,0,,"
+            f"{{\\an5\\pos({x},{y})}}{anim}{ass_escape(text)}"
+        )
+    return events
+
+
 def to_ass(
     captions: Sequence[Caption],
-    preset: str = "clean",
+    preset: str = DEFAULT_PRESET,
     play_res: tuple[int, int] = (1080, 1920),
     title: str = "Studio ZAI",
     position: str = "bottom",
+    text_items: Sequence[dict[str, Any]] | None = None,
 ) -> str:
-    style = dict(PRESETS.get(preset, PRESETS["clean"]))
+    style = dict(PRESETS.get(preset, PRESETS[DEFAULT_PRESET]))
     width, height = play_res
-    # Posisi subtitle: "off" -> tidak ada event (tidak ada yang dibakar).
+    scale = height / 1920.0  # semua ukuran preset ditulis untuk tinggi 1920
+
     alignment = POSITIONS.get(position, 2)
-    scale = height / 1920.0  # margin disetel untuk kanvas 1920 tinggi
     if position == "middle":
-        style["margin_v"] = 0
+        margin_v = 0
     elif position == "top":
-        style["margin_v"] = int(150 * scale)
+        margin_v = int(150 * scale)
     else:
-        style["margin_v"] = int(style["margin_v"] * scale)
-    style["alignment"] = alignment
+        margin_v = int(style.get("margin_v", 220) * scale)
+
+    styles = [_style_line("Default", style, scale, alignment, margin_v)]
+    # Satu style per template yang benar-benar dipakai item teks.
+    used_templates = sorted({template_id(i.get("template")) for i in (text_items or [])})
+    for template in used_templates:
+        template_style = dict(PRESETS[template])
+        styles.append(_style_line(f"Tpl_{template}", template_style, scale, 5, 0))
+
     header = [
         "[Script Info]",
         f"Title: {title}",
@@ -220,18 +404,22 @@ def to_ass(
             "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
             "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding"
         ),
-        (
-            "Style: Default,{font},{size},{primary},{secondary},{outline_colour},&H80000000,"
-            "{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{alignment},60,60,{margin_v},1".format(**style)
-        ),
+        *styles,
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    events = [] if position == "off" else [
-        f"Dialogue: 0,{ass_timestamp(c.start)},{ass_timestamp(max(c.end, c.start + 0.2))},Default,,0,0,0,,{_karaoke_text(c, style)}"
-        for c in captions
-    ]
+
+    events: list[str] = []
+    if position != "off":
+        for caption in captions:
+            anim = style.get("anim", "")
+            events.append(
+                f"Dialogue: 0,{ass_timestamp(caption.start)},"
+                f"{ass_timestamp(max(caption.end, caption.start + 0.2))},Default,,0,0,0,,"
+                f"{anim}{_karaoke_text(caption, style)}"
+            )
+    events.extend(text_item_events(text_items or [], width, height))
     return "\n".join(header + events) + "\n"
 
 
@@ -239,9 +427,10 @@ def write_subtitles(
     captions: Sequence[Caption],
     out_dir: str | Path,
     stem: str,
-    preset: str = "clean",
+    preset: str = DEFAULT_PRESET,
     play_res: tuple[int, int] = (1080, 1920),
     position: str = "bottom",
+    text_items: Sequence[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -250,7 +439,10 @@ def write_subtitles(
     ass_path = out_dir / f"{stem}.ass"
     srt_path.write_text(to_srt(captions), encoding="utf-8")
     vtt_path.write_text(to_vtt(captions), encoding="utf-8")
-    ass_path.write_text(to_ass(captions, preset, play_res, position=position), encoding="utf-8")
+    ass_path.write_text(
+        to_ass(captions, preset, play_res, position=position, text_items=text_items),
+        encoding="utf-8",
+    )
     return {"srt": str(srt_path), "vtt": str(vtt_path), "ass": str(ass_path)}
 
 

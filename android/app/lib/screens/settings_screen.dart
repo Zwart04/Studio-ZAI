@@ -94,12 +94,15 @@ class SettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Studio ZAI 1.0.0', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Studio ZAI 1.5.0', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: Tokens.space1),
               const Text('Lisensi MIT · model: Piper (MIT), Whisper (MIT), ZipVoice (Apache-2.0), Chatterbox (MIT)',
                   style: TextStyle(color: Tokens.textDim, fontSize: 12)),
               const SizedBox(height: Tokens.space2),
               Text('Data: ${state.dataDir.path}', style: const TextStyle(color: Tokens.textDim, fontSize: 11)),
+              if (state.device != null)
+                Text('Ruang bebas: ${state.device!.diskFreeGb.toStringAsFixed(1)} GB',
+                    style: const TextStyle(color: Tokens.textDim, fontSize: 11)),
             ],
           ),
         ),

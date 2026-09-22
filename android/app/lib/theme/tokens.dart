@@ -17,9 +17,12 @@ class Tokens {
 
   static const accent = Color(0xFF0A84FF);
   static const accentPress = Color(0xFF0071E3);
+  // Aksen kedua (merah) dipakai hemat: rekam, hapus, peringatan.
+  static const accent2 = Color(0xFFFF453A);
   static const green = Color(0xFF30D158);
   static const orange = Color(0xFFFF9F0A);
   static const red = Color(0xFFFF453A);
+  static const purple = Color(0xFFBF5AF2);
 
   // aliases kept for readability in screens
   static const success = green;

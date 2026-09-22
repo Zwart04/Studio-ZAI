@@ -1,5 +1,10 @@
 // Subtitle builders: SRT and ASS (burned-in), ported from
 // core/studiozai/pipeline/subtitle.py.
+//
+// ASS dipakai untuk semua teks di video: caption otomatis maupun item track
+// teks pada editor timeline. Satu berkas memuat banyak style (template
+// tipografi) dan penempatan bebas lewat \pos, jadi hasilnya sama dengan versi
+// desktop tanpa perlu filter drawtext.
 
 class Caption {
   Caption(this.start, this.end, this.text, [this.words = const []]);
@@ -25,28 +30,150 @@ class Caption {
 }
 
 class SubtitleBuilder {
-  static const presets = {
+  /// Caption dibuat lebih pendek + margin lebih lega daripada versi lama
+  /// (42 karakter / margin 60): pada kanvas 1080x1920 teks sepanjang itu
+  /// melewati area aman dan terlihat terpotong di tepi.
+  static const defaultMaxWords = 5;
+  static const defaultMaxChars = 28;
+  static const marginH = 90.0;
+
+  /// Template tipografi. Ukuran ditulis untuk tinggi kanvas 1920 lalu
+  /// diskalakan (lihat [toAss]) sehingga proporsional di kanvas lain.
+  static const presets = <String, Map<String, Object>>{
     'clean': {
-      'size': 58,
+      'label': 'Clean',
+      'size': 56,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H00FFFFFF',
+      'outlineColour': '&H00101010',
       'bold': 0,
       'outline': 3,
-      'marginV': 280,
+      'shadow': 1,
+      'border': 1,
+      'marginV': 220,
       'karaoke': false,
+      'anim': r'{\fad(120,120)}',
     },
     'bold_highlight': {
-      'size': 66,
+      'label': 'Bold highlight',
+      'size': 68,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H0000E1FF',
+      'outlineColour': '&H00101010',
       'bold': -1,
       'outline': 4,
+      'shadow': 1,
+      'border': 1,
+      'marginV': 250,
+      'karaoke': true,
+      'anim': '',
+    },
+    'tiktok_pop': {
+      'label': 'TikTok pop',
+      'size': 76,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H0000E1FF',
+      'outlineColour': '&H00000000',
+      'bold': -1,
+      'outline': 5,
+      'shadow': 2,
+      'border': 1,
       'marginV': 300,
       'karaoke': true,
+      'anim': r'{\fad(80,80)\fscx94\fscy94\t(0,150,\fscx100\fscy100)}',
+    },
+    'karaoke_fill': {
+      'label': 'Karaoke fill',
+      'size': 66,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H0000D158',
+      'outlineColour': '&H00101010',
+      'bold': -1,
+      'outline': 3,
+      'shadow': 1,
+      'border': 1,
+      'marginV': 250,
+      'karaoke': true,
+      'anim': '',
+    },
+    'title_card': {
+      'label': 'Title card',
+      'size': 96,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H00FFFFFF',
+      'outlineColour': '&H00101010',
+      'bold': -1,
+      'outline': 4,
+      'shadow': 2,
+      'border': 1,
+      'marginV': 0,
+      'karaoke': false,
+      'anim': r'{\fad(160,160)}',
+    },
+    'minimal_lower': {
+      'label': 'Minimal lower',
+      'size': 44,
+      'primary': '&H00F2F2F7',
+      'secondary': '&H00F2F2F7',
+      'outlineColour': '&H00101010',
+      'bold': 0,
+      'outline': 2,
+      'shadow': 0,
+      'border': 1,
+      'marginV': 140,
+      'karaoke': false,
+      'anim': r'{\fad(100,100)}',
+    },
+    'neon': {
+      'label': 'Neon',
+      'size': 70,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H00FF453A',
+      'outlineColour': '&H00FF453A',
+      'bold': -1,
+      'outline': 5,
+      'shadow': 4,
+      'border': 1,
+      'marginV': 260,
+      'karaoke': false,
+      'anim': r'{\fad(120,120)}',
+    },
+    'subtitle_box': {
+      'label': 'Subtitle box',
+      'size': 54,
+      'primary': '&H00FFFFFF',
+      'secondary': '&H00FFFFFF',
+      'outlineColour': '&H99000000',
+      'bold': 0,
+      'outline': 12,
+      'shadow': 0,
+      'border': 3,
+      'marginV': 220,
+      'karaoke': false,
+      'anim': r'{\fad(120,120)}',
     },
   };
+
+  static const defaultPreset = 'clean';
+
+  static List<Map<String, String>> presetList() => presets.entries
+      .map((entry) => {'id': entry.key, 'label': entry.value['label'] as String})
+      .toList();
+
+  /// Nama template yang aman dipakai sebagai nama style ASS.
+  ///
+  /// Dipakai saat membuat style DAN saat menulis event Dialogue, supaya
+  /// keduanya selalu menunjuk style yang sama.
+  static String templateId(Object? name) {
+    final text = name?.toString() ?? defaultPreset;
+    return presets.containsKey(text) ? text : defaultPreset;
+  }
 
   /// Group word-level entries into readable captions.
   static List<Caption> groupWords(
     List<Map<String, dynamic>> words, {
-    int maxWords = 6,
-    int maxChars = 42,
+    int maxWords = defaultMaxWords,
+    int maxChars = defaultMaxChars,
     double gap = 0.7,
   }) {
     final captions = <Caption>[];
@@ -82,8 +209,8 @@ class SubtitleBuilder {
   /// Build captions from ASR segments (Android gives segment level timings).
   static List<Caption> captionsFromSegments(
     List<Map<String, dynamic>> segments, {
-    int maxWords = 6,
-    int maxChars = 42,
+    int maxWords = defaultMaxWords,
+    int maxChars = defaultMaxChars,
   }) {
     final captions = <Caption>[];
     for (final segment in segments) {
@@ -149,8 +276,43 @@ class SubtitleBuilder {
   static String _escape(String text) =>
       text.replaceAll(r'\', r'\\').replaceAll('{', r'\{').replaceAll('}', r'\}').replaceAll('\n', r'\N');
 
-  static String toAss(List<Caption> captions, {String preset = 'clean', int width = 1080, int height = 1920}) {
-    final style = presets[preset] ?? presets['clean']!;
+  static String _styleLine(String name, Map<String, Object> style, double scale, int alignment, int marginV) {
+    final marginH = (SubtitleBuilder.marginH * scale).round();
+    return 'Style: $name,Roboto,${style['size']},${style['primary']},${style['secondary']},'
+        '${style['outlineColour']},&H80000000,${style['bold']},0,0,0,100,100,0,0,'
+        '${style['border']},${style['outline']},${style['shadow']},$alignment,'
+        '$marginH,$marginH,$marginV,1';
+  }
+
+  static String _karaoke(Caption caption, Map<String, Object> style) {
+    if (style['karaoke'] != true || caption.words.isEmpty) return _escape(caption.text);
+    return caption.words.map((w) {
+      final duration = ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
+      return '{\\k${duration.round().clamp(1, 100000)}}${_escape(w['word'] as String)}';
+    }).join(' ');
+  }
+
+  /// Berkas ASS lengkap: caption + item track teks (template).
+  static String toAss(
+    List<Caption> captions, {
+    String preset = defaultPreset,
+    int width = 1080,
+    int height = 1920,
+    List<Map<String, dynamic>> textItems = const [],
+  }) {
+    final style = presets[preset] ?? presets[defaultPreset]!;
+    final scale = height / 1920.0;
+    final marginV = ((style['marginV'] as int? ?? 220) * scale).round();
+
+    final styles = <String>[_styleLine('Default', style, scale, 2, marginV)];
+    final usedTemplates = <String>{
+      for (final item in textItems) templateId(item['template']),
+    }.toList()
+      ..sort();
+    for (final template in usedTemplates) {
+      styles.add(_styleLine('Tpl_$template', presets[template]!, scale, 5, 0));
+    }
+
     final header = '''
 [Script Info]
 Title: Studio ZAI
@@ -162,21 +324,29 @@ PlayResY: $height
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Roboto,${style['size']},&H00FFFFFF,&H0000E1FF,&H00101010,&H80000000,${style['bold']},0,0,0,100,100,0,0,1,${style['outline']},1,2,60,60,${style['marginV']},1
+${styles.join('\n')}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''';
 
     final events = <String>[];
     for (final caption in captions) {
-      final karaoke = style['karaoke'] == true && caption.words.isNotEmpty;
-      final text = karaoke
-          ? caption.words.map((w) {
-              final duration = ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
-              return '{\\k${duration.round().clamp(1, 100000)}}${_escape(w['word'] as String)}';
-            }).join(' ')
-          : _escape(caption.text);
-      events.add('Dialogue: 0,${_assTime(caption.start)},${_assTime(caption.end)},Default,,0,0,0,,$text');
+      final anim = style['anim'] as String? ?? '';
+      events.add('Dialogue: 0,${_assTime(caption.start)},'
+          '${_assTime(caption.end > caption.start ? caption.end : caption.start + 0.2)},'
+          'Default,,0,0,0,,$anim${_karaoke(caption, style)}');
+    }
+    for (final item in textItems) {
+      final text = (item['text'] as String? ?? '').trim();
+      if (text.isEmpty) continue;
+      final template = templateId(item['template']);
+      final start = (item['start'] as num?)?.toDouble() ?? 0;
+      final end = (item['end'] as num?)?.toDouble() ?? (start + 2);
+      final x = ((item['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * width;
+      final y = ((item['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * height;
+      final anim = presets[template]?['anim'] as String? ?? '';
+      events.add('Dialogue: 0,${_assTime(start)},${_assTime(end < start + 0.2 ? start + 0.2 : end)},'
+          'Tpl_$template,,0,0,0,,{\\an5\\pos(${x.round()},${y.round()})}$anim${_escape(text)}');
     }
     return '$header\n${events.join('\n')}\n';
   }

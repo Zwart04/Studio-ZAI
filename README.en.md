@@ -60,7 +60,9 @@ AI models are **not** bundled. On first launch a setup wizard downloads what you
 - 📱 **Posting-ready 9:16 clips** — center or blur-background crop, 1080×1920, for TikTok / Reels / Shorts.
 - 🎙️ **Automatic voiceover** — type text → natural Indonesian/English voice (Piper, realtime on CPU).
 - 🧬 **Voice cloning** — from a 10–30 s sample (desktop: Chatterbox ID+EN; Android: on-device ZipVoice EN). Only for your own voice / with explicit permission.
-- 🎛️ **Simple editor** — trim, split, reorder, edit subtitle text, adjust volume, re-render. A first-run wizard guides you from zero to ready.
+- 🎛️ **Timeline editor (CapCut-like, lightweight)** — Video, Media (add images/video), Text and Audio tracks. Drag blocks to retime, drag edges to resize, quick-preview before rendering. On Android and desktop.
+- 🔤 **8 typography templates** — Clean, Bold highlight, TikTok pop, Karaoke fill, Title card, Minimal lower, Neon, Subtitle box. Use them for auto captions or your own text overlays.
+- 🖼️ **Safe framing** — besides center 9:16 there is **Fit** (letterbox) and **Blur background** so on-screen text in the source is not cut off, plus 9:16 / original / 1:1 / 16:9 canvases.
 - 🌗 **Minimal dark UI** — Indonesian + English, one-hand friendly on phones.
 
 ## ⚙️ How it works

@@ -66,6 +66,7 @@ class Clip {
     this.score = 0,
     this.reason = '',
     this.crop = 'center',
+    this.canvas = 'portrait',
     this.subtitlePreset = 'clean',
     this.audioMode = 'original',
     this.originalVolume = 0.25,
@@ -74,6 +75,7 @@ class Clip {
     this.files = const {},
     this.status = 'draft',
     this.narration = '',
+    this.timeline,
   });
 
   int index;
@@ -83,6 +85,7 @@ class Clip {
   double score;
   String reason;
   String crop;
+  String canvas;
   String subtitlePreset;
   String audioMode;
   double originalVolume;
@@ -91,6 +94,10 @@ class Clip {
   Map<String, String> files;
   String status;
   String narration;
+
+  /// Editor timeline multi-track (Video / Media / Teks / Audio).
+  /// Null = proyek lama, dirender dengan jalur lama (tanpa timeline).
+  Map<String, dynamic>? timeline;
 
   double get duration => (end - start).clamp(0, double.infinity);
 
@@ -102,6 +109,7 @@ class Clip {
         'score': score,
         'reason': reason,
         'crop': crop,
+        'canvas': canvas,
         'subtitlePreset': subtitlePreset,
         'audioMode': audioMode,
         'originalVolume': originalVolume,
@@ -110,6 +118,7 @@ class Clip {
         'files': files,
         'status': status,
         'narration': narration,
+        if (timeline != null) 'timeline': timeline,
       };
 
   static Clip fromJson(Map<String, dynamic> json) => Clip(
@@ -120,6 +129,7 @@ class Clip {
         score: (json['score'] as num?)?.toDouble() ?? 0,
         reason: json['reason'] as String? ?? '',
         crop: json['crop'] as String? ?? 'center',
+        canvas: json['canvas'] as String? ?? 'portrait',
         subtitlePreset: json['subtitlePreset'] as String? ?? 'clean',
         audioMode: json['audioMode'] as String? ?? 'original',
         originalVolume: (json['originalVolume'] as num?)?.toDouble() ?? 0.25,
@@ -129,6 +139,7 @@ class Clip {
         files: Map<String, String>.from(json['files'] as Map? ?? const {}),
         status: json['status'] as String? ?? 'draft',
         narration: json['narration'] as String? ?? '',
+        timeline: json['timeline'] == null ? null : Map<String, dynamic>.from(json['timeline'] as Map),
       );
 }
 
