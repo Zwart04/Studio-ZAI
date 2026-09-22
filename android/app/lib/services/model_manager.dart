@@ -163,14 +163,12 @@ class ModelManager {
   void _moveExtracted(Directory tmpDir, Directory dir) {
     for (final entity in tmpDir.listSync(recursive: true)) {
       final rel = entity.path.substring(tmpDir.path.length + 1);
-      final dest = entity is Directory
-          ? Directory('${dir.path}/$rel')
-          : File('${dir.path}/$rel');
       if (entity is Directory) {
-        dest.createSync(recursive: true);
-      } else {
-        (dest.parent as Directory).createSync(recursive: true);
-        (entity as File).copySync(dest.path);
+        Directory('${dir.path}/$rel').createSync(recursive: true);
+      } else if (entity is File) {
+        final target = File('${dir.path}/$rel');
+        target.parent.createSync(recursive: true);
+        entity.copySync(target.path);
       }
     }
   }
@@ -223,7 +221,7 @@ class ModelManager {
     // Tolak path traversal (../ atau absolute) dari arsip yang tidak tepercaya.
     for (final entry in decoded) {
       if (!entry.isFile) continue;
-      final name = entry.name.replace('\\', '/');
+      final name = entry.name.replaceAll('\\', '/');
       if (name.startsWith('/') || name.split('/').contains('..')) {
         throw Exception('Arsip berisi path tidak aman. Unduhan dibatalkan.');
       }

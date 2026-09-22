@@ -150,6 +150,8 @@ Model tersimpan di folder data pengguna (MODELS.md §4), bukan di artefak.
 | Gradle: `Android SDK file not found: adb` | `sdkmanager ... "platform-tools"` belum jalan |
 | APK gagal di plugin yt-dlp Android | Plugin `flutter_yt_dlp` belum kompatibel dengan AGP 9/Gradle 9 → di repo ini sudah dilepas; TikTok/IG diunduh dari desktop |
 | PyInstaller EXE: server tidak listen | Lihat `%LOCALAPPDATA%\StudioZAI\launcher.log` (launcher menulis traceback ke sana) |
+| Aplikasi jalan di port lain (8738/8739), UI terasa lama | Ada proses `Studio ZAI`/`python` lama yang masih memegang 8737. Tutup lewat Task Manager — kalau prosesnya berjalan sebagai Administrator, Task Manager juga harus dibuka *as Administrator*. Cek cepat: `Get-NetTCPConnection -LocalPort 8737` |
+| Folder `StudioZAI-…` tidak bisa dihapus / "file in use" | Aplikasi masih berjalan. Sejak 1.3.2 menutup jendela = proses keluar dan semua anak `ffmpeg` dihentikan (Job Object `KILL_ON_JOB_CLOSE`). Bila sudah di-*End task* dan masih terkunci, akhiri proses `StudioZAI.exe`/`ffmpeg.exe` yang tersisa |
 | Gradle lambat pertama kali | Normal: AGP 9.1 + Kotlin 2.4 + dependensi plugin diunduh sekali |
 | `ffmpeg not found` (mode dev) | Instal ffmpeg; EXE hasil build sudah membawa ffmpeg sendiri |
 | `pip install` gagal (ctranslate2/piper) | Python terlalu baru → pakai 3.12/3.13 |
