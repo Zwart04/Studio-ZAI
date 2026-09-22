@@ -93,7 +93,7 @@ def _startup_cleanup() -> None:
         removed = config.cleanup_stale_transcript_chunks()
         if removed:
             print(f"[studiozai] membersihkan {removed} file chunk yatim")
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - pembersihan opsional saat start
         pass
 
 

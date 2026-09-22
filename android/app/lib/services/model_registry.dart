@@ -60,19 +60,6 @@ class ModelRegistry {
     tier: 1,
   );
 
-  static final chatterboxQ4 = ModelInfo(
-    id: 'chatterbox-gguf-q4',
-    kind: 'clone',
-    langs: ['id', 'en'],
-    sizeMb: 550,
-    license: 'MIT',
-    note: 'EKSPERIMENTAL: kloning ID/EN (uji kecepatan dulu). Di CPU HP bisa sangat lambat.',
-    url: 'https://huggingface.co/calcuis/chatterbox-gguf/resolve/main/chatterbox-q4.gguf',
-    archive: false,
-    tier: 3,
-    experimental: true,
-  );
-
   static final vad = ModelInfo(
     id: 'silero-vad',
     kind: 'asr',
@@ -92,6 +79,5 @@ class ModelRegistry {
     piperEn,
     zipVoice,
     vad,
-    chatterboxQ4,
   ];
 }

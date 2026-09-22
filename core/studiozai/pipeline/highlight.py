@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from ..utils import ffmpeg
+from ..utils import ffmpeg, proc
 
 DEFAULT_MIN_LEN = 15.0
 DEFAULT_MAX_LEN = 60.0
@@ -81,10 +81,10 @@ def decode_pcm(path: str | Path, sample_rate: int = 16000) -> np.ndarray:
         "f32le",
         "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True, check=False, creationflags=_no_window_flags())
-    if proc.returncode != 0:
-        raise RuntimeError(f"gagal mendekode audio: {proc.stderr[-300:].decode('utf-8', 'replace')}")
-    return np.frombuffer(proc.stdout, dtype=np.float32)
+    code, out, err = proc.run_bytes(cmd, timeout=600)
+    if code != 0:
+        raise RuntimeError(f"gagal mendekode audio: {err[-300:]}")
+    return np.frombuffer(out, dtype=np.float32)
 
 
 def rms_envelope(
@@ -584,8 +584,7 @@ def pick_clips(
         keep_n = max(count * 3, 3)
         top_windows = sorted(ranked[:keep_n], key=lambda w: w["start"])
         for window in top_windows:
-            for carved in carve_clip_windows(window, silences, min_len, max_len):
-                candidates_pool.append(carved)
+            candidates_pool.extend(carve_clip_windows(window, silences, min_len, max_len))
     if not candidates_pool:
         windows = slide_windows(duration, min_len, max_len)
         candidates_pool = list(windows)

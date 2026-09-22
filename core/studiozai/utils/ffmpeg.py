@@ -12,6 +12,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import proc
+
 TIME_RE = re.compile(r"time=(\d+):(\d{2}):(\d{2})(?:\.(\d+))?")
 
 ProgressCb = Callable[[float], None]
@@ -73,26 +75,16 @@ def detect_h264_encoder() -> str:
     if not shutil.which("nvidia-smi"):
         return "libx264"
     try:
-        probe_result = subprocess.run(
-            ["nvidia-smi", "-L"], capture_output=True, text=True, timeout=15, check=False,
-            creationflags=_creation_flags(),
-        )
+        code, out, _ = proc.run(["nvidia-smi", "-L"], timeout=15)
     except (OSError, subprocess.SubprocessError):
         return "libx264"
-    if probe_result.returncode != 0 or "GPU" not in probe_result.stdout:
+    if code != 0 or "GPU" not in out:
         return "libx264"
     try:
-        out = subprocess.run(
-            [ffmpeg_path(), "-hide_banner", "-encoders"],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
-            creationflags=_creation_flags(),
-        ).stdout
+        _, encoders, _ = proc.run([ffmpeg_path(), "-hide_banner", "-encoders"], timeout=20)
     except (OSError, subprocess.SubprocessError):
         return "libx264"
-    return "h264_nvenc" if "h264_nvenc" in out else "libx264"
+    return "h264_nvenc" if "h264_nvenc" in encoders else "libx264"
 
 
 @dataclass
@@ -122,18 +114,15 @@ def run_ffmpeg(
 ) -> RunResult:
     """Run ffmpeg with array args (never shell) and optional progress parsing."""
     cmd = [ffmpeg_path(), "-hide_banner", "-nostdin", "-y", *args]
-    proc = subprocess.Popen(
+    proc_handle = proc.spawn(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        encoding="utf-8",
-        errors="replace",
-        creationflags=_creation_flags(),
     )
     stderr_lines: list[str] = []
-    assert proc.stderr is not None
-    for line in proc.stderr:
+    assert proc_handle.stderr is not None
+    for line in proc_handle.stderr:
         stderr_lines.append(line)
         if progress_cb and total_duration:
             match = TIME_RE.search(line)
@@ -142,26 +131,18 @@ def run_ffmpeg(
                 seconds = int(h) * 3600 + int(m) * 60 + int(s) + float(f"0.{frac or 0}")
                 progress_cb(min(99.0, max(0.0, seconds / total_duration * 100)))
     try:
-        proc.wait(timeout=timeout)
+        proc_handle.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        proc.kill()
-    if progress_cb and proc.returncode == 0:
+        proc_handle.kill()
+    proc.forget(proc_handle)
+    if progress_cb and proc_handle.returncode == 0:
         progress_cb(100.0)
-    return RunResult(proc.returncode, "", "".join(stderr_lines[-200:]), cmd)
+    return RunResult(proc_handle.returncode, "", "".join(stderr_lines[-200:]), cmd)
 
 
 def run_command(args: Sequence[str], timeout: int | None = None) -> RunResult:
-    proc = subprocess.run(
-        list(args),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        creationflags=_creation_flags(),
-    )
-    return RunResult(proc.returncode, proc.stdout, proc.stderr, list(args))
+    code, out, err = proc.run(list(args), timeout=timeout)
+    return RunResult(code, out, err, list(args))
 
 
 def ffprobe_json(path: str | Path) -> dict:

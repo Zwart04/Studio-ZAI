@@ -3,10 +3,16 @@
 The frozen EXE always opens its own window (pywebview EdgeChromium).
 A real browser is only used when the user explicitly runs `serve`.
 All startup diagnostics go to <data dir>/launcher.log.
+
+Exit behaviour matters for users: closing the window must end the process,
+must not leave ffmpeg children behind (they lock clip files and used to make
+the install folder impossible to delete), and launching the app twice must
+reuse the running instance instead of spawning a second server.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import socket
@@ -18,6 +24,11 @@ import traceback
 import webbrowser
 from datetime import datetime
 from pathlib import Path
+
+try:  # paket engine bisa belum terpasang saat launcher dijalankan dari sumber
+    from studiozai.utils import proc
+except ImportError:  # pragma: no cover
+    proc = None
 
 
 def data_dir() -> Path:
@@ -33,6 +44,7 @@ def data_dir() -> Path:
 
 
 LOG_FILE = data_dir() / "launcher.log"
+INSTANCE_FILE = data_dir() / "instance.json"
 
 
 def log(message: str) -> None:
@@ -56,15 +68,76 @@ def free_port(preferred: int = 8737) -> int:
     raise RuntimeError("tidak ada port kosong yang tersedia")
 
 
-def wait_ready(port: int, timeout: float = 45.0) -> bool:
+def port_open(port: int, timeout: float = 0.4) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def wait_ready(port: int, timeout: float = 60.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.4)
-            if sock.connect_ex(("127.0.0.1", port)) == 0:
-                return True
+        if port_open(port):
+            return True
         time.sleep(0.15)
     return False
+
+
+def process_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False
+            try:
+                code = ctypes.c_ulong()
+                if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    return False
+                return code.value == 259  # STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:  # noqa: BLE001 - anggap mati bila tidak bisa dipastikan
+            return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def live_instance() -> str | None:
+    """URL instance Studio ZAI yang masih berjalan, kalau ada."""
+    try:
+        data = json.loads(INSTANCE_FILE.read_text(encoding="utf-8"))
+        pid = int(data.get("pid", 0))
+        port = int(data.get("port", 0))
+    except (OSError, ValueError, TypeError):
+        return None
+    if pid and port and process_alive(pid) and port_open(port):
+        return f"http://127.0.0.1:{port}"
+    return None
+
+
+def remember_instance(port: int) -> None:
+    try:
+        INSTANCE_FILE.write_text(
+            json.dumps({"pid": os.getpid(), "port": port, "started": time.time()}),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def forget_instance() -> None:
+    try:
+        INSTANCE_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def open_folder(path: str) -> None:
@@ -82,7 +155,7 @@ def serve(port: int) -> None:
     """Run the FastAPI server, logging any startup failure."""
     try:
         log(f"server: importing (frozen={getattr(sys, 'frozen', False)})")
-        from studiozai.server import app, run as run_server
+        from studiozai.server import run as run_server
 
         log(f"server: starting uvicorn on 127.0.0.1:{port}")
         run_server(host="127.0.0.1", port=port)
@@ -113,21 +186,18 @@ def find_chrome_exe() -> str | None:
 def open_app_window(url: str, profile_dir: Path) -> int:
     """Buka URL sebagai jendela aplikasi Chrome/Edge (--app, tanpa tab browser).
 
-    Dipakai HANYA jika pywebview gagal total. Profil terpisah di folder data
-    supaya tidak mengganggu browser utama pengguna.
+    Dipakai HANYA jika pywebview gagal total. Fungsi ini menunggu jendela
+    ditutup lalu keluar — versi sebelumnya loop selamanya sehingga proses EXE
+    tetap hidup (dan mengunci folder) walau jendela sudah ditutup.
     """
     chrome = find_chrome_exe()
     if not chrome:
         log("app-window: tidak ada Chrome/Edge, membuka browser biasa")
         webbrowser.open(url)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            return 1
+        return 0
     profile_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
-        chrome or "",
+        chrome,
         f"--app={url}",
         f"--user-data-dir={profile_dir}",
         "--no-first-run",
@@ -135,15 +205,16 @@ def open_app_window(url: str, profile_dir: Path) -> int:
     ]
     log(f"app-window: {chrome} --app {url}")
     try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        child = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         log("app-window: gagal start, membuka browser biasa")
         webbrowser.open(url)
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
         return 0
+    try:
+        child.wait()
+    except KeyboardInterrupt:
+        child.terminate()
+    log("app-window: jendela ditutup")
     return 0
 
 
@@ -183,32 +254,11 @@ class Bridge:
         return True
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
-    # Mode CLI: teruskan perintah ke engine studiozai (doctor, serve, download, ...).
-    # Berguna untuk debugging EXE tanpa GUI: `StudioZAI.exe doctor`.
-    if args and args[0] in {"doctor", "serve", "download", "probe", "transcribe", "clip", "tts", "clone", "models", "projects", "--help", "-h", "--version"}:
-        from studiozai.cli import main as cli_main
-
-        return int(cli_main(args) or 0)
-
-    log("=== Studio ZAI launcher start ===")
-    port = free_port()
-    log(f"launcher: port {port}")
-
-    threading.Thread(target=serve, args=(port,), daemon=True).start()
-    url = f"http://127.0.0.1:{port}"
-
-    if not wait_ready(port, timeout=60.0):
-        log("launcher: server tidak siap dalam 60 detik")
-        return open_app_window(url, data_dir() / "webprofile")
-
-    log("launcher: server siap")
+def open_window(url: str) -> int:
+    """Tampilkan UI: pywebview dulu, lalu jendela aplikasi Chrome/Edge."""
     try:
         import webview
 
-        # Paksa EdgeChromium di Windows: backend winforms butuh .NET,
-        # sedangkan edgechromium hanya butuh WebView2 runtime (bawaan Win10/11).
         kwargs: dict = {
             "js_api": Bridge(),
             "width": 1280,
@@ -216,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
             "min_size": (900, 620),
         }
         if sys.platform == "win32":
+            # Backend winforms butuh .NET; edgechromium hanya butuh WebView2.
             kwargs["gui"] = "edgechromium"
         webview.create_window("Studio ZAI", url, **kwargs)
         log("launcher: membuka jendela (pywebview)")
@@ -225,9 +276,59 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         log("launcher: pywebview tidak ada, memakai jendela aplikasi Chrome/Edge")
         return open_app_window(url, data_dir() / "webprofile")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - fallback apa pun lebih baik daripada gagal
         log("launcher: webview gagal\n" + traceback.format_exc())
         return open_app_window(url, data_dir() / "webprofile")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    # Mode CLI: teruskan perintah ke engine studiozai (doctor, serve, download, ...).
+    # Berguna untuk debugging EXE tanpa GUI: `StudioZAI.exe doctor`.
+    if args and args[0] in {
+        "doctor",
+        "serve",
+        "download",
+        "probe",
+        "transcribe",
+        "clip",
+        "tts",
+        "clone",
+        "models",
+        "projects",
+        "--help",
+        "-h",
+        "--version",
+    }:
+        from studiozai.cli import main as cli_main
+
+        return int(cli_main(args) or 0)
+
+    log("=== Studio ZAI launcher start ===")
+
+    existing = live_instance()
+    if existing:
+        log(f"launcher: instance sudah berjalan di {existing}, memakai yang itu")
+        return open_window(existing)
+
+    port = free_port()
+    remember_instance(port)
+    log(f"launcher: port {port}")
+    threading.Thread(target=serve, args=(port,), daemon=True).start()
+    url = f"http://127.0.0.1:{port}"
+
+    try:
+        if not wait_ready(port):
+            log("launcher: server tidak siap dalam 60 detik")
+            return open_app_window(url, data_dir() / "webprofile")
+        log("launcher: server siap")
+        return open_window(url)
+    finally:
+        killed = proc.terminate_all() if proc is not None else 0
+        if killed:
+            log(f"launcher: menghentikan {killed} proses anak (ffmpeg)")
+        forget_instance()
+        log("launcher: keluar")
 
 
 if __name__ == "__main__":

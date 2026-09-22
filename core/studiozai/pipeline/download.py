@@ -63,7 +63,7 @@ def fetch_info(
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
-    except Exception as exc:  # noqa: BLE001 - berikan pesan yang bisa dipakai UI
+    except Exception as exc:
         raise RuntimeError(f"gagal membaca link: {exc}") from exc
     formats: list[dict[str, Any]] = []
     for fmt in info.get("formats") or []:
@@ -101,7 +101,6 @@ def fetch_info(
 
 def pick_format_id(formats: list[dict[str, Any]], quality: str) -> str:
     """Pilih format_id yt-dlp dari pilihan kualitas UI."""
-    video = [f for f in formats if f["has_video"]]
     if quality == "audio":
         return "bestaudio[ext=m4a]/bestaudio/best"
     if quality == "best":
@@ -180,7 +179,7 @@ def download(
                 candidates = sorted(out_dir.glob(f"{path.stem}.*"), key=lambda p: p.stat().st_size)
                 if candidates:
                     path = candidates[-1]
-    except Exception as exc:  # noqa: BLE001 - sampaikan alasan yt-dlp apa adanya
+    except Exception as exc:
         raise RuntimeError(f"gagal mengunduh: {exc}") from exc
     if not path.exists():
         raise RuntimeError("unduhan selesai tetapi berkas tidak ditemukan")

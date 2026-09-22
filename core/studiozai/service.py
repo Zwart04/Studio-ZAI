@@ -21,7 +21,7 @@ def _emit_progress(sse: Any, prog: float, msg: str) -> None:
     """Emit a progress SSE event without touching a job dict."""
     try:
         sse.send({"type": "progress", "progress": round(min(99.0, max(0.0, prog)), 1), "message": msg})
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - progres SSE bersifat best-effort
         pass
 
 
@@ -212,7 +212,7 @@ def generate_clips(
     media = project.media_path()
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
-    floor, ceiling = highlight.clip_count_targets(project.duration or 0, count)
+    _floor, _ceiling = highlight.clip_count_targets(project.duration or 0, count)
 
     transcript = None
     if use_transcript and transcribe.asr_available():

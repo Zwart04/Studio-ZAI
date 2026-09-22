@@ -75,7 +75,7 @@ def transcribe(
     media_path = Path(media_path)
     try:
         total_duration = float(ffmpeg_utils.ffprobe_json(media_path).get("format", {}).get("duration") or 0.0)
-    except Exception:
+    except Exception:  # noqa: BLE001 - durasi opsional, lanjut dengan 0
         total_duration = 0.0
 
     chunk_seconds = max(60.0, float(chunk_minutes) * 60.0)
@@ -118,11 +118,17 @@ def transcribe(
         base = (cursor / total_duration * 95.0) if total_duration else 0.0
         span = ((end - cursor) / total_duration * 95.0) if total_duration else 0.0
 
-        def _chunk_progress(p: float, m: str, _base: float = base, _span: float = span) -> None:
+        def _chunk_progress(
+            p: float,
+            m: str,
+            _base: float = base,
+            _span: float = span,
+            _index: int = index,
+        ) -> None:
             if progress_cb:
                 progress_cb(
                     min(95.0, _base + p / 100.0 * _span),
-                    f"menranskripsi audio (bagian {index + 1})",
+                    f"menranskripsi audio (bagian {_index + 1})",
                 )
 
         part = _transcribe_single(chunk_path, model_id, lang, _chunk_progress, offset=cursor)

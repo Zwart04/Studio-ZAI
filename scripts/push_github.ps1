@@ -34,7 +34,7 @@ if (-not (Test-Path '.git')) {
 git add -A
 $pending = (git status --porcelain | Out-String).Trim()
 if ($pending) {
-  git commit -m "feat: Studio ZAI 1.0.0 - auto clip, subtitle & voiceover studio (Windows/Linux/Android)" | Out-Null
+  git commit -m "chore: sinkronisasi kode Studio ZAI" | Out-Null
   Write-Host "Commit dibuat." -ForegroundColor Green
 } else {
   Write-Host "Tidak ada perubahan untuk di-commit." -ForegroundColor DarkGray

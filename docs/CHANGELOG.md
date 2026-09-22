@@ -2,6 +2,34 @@
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] — 2026-09-22
+
+### Fixed
+- **Aplikasi tidak bisa ditutup / folder tidak bisa dihapus**: fallback jendela Chrome/Edge dulu
+  loop selamanya sehingga proses EXE tetap hidup setelah jendela ditutup. Sekarang launcher
+  menunggu jendela ditutup lalu keluar.
+- **Satu instance saja**: membuka aplikasi dua kali tidak lagi membuat server/jendela ganda
+  (dipakai `instance.json` + pengecekan PID & port); jendela kedua menyambung ke instance yang jalan.
+- **Proses ffmpeg tidak tertinggal**: semua proses anak dilacak (`utils/proc.py`) dan dihentikan
+  saat keluar, plus Job Object Windows `KILL_ON_JOB_CLOSE` supaya ikut mati walau aplikasi di-End task.
+- **Unduhan model gagal (404)**: entri `chatterbox-gguf-q4` dan `mms-tts-ind` dihapus dari registry
+  desktop & Android (URL-nya sudah tidak ada / modelnya tidak punya berkas ONNX). Tersisa 10 model
+  yang seluruh URL-nya sudah diverifikasi HTTP 200.
+- **Versi tidak sinkron**: kode masih 1.0.0 padahal rilis GitHub sudah 1.3.1. Versi kini 1.3.2 di
+  `__init__.py`, `pyproject.toml`, dan `pubspec.yaml`, dijaga oleh `scripts/check_version.py`.
+- **Tes gagal karena PermissionError**: folder `%TEMP%\pytest-*` bisa punya ACL rusak setelah sesi
+  mati paksa; pytest kini memakai basetemp lokal (`.tmp-pytest`).
+- **Lint bersih**: 15 temuan ruff diperbaiki, termasuk bug closure variabel loop di `transcribe.py`.
+
+## [1.3.1] — 2026-09-22
+- UI tanpa emoji, nama model lebih natural, perbaikan penamaan aset rilis.
+
+## [1.3.0] — 2026-09-22
+- UI overhaul: ikon SVG navigasi, toggle gaya iOS, skeleton, progress monoton, wizard setup awal.
+
+## [1.2.0] — 2026-09-22
+- Klip muncul kembali, transkrip lebih cepat (chunk 10 menit), progress lebih jelas.
+
 ## [1.0.0] — 2026-09-21
 
 ### Added
