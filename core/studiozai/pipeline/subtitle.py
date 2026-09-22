@@ -42,6 +42,11 @@ PRESETS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Posisi subtitle. "off" = jangan bakar subtitle sama sekali (dipakai kalau
+# video sumber sudah punya subtitle bawaan, mis. dari YouTube).
+POSITIONS: dict[str, int] = {"bottom": 2, "middle": 5, "top": 8}
+POSITION_CHOICES = ("bottom", "middle", "top", "off")
+
 
 @dataclass
 class Caption:
@@ -186,9 +191,17 @@ def to_ass(
     preset: str = "clean",
     play_res: tuple[int, int] = (1080, 1920),
     title: str = "Studio ZAI",
+    position: str = "bottom",
 ) -> str:
-    style = PRESETS.get(preset, PRESETS["clean"])
+    style = dict(PRESETS.get(preset, PRESETS["clean"]))
     width, height = play_res
+    # Posisi subtitle: "off" -> tidak ada event (tidak ada yang dibakar).
+    alignment = POSITIONS.get(position, 2)
+    if position == "middle":
+        style["margin_v"] = 0
+    elif position == "top":
+        style["margin_v"] = 150
+    style["alignment"] = alignment
     header = [
         "[Script Info]",
         f"Title: {title}",
@@ -206,13 +219,13 @@ def to_ass(
         ),
         (
             "Style: Default,{font},{size},{primary},{secondary},{outline_colour},&H80000000,"
-            "{bold},0,0,0,100,100,0,0,1,{outline},{shadow},2,60,60,{margin_v},1".format(**style)
+            "{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{alignment},60,60,{margin_v},1".format(**style)
         ),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    events = [
+    events = [] if position == "off" else [
         f"Dialogue: 0,{ass_timestamp(c.start)},{ass_timestamp(max(c.end, c.start + 0.2))},Default,,0,0,0,,{_karaoke_text(c, style)}"
         for c in captions
     ]

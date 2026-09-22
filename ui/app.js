@@ -387,6 +387,7 @@ async function startClipping() {
         use_transcript: $("#useTranscript").checked,
         use_llm: $("#useLlm").checked,
         quality: $("#quality").value || "720p",
+        subtitle_position: ($("#subPos") || {}).value || "bottom",
       }),
     });
     trackJob(job);
@@ -1026,13 +1027,47 @@ async function checkWizard() {
   try {
     const settings = await api("/api/settings");
     const models = await api("/api/models");
-    // Wizard SETUP muncul kalau: belum pernah selesai ATAU model inti belum lengkap.
     // "Lengkap" = minimal 1 ASR + 1 TTS terpasang (syarat klip + subtitle + suara jalan).
     const installed = (models.models || []).filter((m) => m.installed).map((m) => m.kind);
     const coreReady = installed.includes("asr") && installed.includes("tts");
-    if (!settings.setup_done || !coreReady) {
+
+    // Wizard layar penuh HANYA saat pertama kali (belum pernah selesai setup).
+    // Sebelumnya wizard muncul terus selama model belum lengkap, sehingga
+    // seluruh UI tampak kusam/terhalang overlay setiap dibuka.
+    if (!settings.setup_done) {
       wizardShow(0);
+      return;
     }
+
+    // Model belum lengkap setelah setup -> cukup banner kecil di Beranda.
+    const banner = $("#modelBanner");
+    if (coreReady) {
+      if (banner) banner.remove();
+      return;
+    }
+    if (banner) return;
+    const home = $("#page-home");
+    if (!home) return;
+    const node = document.createElement("div");
+    node.id = "modelBanner";
+    node.className = "card tight";
+    node.innerHTML = `
+      <div class="row settings">
+        <div>
+          <span data-i18n="models.need">Model belum lengkap</span>
+          <span class="sub">Unduh model transkripsi + suara sekali saja, lalu semua jalan offline.</span>
+        </div>
+        <div class="row" style="gap:8px">
+          <button class="mini" id="bannerSetup">Siapkan</button>
+          <button class="mini" id="bannerHide">Nanti</button>
+        </div>
+      </div>`;
+    home.insertBefore(node, home.children[1] || null);
+    $("#bannerSetup").addEventListener("click", () => {
+      node.remove();
+      setPage("models");
+    });
+    $("#bannerHide").addEventListener("click", () => node.remove());
   } catch { /* abaikan saat pertama kali */ }
 }
 

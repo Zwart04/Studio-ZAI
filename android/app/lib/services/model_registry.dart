@@ -60,6 +60,39 @@ class ModelRegistry {
     tier: 1,
   );
 
+  static final whisperSmall = ModelInfo(
+    id: 'whisper-small',
+    kind: 'asr',
+    langs: ['id', 'en'],
+    sizeMb: 480,
+    license: 'MIT',
+    note: 'Akurasi lebih baik untuk Bahasa Indonesia (butuh RAM lega).',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2',
+    tier: 2,
+  );
+
+  static final whisperMedium = ModelInfo(
+    id: 'whisper-medium',
+    kind: 'asr',
+    langs: ['id', 'en'],
+    sizeMb: 1500,
+    license: 'MIT',
+    note: 'Paling akurat, paling berat. Untuk HP dengan RAM besar saja.',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium.tar.bz2',
+    tier: 3,
+  );
+
+  static final piperEnGb = ModelInfo(
+    id: 'piper-en_GB-alba-medium',
+    kind: 'tts',
+    langs: ['en'],
+    sizeMb: 63,
+    license: 'MIT',
+    note: 'Suara Inggris (British) alternatif',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2',
+    tier: 0,
+  );
+
   static final vad = ModelInfo(
     id: 'silero-vad',
     kind: 'asr',
@@ -75,8 +108,11 @@ class ModelRegistry {
   static final all = <ModelInfo>[
     whisperTiny,
     whisperBase,
+    whisperSmall,
+    whisperMedium,
     piperId,
     piperEn,
+    piperEnGb,
     zipVoice,
     vad,
   ];

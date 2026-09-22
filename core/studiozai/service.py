@@ -95,6 +95,34 @@ def _version() -> str:
 # --------------------------------------------------------------------------- ingest
 
 
+def _strip_embedded_subtitles(path: Path) -> Path:
+    """Buang track subtitle/data bawaan dari berkas kerja.
+
+    Video dari YouTube/media lain kadang membawa track subtitle sendiri. Kalau
+    dibiarkan, pemutar menampilkan subtitle bawaan itu DI ATAS subtitle hasil
+    Studio ZAI sehingga terlihat dobel. Remux stream-copy (cepat, tanpa
+    re-encode) hanya dijalankan bila memang ada track subtitle/data.
+    """
+    try:
+        streams = ffmpeg.ffprobe_json(path).get("streams", [])
+    except Exception:  # noqa: BLE001 - kalau gagal dibaca, lanjut tanpa bersih-bersih
+        return path
+    if not any(stream.get("codec_type") in {"subtitle", "data"} for stream in streams):
+        return path
+
+    cleaned = path.with_name(f"{path.stem}.nosub{path.suffix}")
+    result = ffmpeg.run_ffmpeg(
+        ["-i", str(path), "-map", "0:v?", "-map", "0:a?", "-c", "copy", "-sn", "-dn", str(cleaned)],
+        timeout=900,
+    )
+    if result.ok and cleaned.exists() and cleaned.stat().st_size > 1024:
+        path.unlink(missing_ok=True)
+        cleaned.replace(path)
+    else:
+        cleaned.unlink(missing_ok=True)
+    return path
+
+
 def ingest(
     project: projects.Project,
     source: str,
@@ -129,6 +157,9 @@ def ingest(
         project.source_kind = "local"
         if not project.title:
             project.title = src_path.stem
+
+    _report(job, 36, "memeriksa", "membersihkan subtitle bawaan bila ada")
+    project.source = str(_strip_embedded_subtitles(Path(project.source)))
 
     _report(job, 38, "memeriksa", "membaca metadata media")
     info = probe.probe(project.source)
@@ -292,6 +323,7 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
                 directory,
                 "subs",
                 preset=clip.subtitle_preset,
+                position=getattr(clip, "subtitle_position", "bottom"),
                 play_res=(plan.out_w, plan.out_h),
             )
         )

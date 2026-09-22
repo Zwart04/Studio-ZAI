@@ -2,6 +2,30 @@
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-09-22
+
+### Fixed
+- **Aplikasi Android tertutup sendiri saat unduh model**: ekstraksi `.tar.bz2` dulu memuat seluruh
+  arsip ke memori (`readAsBytesSync` + `decodeBytes`) — ZipVoice 350 MB butuh ~1 GB RAM sehingga
+  Android membunuh aplikasi. Sekarang bz2 didekompresi streaming ke berkas `.tar` sementara, lalu
+  `.tar` dibaca per blok 64 KB (memori tetap kecil) + cek ruang disk sebelum ekstrak.
+- **Layar selalu tampak kusam/terhalang**: wizard setup muncul terus selama model inti belum lengkap.
+  Sekarang wizard layar penuh hanya saat pertama kali; kalau model kurang, muncul banner kecil di
+  Beranda dengan tombol "Siapkan"/"Nanti".
+- **Subtitle dobel dengan subtitle bawaan video**: berkas kerja kini dibersihkan dari track
+  subtitle/data bawaan (remux stream-copy), dan posisi subtitle bisa dipilih —
+  Bawah / Tengah / Atas / Tanpa subtitle (untuk video yang sudah punya subtitle sendiri).
+
+### Changed
+- **UI dirombak (gaya Apple)**: stylesheet ditulis ulang — hitam pekat, judul putih tegas, kartu
+  "inset grouped" dengan garis rambut, toggle iOS, segmented control, tombol biru iOS, sheet panel,
+  toast, dan gerak 200 ms; tata letak mobile memakai tab bar bawah.
+- **Daftar model Android lengkap**: ditambah whisper-small, whisper-medium, dan suara Inggris
+  (en_GB alba) sehingga semua model yang tersedia tampil dengan tombol unduh/hapus.
+
+### Tests
+- 68 tes lulus (5 tes baru untuk posisi subtitle), `ruff` bersih, `flutter analyze` 0 error.
+
 ## [1.3.3] — 2026-09-22
 
 ### Security

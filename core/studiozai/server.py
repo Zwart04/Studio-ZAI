@@ -36,6 +36,7 @@ class ProcessRequest(BaseModel):
     model: str | None = None
     quality: str = "720p"
     format_id: str | None = None
+    subtitle_position: str = "bottom"  # bottom | middle | top | off
 
 
 class LinkInfoRequest(BaseModel):
@@ -263,6 +264,8 @@ def _process_task(project_id: str, payload: ProcessRequest):
             job=job,
         )
         for clip in list(project.clips):
+            clip.subtitle_position = payload.subtitle_position
+            project.save()
             service.render_clip(project, clip, job=job)
         return {"clips": len(project.clips), "project": projects.load_project(project_id).as_dict()}
 

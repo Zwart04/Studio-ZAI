@@ -1,6 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -201,33 +202,148 @@ class ModelManager {
   }
 
   Future<void> _extract(File archive, Directory dir) async {
+    final lower = archive.path.toLowerCase();
+    if (lower.endsWith('.zip')) {
+      await _extractZip(archive, dir);
+      return;
+    }
+    if (lower.endsWith('.tar.bz2') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
+      await _extractTarStreaming(archive, dir);
+      return;
+    }
+    throw Exception('Jenis arsip tidak dikenal: ${archive.path}');
+  }
+
+  /// Ekstraksi .tar.bz2 TANPA memuat arsip ke memori.
+  ///
+  /// Versi lama memakai `readAsBytesSync` + `decodeBytes`: untuk ZipVoice
+  /// (350 MB) itu butuh ~1 GB RAM sehingga Android membunuh aplikasi
+  /// (gejala: aplikasi tertutup sendiri saat unduh model). Sekarang:
+  /// bz2 didekompresi streaming ke file .tar sementara, lalu .tar dibaca
+  /// per blok 64 KB dan ditulis ke disk.
+  Future<void> _extractTarStreaming(File archive, Directory dir) async {
+    final tempTar = File('${archive.parent.path}/.tmp-${archive.uri.pathSegments.last}.tar');
+    final free = await _freeDiskMb(archive.parent);
+    final neededMb = (archive.lengthSync() * 3 / 1048576).round();
+    if (free > 0 && free < neededMb) {
+      throw Exception('Ruang penyimpanan kurang untuk mengekstrak. Butuh sekitar $neededMb MB, tersedia ${free.round()} MB.');
+    }
+    try {
+      await _decompressTo(archive, tempTar);
+
+      final raf = tempTar.openSync();
+      var offset = 0;
+      final total = tempTar.lengthSync();
+      final buffer = Uint8List(65536);
+      while (offset + 512 <= total) {
+        raf.setPositionSync(offset);
+        final header = raf.readSync(512);
+        if (header.length < 512 || header.every((byte) => byte == 0)) break;
+        final entryName = _tarText(header, 0, 100);
+        final prefix = _tarText(header, 345, 155);
+        final fullName = prefix.isEmpty ? entryName : '$prefix/$entryName';
+        final size = _tarOctal(header, 124, 12);
+        final type = header[156];
+        offset += 512;
+
+        if ((type == 0x30 || type == 0x00) && size > 0) {
+          final target = _safeTarget(dir, fullName);
+          target.parent.createSync(recursive: true);
+          final sink = target.openSync(mode: FileMode.write);
+          var remaining = size;
+          try {
+            while (remaining > 0) {
+              final want = remaining < buffer.length ? remaining : buffer.length;
+              final chunk = raf.readSync(want);
+              if (chunk.isEmpty) break;
+              sink.writeFromSync(chunk);
+              remaining -= chunk.length;
+            }
+          } finally {
+            sink.closeSync();
+          }
+        }
+        offset += ((size + 511) ~/ 512) * 512; // data dipad ke kelipatan 512
+      }
+      raf.closeSync();
+    } finally {
+      if (tempTar.existsSync()) {
+        try {
+          tempTar.deleteSync();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> _decompressTo(File source, File target) async {
+    // Factory InputFileStream/OutputFileStream langsung membuka berkasnya.
+    final input = InputFileStream(source.path);
+    final output = OutputFileStream(target.path);
+    try {
+      if (source.path.toLowerCase().endsWith('.bz2')) {
+        BZip2Decoder().decodeStream(input, output);
+      } else {
+        GZipDecoder().decodeStream(input, output);
+      }
+    } finally {
+      try {
+        output.closeSync();
+      } catch (_) {}
+      try {
+        input.closeSync();
+      } catch (_) {}
+    }
+  }
+
+  String _tarText(Uint8List header, int start, int length) {
+    final end = header.indexOf(0, start);
+    final stop = (end == -1 || end > start + length) ? start + length : end;
+    return String.fromCharCodes(header.sublist(start, stop)).trim();
+  }
+
+  int _tarOctal(Uint8List header, int start, int length) {
+    final text = _tarText(header, start, length);
+    return int.tryParse(text, radix: 8) ?? 0;
+  }
+
+  File _safeTarget(Directory dir, String name) {
+    final normalized = name.replaceAll('\\', '/');
+    if (normalized.isEmpty || normalized.startsWith('/') || normalized.split('/').contains('..')) {
+      throw Exception('Arsip berisi path tidak aman ($name). Unduhan dibatalkan.');
+    }
+    return File('${dir.path}/$normalized');
+  }
+
+  Future<double> _freeDiskMb(Directory dir) async {
+    try {
+      final stat = await FileStat.stat(dir.path);
+      return stat.size / 1048576; // tidak semua platform mengisi ini
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Arsip .zip (dipakai desktop; di Android jarang) dengan batas ukuran.
+  Future<void> _extractZip(File archive, Directory dir) async {
     final bytes = archive.readAsBytesSync();
-    if (bytes.length > 900 * 1024 * 1024) {
-      throw Exception('Arsip terlalu besar untuk diekstrak di HP (${(bytes.length / 1048576).round()} MB).');
+    if (bytes.length > 512 * 1024 * 1024) {
+      throw Exception('Arsip zip terlalu besar untuk diekstrak di HP.');
     }
     if (bytes.length < 1024) {
       throw Exception('Arsip rusak (hanya ${bytes.length} byte). Coba lagi.');
     }
     final Archive decoded;
     try {
-      if (archive.path.endsWith('.zip')) {
-        decoded = ZipDecoder().decodeBytes(bytes);
-      } else {
-        decoded = TarDecoder().decodeBytes(BZip2Decoder().decodeBytes(bytes));
-      }
+      decoded = ZipDecoder().decodeBytes(bytes);
     } catch (e) {
       throw Exception('Arsip rusak dan tidak bisa dibuka. Coba lagi. ($e)');
     }
-    // Tolak path traversal (../ atau absolute) dari arsip yang tidak tepercaya.
     for (final entry in decoded) {
       if (!entry.isFile) continue;
-      final name = entry.name.replaceAll('\\', '/');
-      if (name.startsWith('/') || name.split('/').contains('..')) {
-        throw Exception('Arsip berisi path tidak aman. Unduhan dibatalkan.');
-      }
-      final out = File('${dir.path}/$name');
+      final out = _safeTarget(dir, entry.name);
       out.parent.createSync(recursive: true);
-      out.writeAsBytesSync(entry.content as List<int>);
+      final content = entry.content as List<int>;
+      out.writeAsBytesSync(content);
     }
   }
 
