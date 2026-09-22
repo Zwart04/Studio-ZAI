@@ -518,12 +518,13 @@ pre { font-family: var(--font-mono); font-size: var(--t-caption); line-height: 1
   to { opacity: 1; transform: none; }
 }
 
-.brand-logo { width: 30px; height: 30px; object-fit: contain; }
+.brand-logo { width: 26px; height: 26px; object-fit: contain; filter: brightness(0) invert(1); margin-right: 2px; }
 
 .wizard-logo {
   width: 88px;
   height: 88px;
   object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 .logo-hide { display: none; }

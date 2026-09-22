@@ -621,7 +621,17 @@ function closePanel() {
 
 function renderVoice() {
   const select = $("#ttsVoice");
-  select.innerHTML = (state.voices.piper || []).map((id) => `<option value="${id}">${id}</option>`).join("");
+  const available = state.voices.piper || [];
+  select.innerHTML = available.map((id) => `<option value="${id}">${id}</option>`).join("");
+  select.disabled = available.length === 0;
+  const ttsBtn = $("#ttsBtn");
+  if (ttsBtn) {
+    ttsBtn.disabled = available.length === 0;
+    ttsBtn.title = available.length === 0 ? "Unduh dulu model suara di halaman Model" : "";
+  }
+  if (available.length === 0) {
+    select.innerHTML = `<option value="">— belum ada model suara —</option>`;
+  }
   const hint = $("#cloneHint");
   if (!state.voices.available || !state.voices.available.chatterbox) {
     hint.textContent = "Chatterbox belum terpasang (pip install -e \"core[clone]\") — kloning nonaktif.";

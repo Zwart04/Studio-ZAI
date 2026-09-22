@@ -350,8 +350,8 @@ def project_clone(project_id: str, payload: CloneRequest) -> dict[str, Any]:
 @app.get("/api/voices")
 def list_voices() -> dict[str, Any]:
     return {
-        "piper": [m["id"] for m in voice.tts_models()],
-        "clone": [m["id"] for m in voice.clone_models()],
+        "piper": [m["id"] for m in voice.tts_models() if models.manager.is_installed(m["id"])],
+        "clone": [m["id"] for m in voice.clone_models() if models.manager.is_installed(m["id"])],
         "available": {"piper": voice.piper_available(), "chatterbox": voice.chatterbox_available()},
         "default": {"id": voice.default_voice("id"), "en": voice.default_voice("en")},
     }
