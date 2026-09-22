@@ -22,6 +22,8 @@ const I18N = {
     "models.title": "Model",
     "models.lead": "Model tidak dibundel dalam aplikasi. Studio ZAI mendeteksi perangkatmu dan menyarankan model paling ringan yang cocok.",
     "models.download": "Unduh", "models.remove": "Hapus", "models.installed": "terpasang", "models.pip": "via pip",
+    "models.recommended": "rekomendasi",
+    "models.kindAsr": "Transkripsi", "models.kindTts": "Suara", "models.kindClone": "Kloning suara",
     "settings.title": "Pengaturan", "settings.lang": "Bahasa antarmuka", "settings.asr": "Model transkripsi default",
     "settings.tts": "Suara Indonesia default", "settings.clone": "Model kloning default", "settings.crop": "Mode crop default",
     "settings.cookies": "cookies.txt (opsional, untuk video privat)",
@@ -57,6 +59,8 @@ const I18N = {
     "models.title": "Models",
     "models.lead": "Models are not bundled. Studio ZAI detects your device and recommends the lightest matching models.",
     "models.download": "Download", "models.remove": "Remove", "models.installed": "installed", "models.pip": "via pip",
+    "models.recommended": "recommended",
+    "models.kindAsr": "Transcription", "models.kindTts": "Voice", "models.kindClone": "Voice cloning",
     "settings.title": "Settings", "settings.lang": "Interface language", "settings.asr": "Default transcription model",
     "settings.tts": "Default Indonesian voice", "settings.clone": "Default cloning model", "settings.crop": "Default crop mode",
     "settings.cookies": "cookies.txt (optional, for private videos)",
@@ -311,7 +315,7 @@ function showLinkPreview(info) {
   box.innerHTML = `
     <div class="row settings">
       <div style="display:grid;gap:2px;min-width:0">
-        <span style="font-weight:600">✓ ${t("home.linkReady")}</span>
+        <span style="font-weight:600"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> ${t("home.linkReady")}</span>
         <span class="muted">${info.title} · ${fmtDuration(info.duration)}${info.uploader ? " · " + info.uploader : ""}</span>
       </div>
     </div>`;
@@ -323,7 +327,7 @@ function showLinkError(message) {
   wrap.style.display = "flex";
   $("#qualityWrap").style.display = "none";
   linkInfoCache = null;
-  box.innerHTML = `<span class="muted">✗ ${t("home.linkFail")}: ${message}</span>`;
+  box.innerHTML = `<span class="muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:14px;height:14px;vertical-align:-2px"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg> ${t("home.linkFail")}: ${message}</span>`;
 }
 
 function hideLinkPreview() {
@@ -344,7 +348,7 @@ function onSourceChanged() {
     wrap.style.display = "flex";
     $("#qualityWrap").style.display = "none";
     linkInfoCache = null;
-    box.innerHTML = `<span class="muted">✓ ${t("home.localReady")}: ${fileName(value)}</span>`;
+    box.innerHTML = `<span class="muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> ${t("home.localReady")}: ${fileName(value)}</span>`;
     return;
   }
   // debounce 800ms supaya tidak request tiap ketikan
@@ -657,10 +661,17 @@ function closePanel() {
 
 /* ------------------------------------------------------------------ voice */
 
+function voiceLabel(id) {
+  const fake = { id, size_mb: null, note: "", langs: [] };
+  if (id.includes("id_ID")) fake.langs = ["id"];
+  else if (id.includes("en_")) fake.langs = ["en"];
+  return modelName(fake);
+}
+
 function renderVoice() {
   const select = $("#ttsVoice");
   const available = state.voices.piper || [];
-  select.innerHTML = available.map((id) => `<option value="${id}">${id}</option>`).join("");
+  select.innerHTML = available.map((id) => `<option value="${id}">${voiceLabel(id)}</option>`).join("");
   select.disabled = available.length === 0;
   const ttsBtn = $("#ttsBtn");
   if (ttsBtn) {
@@ -704,11 +715,40 @@ async function runClone() {
 
 /* ------------------------------------------------------------------ models */
 
+/* Nama tampilan natural untuk id teknis model (tanpa underscore/dash = no AI slop) */
+function modelName(model) {
+  const id = model.id || "";
+  const size = model.size_mb ? ` · ${model.size_mb} MB` : "";
+  if (id.startsWith("whisper-")) {
+    const tierName = id.replace("whisper-", "").replace("-int8", "");
+    const label = { tiny: "Tiny", base: "Base", small: "Small", medium: "Medium" }[tierName] || tierName;
+    const rec = /indonesia/i.test(model.note || "") ? ` · ${t("models.recommended")}` : "";
+    return `Whisper ${label}${rec}${size ? ` — ${model.size_mb} MB` : ""}`;
+  }
+  if (id.startsWith("piper-")) {
+    const lang = (model.langs || [])[0] === "id" ? "Indonesia" : (model.langs || [])[0] === "en" ? "English" : "";
+    const voice = id.includes("news_tts") ? "News" : id.includes("lessac") ? "Lessac" : id.includes("alba") ? "Alba" : "";
+    return `Suara ${lang}${voice ? ` ${voice}` : ""} — ${model.size_mb ?? "?"} MB`;
+  }
+  if (id === "chatterbox-base") return `Kloning Suara EN — ${model.size_mb ?? "?"} MB`;
+  if (id === "chatterbox-id-finetune") return `Kloning Suara Indonesia — ${model.size_mb ?? "?"} MB`;
+  if (id === "zipvoice-zh-en") return `Kloning Ringan EN — ${model.size_mb ?? "?"} MB`;
+  if (id === "chatterbox-gguf-q4") return `Kloning Eksperimental — ${model.size_mb ?? "?"} MB`;
+  if (id === "mms-tts-ind") return `Suara Indonesia Alternatif — ${model.size_mb ?? "?"} MB`;
+  return `${id}${size}`;
+}
+
+function kindName(kind) {
+  return kind === "asr" ? t("models.kindAsr") : kind === "tts" ? t("models.kindTts") : t("models.kindClone");
+}
+
 async function renderModels() {
   try {
     const data = await api("/api/models");
     const hardware = data.hardware;
     const tier = data.tier;
+    const asrRec = (data.models || []).find((m) => m.id === tier.asr);
+    const ttsRec = (data.models || []).find((m) => m.id === tier.tts);
     $("#hardwareCard").innerHTML = `
       <div class="row settings" style="border-bottom:1px solid var(--separator)">
         <span style="font-weight:600">${hardware.os} / ${hardware.arch}</span>
@@ -721,16 +761,15 @@ async function renderModels() {
         <span class="muted">${tier.reasons.join(" · ")}</span>
       </div>
       <div class="row" style="gap:var(--s2);margin-top:var(--s3)">
-        <span class="badge info">${tier.asr}</span>
-        <span class="badge info">${tier.tts}</span>
-        ${tier.clone ? `<span class="badge info">${tier.clone}</span>` : ""}
+        ${asrRec ? `<span class="badge info">${modelName(asrRec)}</span>` : ""}
+        ${ttsRec ? `<span class="badge info">${modelName(ttsRec)}</span>` : ""}
       </div>`;
     $("#modelList").innerHTML = data.models.map((model) => `
       <div class="card tight">
         <div class="row settings">
           <div style="display:grid;gap:2px;min-width:0">
-            <span style="font-weight:600">${model.id}</span>
-            <span class="muted">${model.kind} · ${model.size_mb ?? "?"} MB · ${model.license}${model.note ? " · " + model.note : ""}</span>
+            <span style="font-weight:600">${modelName(model)}</span>
+            <span class="muted">${kindName(model.kind)}${model.note ? " · " + model.note : ""}</span>
           </div>
           <div class="row" style="gap:var(--s2)">
             ${model.installed ? `<span class="badge ok">${t("models.installed")}</span>` : (model.requires_pip ? `<span class="badge">${t("models.pip")}</span>` : "")}
@@ -762,12 +801,17 @@ async function renderSettings() {
   if (!state.voices.piper) await loadVoices();
   const settings = state.settings;
   $("#setLang").value = state.lang;
-  $("#setAsr").innerHTML = ["whisper-tiny-int8", "whisper-base-int8", "whisper-small-int8", "whisper-medium-int8"]
-    .map((id) => `<option ${settings.asr_model === id ? "selected" : ""}>${id}</option>`).join("");
-  $("#setTts").innerHTML = state.voices.piper.filter((id) => id.includes("id_ID"))
-    .map((id) => `<option ${settings.tts_voice_id === id ? "selected" : ""}>${id}</option>`).join("");
-  $("#setClone").innerHTML = state.voices.clone
-    .map((id) => `<option ${settings.clone_model === id ? "selected" : ""}>${id}</option>`).join("");
+  const asrIds = ["whisper-tiny-int8", "whisper-base-int8", "whisper-small-int8", "whisper-medium-int8"];
+  $("#setAsr").innerHTML = asrIds
+    .map((id) => `<option value="${id}" ${settings.asr_model === id ? "selected" : ""}>${voiceLabel(id)}</option>`).join("");
+  const ttsIds = state.voices.piper.filter((id) => id.includes("id_ID"));
+  $("#setTts").innerHTML = (ttsIds.length ? ttsIds : [""]).map((id) => id
+    ? `<option value="${id}" ${settings.tts_voice_id === id ? "selected" : ""}>${voiceLabel(id)}</option>`
+    : `<option value="">— belum ada —</option>`).join("");
+  const cloneIds = state.voices.clone || [];
+  $("#setClone").innerHTML = (cloneIds.length ? cloneIds : [""]).map((id) => id
+    ? `<option value="${id}" ${settings.clone_model === id ? "selected" : ""}>${voiceLabel(id)}</option>`
+    : `<option value="">— belum ada —</option>`).join("");
   $("#setCrop").value = settings.crop || "center";
   $("#setCookies").value = settings.cookies_path || "";
   $("#setLlmUrl").value = settings.llm_base_url || "";
@@ -859,20 +903,26 @@ function wizardShowRecommend() {
 
   const rows = wizard.models.map((model) => {
     const rec = wizard.chosen.includes(model.id);
-    const mark = model.kind === "asr" ? "🎙️" : model.kind === "tts" ? "🔊" : "🧬";
+    const markSvg = model.kind === "asr"
+      ? '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>'
+      : model.kind === "tts"
+        ? '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px"><path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
+        : '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>';
     return `
     <label class="wizard-body-row" style="cursor:pointer">
       <input type="checkbox" data-model="${model.id}" ${rec ? "checked" : ""} ${model.installed ? "disabled" : ""} />
       <span class="label">
-        ${mark} ${model.id}
-        <span class="sub">${model.size_mb ?? "?"} MB · ${model.note || ""}</span>
+        ${markSvg} ${modelName(model)}
+        <span class="sub">${model.note || ""}</span>
       </span>
-      ${model.installed ? `<span class="stage-pill" style="background:rgba(48,209,88,.16);color:var(--green)">✓</span>` : ""}
+      ${model.installed ? `<span class="stage-pill" style="background:rgba(48,209,88,.16);color:var(--green)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M20 6 9 17l-5-5"/></svg></span>` : ""}
     </label>`;
   }).join("");
 
+  const recAsr = wizard.models.find((m) => m.id === tier.asr);
+  const recTts = wizard.models.find((m) => m.id === tier.tts);
   $("#wizardBody").innerHTML = `
-    <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${tier.asr}</strong> + <strong>${tier.tts}</strong></p>
+    <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${recAsr ? modelName(recAsr) : tier.asr}</strong> + <strong>${recTts ? modelName(recTts) : tier.tts}</strong></p>
     ${rows}`;
   $("#wizardActions").innerHTML = `
     <button class="primary" id="wzInstall">Unduh & pasang</button>
@@ -902,14 +952,17 @@ async function wizardInstall() {
   $("#wizardActions").innerHTML = "";
 
   const body = $("#wizardBody");
-  body.innerHTML = toInstall.map((id) => `
+  body.innerHTML = toInstall.map((id) => {
+    const model = wizard.models.find((m) => m.id === id);
+    return `
     <div class="wizard-body-row" data-row="${id}">
       <span class="dot" data-dot="${id}">…</span>
-      <span class="label">${id}
+      <span class="label">${model ? modelName(model) : id}
         <div class="wizard-progress"><span data-bar="${id}" style="width:0%"></span></div>
       </span>
       <span class="muted" data-pct="${id}">0%</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 
   for (const id of toInstall) {
     await wizardDownloadModel(id);
@@ -943,7 +996,7 @@ function wizardDownloadModel(id) {
             if (pct) pct.textContent = "gagal";
             if (bar) bar.style.background = "var(--red)";
           } else {
-            if (dot) { dot.classList.remove("run"); dot.classList.add("ok"); dot.textContent = "✓"; }
+            if (dot) { dot.classList.remove("run"); dot.classList.add("ok"); dot.innerHTML = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M20 6 9 17l-5-5"/></svg>'; }
             if (bar) bar.style.width = "100%";
             if (pct) pct.textContent = "100%";
           }
@@ -956,7 +1009,7 @@ function wizardDownloadModel(id) {
 }
 
 async function wizardFinish() {
-  $("#wizardTitle").textContent = "Siap dipakai 🎉";
+  $("#wizardTitle").textContent = "Siap dipakai";
   $("#wizardSub").textContent = "Model terpasang. Semua fitur inti jalan lokal dan offline.";
   $("#wizardBody").innerHTML = "";
   $("#wizardActions").innerHTML = `<button class="primary" id="wzGo">Mulai pakai</button>`;
