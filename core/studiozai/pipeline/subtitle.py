@@ -152,6 +152,40 @@ PRESETS: dict[str, dict[str, Any]] = {
 
 DEFAULT_PRESET = "clean"
 
+# Creator-style templates use bundled OFL fonts and distinct render colors.
+# Generate the Android mirror with tools/sync_text_presets.py after changes.
+for _id, _label, _font, _color, _outline, _box, _category, _sample in [
+    ("viral_yellow", "Viral Yellow", "Anton", "#FFE55C", "#111111", False, "Pop", "MAKE IT HAPPEN"),
+    ("mint_punch", "Mint Punch", "Anton", "#79F2C0", "#10261F", False, "Pop", "STAY CREATIVE"),
+    ("pink_pop", "Pink Pop", "Barlow Condensed", "#FF8FD8", "#4A143A", False, "Pop", "YOUR MOMENT"),
+    ("ice_blue", "Ice Blue", "Anton", "#A4E8FF", "#123D61", False, "Pop", "NEXT LEVEL"),
+    ("orange_burst", "Orange Burst", "Anton", "#FFAE54", "#451E0B", False, "Pop", "LET'S GO"),
+    ("lilac_glow", "Lilac Glow", "Barlow Condensed", "#E7C3FF", "#783CAE", False, "Neon", "AFTER HOURS"),
+    ("cyan_neon", "Cyan Neon", "Barlow Condensed", "#E9FFFF", "#00BFD6", False, "Neon", "LIGHT IT UP"),
+    ("rose_neon", "Rose Neon", "Barlow Condensed", "#FFF3FA", "#F02B89", False, "Neon", "FEEL THE VIBE"),
+    ("editorial_cream", "Editorial", "DM Serif Display", "#FFEAC5", "#282016", False, "Editorial", "A little magic"),
+    ("cinema_white", "Cinema", "DM Serif Display", "#FFFFFF", "#111111", False, "Editorial", "Every frame matters"),
+    ("handwritten", "Handwritten", "Kalam", "#FFF0A1", "#2C2612", False, "Editorial", "made with love"),
+    ("ink_note", "Ink Note", "Kalam", "#AADFD2", "#101C1A", False, "Editorial", "one more story"),
+    ("yellow_label", "Yellow Label", "Barlow Condensed", "#171717", "#FFE55C", True, "Label", "SAVE THIS TIP"),
+    ("pink_label", "Pink Label", "Barlow Condensed", "#311529", "#FFA9DB", True, "Label", "GOOD TO KNOW"),
+    ("mint_label", "Mint Label", "Barlow Condensed", "#112A23", "#91EDCC", True, "Label", "QUICK TUTORIAL"),
+    ("news_flash", "News Flash", "Anton", "#FFFFFF", "#D92D40", True, "Label", "THE BIG UPDATE"),
+]:
+    def _ass_color(hex_color: str) -> str:
+        return "&H00" + hex_color[5:7] + hex_color[3:5] + hex_color[1:3]
+
+    PRESETS[_id] = {
+        **PRESETS["clean"], "label": _label, "font": _font, "size": 76,
+        "primary": _ass_color(_color), "secondary": _ass_color(_color),
+        "outline_colour": _ass_color(_outline), "bold": 0 if _font in ("Anton", "DM Serif Display") else -1,
+        "outline": 10 if _box else (4 if _category == "Pop" else 2),
+        "shadow": 4 if _category == "Neon" else 0, "border_style": 3 if _box else 1,
+        "sample": _sample, "category": _category, "preview_color": _color,
+        "preview_outline": _outline, "italic": _font == "DM Serif Display",
+        "anim": PRESETS["tiktok_pop"]["anim"] if _category == "Pop" else PRESETS["clean"]["anim"],
+    }
+
 # Posisi subtitle. "off" = jangan bakar subtitle sama sekali (dipakai kalau
 # video sumber sudah punya subtitle bawaan, mis. dari YouTube).
 POSITIONS: dict[str, int] = {"bottom": 2, "middle": 5, "top": 8}
@@ -160,7 +194,14 @@ POSITION_CHOICES = ("bottom", "middle", "top", "off")
 
 def preset_list() -> list[dict[str, str]]:
     """Daftar template untuk galeri di UI."""
-    return [{"id": key, "label": value.get("label", key)} for key, value in PRESETS.items()]
+    return [{"id": key, "label": value.get("label", key),
+             "font": value.get("font", "Inter"), "category": value.get("category", "Essential"),
+             "sample": value.get("sample", "Tell your story"),
+             "color": value.get("preview_color", "#FFFFFF"),
+             "outline": value.get("preview_outline", "#161B22"),
+             "box": "yes" if value.get("border_style") == 3 else "no",
+             "italic": "yes" if value.get("italic") else "no"}
+            for key, value in PRESETS.items()]
 
 
 def template_id(name: Any) -> str:
@@ -319,21 +360,22 @@ def _style_line(name: str, style: dict[str, Any], scale: float, alignment: int, 
     values = {
         "name": name,
         "font": style.get("font", "Inter"),
-        "size": style.get("size", 56),
+        "size": max(10, round(style.get("size", 56) * scale)),
         "primary": style.get("primary", "&H00FFFFFF"),
         "secondary": style.get("secondary", "&H00FFFFFF"),
         "outline_colour": style.get("outline_colour", "&H00101010"),
         "bold": style.get("bold", 0),
+        "italic": -1 if style.get("italic") else 0,
         "border": style.get("border_style", 1),
-        "outline": style.get("outline", 3),
-        "shadow": style.get("shadow", 1),
+        "outline": round(style.get("outline", 3) * scale, 2),
+        "shadow": round(style.get("shadow", 1) * scale, 2),
         "align": alignment,
         "margin_h": int(DEFAULT_MARGIN_H * scale),
         "margin_v": margin_v,
     }
     return (
         "Style: {name},{font},{size},{primary},{secondary},{outline_colour},&H80000000,"
-        "{bold},0,0,0,100,100,0,0,{border},{outline},{shadow},{align},"
+        "{bold},{italic},0,0,100,100,0,0,{border},{outline},{shadow},{align},"
         "{margin_h},{margin_h},{margin_v},1"
     ).format(**values)
 

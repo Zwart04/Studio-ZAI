@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -12,6 +13,7 @@ import 'model_registry.dart';
 /// Detects the device and manages on-demand model downloads (resume + verify).
 class ModelManager {
   ModelManager._(this.modelsDir);
+  ModelManager.forDirectory(this.modelsDir);
 
   final Directory modelsDir;
   static ModelManager? _instance;
@@ -143,6 +145,12 @@ class ModelManager {
 
       if (response.statusCode == 416) {
         await response.stream.drain<void>();
+        final remoteSize = int.tryParse((response.headers['content-range'] ?? '').split('/').last);
+        if (remoteSize == null || remoteSize != existing) {
+          if (target.existsSync()) target.deleteSync();
+          if (attempt == 0) continue;
+          throw Exception('Ukuran unduhan tidak cocok dengan server. Coba lagi.');
+        }
         if (existing == 0) {
           throw Exception('Unduhan ditolak server (HTTP 416). Coba lagi.');
         }
@@ -175,18 +183,27 @@ class ModelManager {
       final total = (response.contentLength ?? 0) + (resumed ? existing : 0);
       final sink = target.openWrite(mode: resumed ? FileMode.append : FileMode.write);
       var received = resumed ? existing : 0;
+      var buffered = 0;
+      final progressClock = Stopwatch()..start();
       try {
         await for (final chunk in response.stream.timeout(const Duration(seconds: 60))) {
           sink.add(chunk);
           received += chunk.length;
-          if (total > 0) {
-            onProgress(received / total * 100, 'mengunduh ${model.id}');
+          buffered += chunk.length;
+          if (buffered >= 1024 * 1024) {
+            await sink.flush();
+            buffered = 0;
+          }
+          if (total > 0 && progressClock.elapsedMilliseconds >= 200) {
+            onProgress(received / total * 94, 'mengunduh ${model.id}');
+            progressClock.reset();
           }
         }
         await sink.flush();
       } finally {
         await sink.close();
       }
+      if (total > 0 && received != total) throw Exception('Unduhan belum lengkap. Coba lagi untuk melanjutkan.');
       return;
     }
   }
@@ -201,6 +218,15 @@ class ModelManager {
     final looksModel = names.contains('.onnx') || names.contains('.bin') || names.contains('tokens.txt') || names.contains('.gguf') || names.contains('.json');
     if (!looksModel) {
       throw Exception('Isi arsip tidak dikenali sebagai model (${files.length} file). Coba lagi.');
+    }
+    bool has(String suffix) => files.any((f) => f.path.endsWith(suffix) && f.lengthSync() > 0);
+    if (model.id.startsWith('whisper-') || model.kind == 'clone') {
+      if (!(has('encoder.onnx') || has('encoder.int8.onnx')) ||
+          !(has('decoder.onnx') || has('decoder.int8.onnx')) || !has('tokens.txt')) {
+        throw Exception('Model tidak lengkap: encoder, decoder, atau tokens tidak ditemukan.');
+      }
+    } else if (model.kind == 'tts' && (!has('.onnx') || !has('tokens.txt'))) {
+      throw Exception('Model suara tidak lengkap: ONNX atau tokens tidak ditemukan.');
     }
   }
 
@@ -271,14 +297,26 @@ class ModelManager {
     }
     final minBytes = model.id == 'silero-vad' ? 500 * 1024 : 1024 * 1024;
     if (target.lengthSync() < minBytes && model.sizeMb * 1024 * 1024 > minBytes) {
+      final actualKb = (target.lengthSync() / 1024).round();
       try {
         target.deleteSync();
       } catch (_) {}
-      throw Exception('Unduhan tidak lengkap (${(target.lengthSync() / 1024).round()} KB). Coba lagi.');
+      throw Exception('Unduhan tidak lengkap ($actualKb KB). Coba lagi.');
     }
   }
 
   Future<void> _extract(File archive, Directory dir) async {
+    final free = await freeSpaceMb();
+    final needed = archive.lengthSync() * 6 / 1048576 + 128;
+    if (free > 0 && free < needed) {
+      throw Exception('Ruang ekstraksi kurang: perlu sekitar ${needed.round()} MB, tersedia ${free.round()} MB.');
+    }
+    final archivePath = archive.path;
+    final outputPath = dir.path;
+    await Isolate.run(() => ModelManager._(Directory(outputPath))._extractWorker(File(archivePath), Directory(outputPath)));
+  }
+
+  Future<void> _extractWorker(File archive, Directory dir) async {
     final lower = archive.path.toLowerCase();
     if (lower.endsWith('.zip')) {
       await _extractZip(archive, dir);
@@ -300,7 +338,7 @@ class ModelManager {
   /// per blok 64 KB dan ditulis ke disk.
   Future<void> _extractTarStreaming(File archive, Directory dir) async {
     final tempTar = File('${archive.parent.path}/.tmp-${archive.uri.pathSegments.last}.tar');
-    final free = await freeSpaceMb();
+    const free = 0.0; // Disk space was checked on the UI isolate before dispatch.
     // Puncak pemakaian: arsip + .tar hasil dekompresi (≈3x) + hasil ekstrak (≈3x).
     final neededMb = (archive.lengthSync() * 3 / 1048576).round() + 128;
     if (free > 0 && free < neededMb) {
@@ -313,6 +351,7 @@ class ModelManager {
       var offset = 0;
       final total = tempTar.lengthSync();
       final buffer = Uint8List(65536);
+      try {
       while (offset + 512 <= total) {
         raf.setPositionSync(offset);
         final header = raf.readSync(512);
@@ -323,6 +362,9 @@ class ModelManager {
         final size = _tarOctal(header, 124, 12);
         final type = header[156];
         offset += 512;
+        if (size < 0 || offset + size > total) {
+          throw Exception('Arsip terpotong. Unduh ulang model.');
+        }
 
         if ((type == 0x30 || type == 0x00) && size > 0) {
           final target = _safeTarget(dir, fullName);
@@ -333,7 +375,7 @@ class ModelManager {
             while (remaining > 0) {
               final want = remaining < buffer.length ? remaining : buffer.length;
               final chunk = raf.readSync(want);
-              if (chunk.isEmpty) break;
+              if (chunk.isEmpty) throw Exception('Isi arsip tidak lengkap.');
               sink.writeFromSync(chunk);
               remaining -= chunk.length;
             }
@@ -343,7 +385,9 @@ class ModelManager {
         }
         offset += ((size + 511) ~/ 512) * 512; // data dipad ke kelipatan 512
       }
-      raf.closeSync();
+      } finally {
+        raf.closeSync();
+      }
     } finally {
       if (tempTar.existsSync()) {
         try {
@@ -359,7 +403,7 @@ class ModelManager {
     final output = OutputFileStream(target.path);
     try {
       if (source.path.toLowerCase().endsWith('.bz2')) {
-        BZip2Decoder().decodeStream(input, output);
+        BZip2Decoder().decodeStream(input, output, verify: true);
       } else {
         GZipDecoder().decodeStream(input, output);
       }
@@ -411,10 +455,10 @@ class ModelManager {
 
   /// Arsip .zip (dipakai desktop; di Android jarang) dengan batas ukuran.
   Future<void> _extractZip(File archive, Directory dir) async {
-    final bytes = archive.readAsBytesSync();
-    if (bytes.length > 512 * 1024 * 1024) {
+    if (archive.lengthSync() > 64 * 1024 * 1024) {
       throw Exception('Arsip zip terlalu besar untuk diekstrak di HP.');
     }
+    final bytes = archive.readAsBytesSync();
     if (bytes.length < 1024) {
       throw Exception('Arsip rusak (hanya ${bytes.length} byte). Coba lagi.');
     }

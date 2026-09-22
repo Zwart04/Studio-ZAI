@@ -1,147 +1,98 @@
-<p align="center">
-  <img src="assets/logo-banner.png" alt="Studio ZAI — Auto Clip • Subtitle • Voiceover" width="720" />
-</p>
-
+<p align="center"><img src="assets/logo.png" width="112" alt="Studio ZAI logo" /></p>
 <h1 align="center">Studio ZAI</h1>
+<p align="center"><strong>Turn long videos into short stories.</strong><br />Automatic clips, captions, a timeline editor, and local voiceovers.</p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download</strong></a> · <a href="#preview">Preview</a> · <a href="docs/BUILD.md">Build guide</a> · <a href="README.md">Bahasa Indonesia</a></p>
 
-<p align="center">
-  <strong>Turn long videos into viral 9:16 clips — automatically, locally, no cloud.</strong><br />
-  Smart auto-clip · ID/EN subtitles · voiceover &amp; voice cloning · 100% on-device.
-</p>
+## Preview
 
-<p align="center">
-  <a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/Zwart04/Studio-ZAI?label=download&logo=github" /></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-blue" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
-  <img alt="Offline" src="https://img.shields.io/badge/offline--first-100%25%20local-orange" />
-</p>
+![Studio ZAI editor](docs/screenshots/04-editor.png)
 
-<p align="center">
-  <a href="#️-download--try-in-2-minutes"><strong>⬇️ Download &amp; try (2 minutes)</strong></a> ·
-  <a href="#-screenshots">📸 Screenshots</a> ·
-  <a href="#-features">✨ Features</a> ·
-  <a href="#️-how-it-works">⚙️ How it works</a> ·
-  <a href="README.md">🇮🇩 Bahasa Indonesia</a>
-</p>
+Edit video, media, text, and audio tracks in one workspace. Choose a canvas, generate captions, apply a typography template, and check a quick preview before exporting.
 
----
+![Recorded editor preview](docs/screenshots/studio-zai-demo.gif)
 
-## 🎬 How it works
+*Recorded from the desktop UI using original synthetic demo media. Captions can be corrected in the editor. [Download the MP4 demo](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/StudioZAI-1.5.1-demo.mp4).*
 
-Paste a YouTube / TikTok / Instagram link (or pick a local file) → Studio ZAI downloads it, finds the best moments, cuts 9:16 clips, and burns in subtitles automatically — all on your own machine.
+## Download
 
-| Home — paste a link, pick quality, start | Model Manager — detects hardware, downloads once |
-|---|---|
+| Platform | Package |
+| :-- | :-- |
+| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/StudioZAI-1.5.1-windows-x64.zip) |
+| Android 8+ ARM64 | [ARM64 APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/StudioZAI-1.5.1-android-arm64.apk) |
+| Android ARMv7 | [32-bit ARM APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/StudioZAI-1.5.1-android-armv7.apk) |
+| Android x86_64 | [x86_64 APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/StudioZAI-1.5.1-android-x86_64.apk) |
+
+Extract the entire Windows ZIP before opening `StudioZAI.exe`; FFmpeg is included. AI models are downloaded during first-run setup. Network access is needed for model downloads and online sources; local media processing works offline once models are installed. Linux can be built from source.
+
+[Release notes](https://github.com/Zwart04/Studio-ZAI/releases/tag/v1.5.1) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.5.1/SHA256SUMS.txt)
+
+## Start in three steps
+
+1. **Complete setup.** Install transcription and speech models. Android also prepares voice activity detection and offers optional English cloning. Failed downloads remain retryable.
+2. **Add a video.** Select a local file or supported link, then choose the transcript language, clip count, and original, portrait, square, or landscape canvas.
+3. **Edit and export.** Generate captions, correct the wording, choose a style, and adjust your tracks. Use **Quick preview** before exporting the final video.
+
+> A transcript is recognized speech. Captions place that text at specific times in a video. Selecting a transcript language does not translate or replace the original audio. Choose the available Indonesian audio track to download an Indonesian YouTube dub.
+
+## Features
+
+| Feature | What it does |
+| :-- | :-- |
+| Automatic clips | Finds moments using audio energy, speech density, and pauses. |
+| Timeline editor | Video, image/video overlays, text, and extra audio tracks. |
+| Automatic captions | Local Whisper transcription, editable timing/text, and captions burned into MP4. |
+| 24 typography templates | Essential, Pop, Neon, Editorial, and Label styles with bundled fonts and distinct colors. |
+| Canvas and position | Original aspect ratio, 9:16, 1:1, 16:9; fit, crop, blur; 3 × 3 position presets and precise percentages. |
+| Local voiceover | Indonesian and English Piper voices. |
+| Multilingual audio | Select available YouTube tracks without silently falling back to another language. |
+| Guided setup | Model downloads, installation validation, and retryable errors. |
+
+## Screenshots
+
+| Home | Models |
+| :--: | :--: |
 | ![Home](docs/screenshots/01-home.png) | ![Models](docs/screenshots/02-models.png) |
 
-| Voice — ID/EN TTS + voice cloning | Mobile view — bottom tabs, one-handed |
-|---|---|
-| ![Voice](docs/screenshots/03-voice.png) | ![Mobile](docs/screenshots/05-mobile-home.png) |
+| Voiceover | Setup |
+| :--: | :--: |
+| ![Voiceover](docs/screenshots/03-voice.png) | ![Setup](docs/screenshots/06-setup.png) |
 
-## ⬇️ Download & try (2 minutes)
+These are desktop UI screenshots. The [small-screen web screenshot](docs/screenshots/05-mobile-home.png) demonstrates responsive layout and is not an APK screenshot.
 
-**Latest release: [github.com/Zwart04/Studio-ZAI/releases/latest](https://github.com/Zwart04/Studio-ZAI/releases/latest)**
+## Validation and limitations
 
-| Platform | File | Size |
-|---|---|---|
-| 🪟 Windows 10/11 (x64) | `StudioZAI-*-windows-x64.zip` — unzip, run `StudioZAI.exe` (FFmpeg bundled) | ±215 MB |
-| 🤖 Android 8+ (arm64) | `StudioZAI-*-android-arm64.apk` — targets Android 17 (API 37) | ±42 MB |
+Version 1.5.1 was tested with a **78-minute YouTube video** containing an Indonesian audio track: a complete 480p download, 1,874 transcript segments, three automatically selected clips, and renders/previews near the start, after minute 60, and near the end. Original, square, and portrait aspect ratios were checked with FFprobe. See the [validation report](docs/RELEASE-1.5.1.md).
 
-AI models are **not** bundled. On first launch a setup wizard downloads what you need (e.g. Indonesian voice ±63 MB). After that, everything runs **offline**.
+- Desktop uses yt-dlp for supported websites. Android supports YouTube, direct media URLs, and local files. Source-site access may change or require authentication.
+- Android cloning uses ZipVoice for English. Desktop cloning requires a source installation with the additional Chatterbox runtime; the Windows package does not bundle PyTorch/Chatterbox.
+- Desktop LLM ranking is optional and requires a separately configured compatible server, such as Ollama.
+- Caption accuracy depends on the language, model, and recording. Review text before publishing.
+- Android validation covers builds, Flutter analysis, and automated tests. A physical Android device was not available for this release.
 
-> 💡 Windows SmartScreen may appear (the EXE is not code-signed yet) → *More info → Run anyway*.
-> Android: allow *Install unknown apps* from your browser/file manager.
-
-## ✨ Features
-
-- 🔗 **Any input** — YouTube links (with quality picker 480p → 4K / audio-only), TikTok, Instagram, or local video files. Realtime download progress (MB/s + ETA).
-- ✂️ **Genuinely smart auto-clip** — energy + word-density + natural-pause scoring (learned from [openshorts](https://github.com/mutonby/openshorts)): cuts always land on speech pauses, never mid-word. Works with zero AI (pure ffmpeg) or with transcript/local-LLM help.
-- 💬 **Automatic subtitles** — word-level → clean captions burned into the video (Clean / Bold-Highlight styles), plus SRT/VTT export. Indonesian & English.
-- 📱 **Posting-ready 9:16 clips** — center or blur-background crop, 1080×1920, for TikTok / Reels / Shorts.
-- 🎙️ **Automatic voiceover** — type text → natural Indonesian/English voice (Piper, realtime on CPU).
-- 🧬 **Voice cloning** — from a 10–30 s sample (desktop: Chatterbox ID+EN; Android: on-device ZipVoice EN). Only for your own voice / with explicit permission.
-- 🎛️ **Timeline editor (CapCut-like, lightweight)** — Video, Media (add images/video), Text and Audio tracks. Drag blocks to retime, drag edges to resize, quick-preview before rendering. On Android and desktop.
-- 🔤 **8 typography templates** — Clean, Bold highlight, TikTok pop, Karaoke fill, Title card, Minimal lower, Neon, Subtitle box. Use them for auto captions or your own text overlays.
-- 🖼️ **Safe framing** — besides center 9:16 there is **Fit** (letterbox) and **Blur background** so on-screen text in the source is not cut off, plus 9:16 / original / 1:1 / 16:9 canvases.
-- 🌗 **Minimal dark UI** — Indonesian + English, one-hand friendly on phones.
-
-## ⚙️ How it works
-
-```
-link / local file
-   │  yt-dlp (quality picker + MB/s progress)
-   ▼
-source video ──► Whisper transcript (word timestamps, ID/EN)
-   │                  │
-   │                  ▼
-   │           moment scoring: energy + word density + natural pauses
-   │           cuts snap to speech pauses (snap-to-pause)
-   ▼
-9:16 clips ──► subtitles burned in ──► (optional) voiceover/TTS/cloning ──► posting-ready MP4
-```
-
-Everything is local. No telemetry, no uploads — your videos and voice never leave the device. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## 🪶 Why so light?
-
-| Decision | Effect |
-|---|---|
-| Runs **without AI** (ffmpeg heuristics + audio scoring) | Even weak laptops can make clips |
-| Smallest-in-class models: Whisper tiny–small (75–250 MB), Piper (~60 MB/voice) | Small downloads, CPU-only, realtime |
-| Models **not bundled** — on-demand via the Model Manager | Installer/APK stay small |
-| Vanilla UI (desktop) + lean Flutter (Android) | Low idle RAM, fast startup |
-
-## 🚀 For developers
+## Development
 
 ```bash
-# Desktop: run from source
 git clone https://github.com/Zwart04/Studio-ZAI.git
-cd Studio-ZAI/core
-pip install -e .[dev]
-studiozai doctor     # check ffmpeg, GPU, model recommendations
-studiozai serve      # open http://127.0.0.1:8737
+cd Studio-ZAI
+python -m venv .venv
+# Activate the environment, then:
+pip install -e "core[media,asr,tts,desktop,dev]"
+studiozai serve
+python -m pytest core/tests
 ```
 
 ```bash
-# Android: build the APK (needs Flutter + Android SDK 37)
 cd android/app
 flutter pub get
+flutter analyze
+flutter test
 flutter build apk --release --split-per-abi
 ```
 
-```bash
-# Tests
-cd core && pytest -q        # 40 unit tests
-flutter analyze             # inside android/app
-```
+[Architecture](docs/ARCHITECTURE.md) · [Build and signing](docs/BUILD.md) · [Models and licenses](docs/MODELS.md) · [Design system](docs/DESIGN.md)
 
-Full build guide (Windows EXE via PyInstaller, AppImage, APK signing):
-[docs/BUILD.md](docs/BUILD.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ·
-Models: [docs/MODELS.md](docs/MODELS.md) · Full feature list: [docs/FEATURES.md](docs/FEATURES.md)
+## License and credits
 
-## 🗂️ Repo layout
+Studio ZAI code is [MIT licensed](LICENSE). Models and dependencies retain their own licenses. Anton, Barlow Condensed, DM Serif Display, and Kalam are bundled with their OFL notices. The application follows its existing Apple-style neutral palette and system-blue accent; colorful typography is confined to video templates.
 
-```
-Studio ZAI/
-├─ core/       # Python engine: pipeline, CLI, server, model manager
-├─ ui/         # Static web UI (desktop)
-├─ desktop/    # pywebview launcher + packaging (PyInstaller/AppImage)
-├─ android/    # Flutter app (full on-device)
-├─ assets/     # Official logo
-├─ docs/       # Documentation + screenshots
-├─ scripts/    # Dev & deploy scripts
-└─ tools/      # Utilities (icon generator, screenshots)
-```
-
-## ⚖️ License & attribution
-
-Studio ZAI code: **MIT** — see [LICENSE](LICENSE).
-
-Third-party models: Piper (MIT) · Whisper / faster-whisper (MIT) · Chatterbox (MIT) ·
-Chatterbox-TTS-Indonesian (Apache-2.0) · ZipVoice via sherpa-onnx (Apache-2.0).
-Details & official links: [docs/MODELS.md](docs/MODELS.md).
-Pipeline inspiration: [openshorts](https://github.com/mutonby/openshorts) (snap-to-pause, scoring) &
-[OpenCreator](https://github.com/krillinai/OpenCreator) (local creator workspace).
-
-> ⚠️ Voice cloning is only for your own voice or voices you have explicit permission to use.
-> Chatterbox outputs automatically carry the PerTh watermark (model default, MIT).
+Built with FFmpeg, yt-dlp, faster-whisper, Piper, Flutter, and sherpa-onnx. Workflow inspiration: [openshorts](https://github.com/mutonby/openshorts) and [OpenCreator](https://github.com/krillinai/OpenCreator).

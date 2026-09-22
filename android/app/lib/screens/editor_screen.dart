@@ -41,10 +41,14 @@ class _EditorScreenState extends State<EditorScreen> {
     _timeline = widget.state.timelineForClip(clip);
     _captions = TextEditingController(text: _captionsToText(clip));
     _itemText = TextEditingController();
+    widget.state.addListener(_stateChanged);
   }
+
+  void _stateChanged() { if (mounted) setState(() {}); }
 
   @override
   void dispose() {
+    widget.state.removeListener(_stateChanged);
     _captions.dispose();
     _itemText.dispose();
     super.dispose();
@@ -85,6 +89,7 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _selectedKind = kind;
       _selectedId = item.id;
+      _itemText.text = item.text;
     });
   }
 
@@ -182,6 +187,8 @@ class _EditorScreenState extends State<EditorScreen> {
     if (videoItems.isNotEmpty) {
       clip.crop = videoItems.first.crop;
       clip.canvas = videoItems.first.canvas;
+      clip.start = videoItems.first.srcStart;
+      clip.end = clip.start + videoItems.first.end - videoItems.first.start;
     }
     clip.timeline = _timeline.toJson();
     await widget.state.saveClip(clip);
@@ -189,6 +196,8 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _preview() async {
     try {
+      setState(() => _previewPath = null);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       await _save();
       final file = await widget.state.previewClip(widget.clip);
       if (mounted) setState(() => _previewPath = file.path);
@@ -216,6 +225,19 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  Future<void> _generateCaptions() async {
+    try {
+      await _save();
+      await widget.state.generateCaptions(widget.clip);
+      if (!mounted) return;
+      setState(() => _captions.text = _captionsToText(widget.clip));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          widget.clip.captions.isEmpty ? 'Tidak ada ucapan terdeteksi.' : 'Subtitle siap. Pilih tipografi lalu Pratinjau atau Render.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   // --------------------------------------------------------------------- UI
 
   @override
@@ -224,24 +246,13 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(state.translate('editor.title')),
-        actions: [
-          IconButton(
-            tooltip: state.translate('editor.previewDraft'),
-            onPressed: state.jobState == JobState.running ? null : _preview,
-            icon: const Icon(Icons.play_circle_outline),
-          ),
-          IconButton(
-            tooltip: state.translate('editor.save'),
-            onPressed: _save,
-            icon: const Icon(Icons.check),
-          ),
-          IconButton(
-            tooltip: state.translate('clips.render'),
-            onPressed: state.jobState == JobState.running ? null : _render,
-            icon: const Icon(Icons.movie_creation_outlined),
-          ),
-        ],
+        actions: [TextButton.icon(onPressed:_save,icon:const Icon(Icons.check,size:18),label:const Text('Simpan'))],
       ),
+      bottomNavigationBar: SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,12),child:Row(children:[
+        Expanded(child:OutlinedButton.icon(onPressed:state.jobState == JobState.running ? null : _preview,icon:const Icon(Icons.play_circle_outline,size:18),label:const Text('Pratinjau'))),
+        const SizedBox(width:12),
+        Expanded(child:FilledButton.icon(onPressed:state.jobState == JobState.running ? null : _render,icon:const Icon(Icons.ios_share,size:18),label:const Text('Ekspor video'))),
+      ]))),
       body: Column(
         children: [
           _previewBox(state),
@@ -269,7 +280,7 @@ class _EditorScreenState extends State<EditorScreen> {
       // `ui.Clip` (bukan `Clip` milik models.dart) yang dipakai di sini.
       clipBehavior: ui.Clip.antiAlias,
       child: path != null
-          ? VideoPreview(path: path)
+          ? Center(child: VideoPreview(key: ValueKey(path), path: path))
           : Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -422,15 +433,9 @@ class _EditorScreenState extends State<EditorScreen> {
                   onPick: (template) => _replace('text', selected.copy()..template = template),
                 ),
                 const SizedBox(height: Tokens.space4),
-                _SliderRow(
-                  label: 'X',
-                  value: selected.x,
-                  onChanged: (value) => _replace('text', selected.copy()..x = value),
-                ),
-                _SliderRow(
-                  label: 'Y',
-                  value: selected.y,
-                  onChanged: (value) => _replace('text', selected.copy()..y = value),
+                _PositionPicker(
+                  x: selected.x, y: selected.y,
+                  onChanged: (x, y) => _replace('text', selected.copy()..x = x..y = y),
                 ),
                 const SizedBox(height: Tokens.space2),
                 Row(children: [
@@ -489,7 +494,7 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               Wrap(spacing: Tokens.space2, runSpacing: Tokens.space2, children: [
                 for (final option in const [
-                  ['center', 'Center 9:16'],
+                  ['center', 'Center crop'],
                   ['blur', 'Blur BG'],
                   ['fit', 'Fit (tidak memotong)'],
                   ['none', 'Letterbox'],
@@ -522,7 +527,7 @@ class _EditorScreenState extends State<EditorScreen> {
               initialValue: base?.canvas ?? widget.clip.canvas,
               decoration: const InputDecoration(labelText: 'Ukuran klip'),
               items: const [
-                DropdownMenuItem(value: 'portrait', child: Text('Potrait 9:16 (TikTok/Reels)')),
+                DropdownMenuItem(value: 'portrait', child: Text('Portrait 9:16 (TikTok/Reels)')),
                 DropdownMenuItem(value: 'original', child: Text('Ukuran asli video')),
                 DropdownMenuItem(value: 'square', child: Text('Kotak 1:1')),
                 DropdownMenuItem(value: 'landscape', child: Text('Landscape 16:9')),
@@ -550,6 +555,7 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text('Gaya berlaku untuk semua subtitle klip ini. Klik Pratinjau untuk melihat perubahan.', style: TextStyle(fontSize: 12, color: Tokens.textDim)),
               Text(state.translate('editor.template'),
                   style: const TextStyle(fontSize: 13, color: Tokens.textDim)),
               const SizedBox(height: Tokens.space2),
@@ -563,88 +569,100 @@ class _EditorScreenState extends State<EditorScreen> {
         const SizedBox(height: Tokens.space3),
         SectionCard(
           title: state.translate('editor.captions'),
-          child: TextField(
+          child: Column(children: [
+            const Text('Transkrip adalah teks ucapan; subtitle menempatkan teks itu pada waktu tertentu di video. Format: mulai|selesai|teks (detik).'),
+            FilledButton.icon(
+              onPressed: state.jobState == JobState.running ? null : _generateCaptions,
+              icon: const Icon(Icons.closed_caption_outlined),
+              label: const Text('Buat subtitle otomatis'),
+            ),
+            TextField(
             controller: _captions,
             maxLines: 8,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
           ),
+          ]),
         ),
       ],
     );
   }
 }
 
-/// Galeri template tipografi (nama + contoh warna gaya).
-class _TemplateGallery extends StatelessWidget {
+/// Render previews use the same bundled fonts and palette as the ASS exporter.
+class _TemplateGallery extends StatefulWidget {
   const _TemplateGallery({required this.selected, required this.onPick});
-
   final String selected;
-  final void Function(String preset) onPick;
+  final ValueChanged<String> onPick;
+  @override
+  State<_TemplateGallery> createState() => _TemplateGalleryState();
+}
 
+class _TemplateGalleryState extends State<_TemplateGallery> {
+  String category = 'Pop';
+  Color hex(Object? value, Color fallback) {
+    final text = value?.toString().replaceFirst('#', '');
+    return text != null && text.length == 6 ? Color(0xff000000 | int.parse(text, radix:16)) : fallback;
+  }
   @override
   Widget build(BuildContext context) {
-    final presets = SubtitleBuilder.presetList();
-    return Wrap(
-      spacing: Tokens.space2,
-      runSpacing: Tokens.space2,
-      children: [
-        for (final preset in presets)
-          GestureDetector(
-            onTap: () => onPick(preset['id']!),
-            child: Container(
-              width: 104,
-              padding: const EdgeInsets.all(Tokens.space2),
-              decoration: BoxDecoration(
-                color: Tokens.surface2,
-                borderRadius: BorderRadius.circular(Tokens.radiusSm),
-                border: Border.all(
-                  color: preset['id'] == selected ? Tokens.accent : Colors.transparent,
-                  width: 1.5,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Text('Aa',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: preset['id'] == selected ? Tokens.accent : Tokens.text,
-                      )),
-                  const SizedBox(height: 2),
-                  Text(preset['label']!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: Tokens.textDim)),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
+    final entries = SubtitleBuilder.presets.entries.where((e) => category == 'Semua' || (e.value['category'] ?? 'Essential') == category);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+        for (final c in ['Semua','Pop','Neon','Editorial','Label','Essential'])
+          Padding(padding: const EdgeInsets.only(right:6), child: ChoiceChip(label:Text(c), selected:category == c, onSelected: (_) => setState(() => category=c))),
+      ])),
+      const SizedBox(height:12),
+      LayoutBuilder(builder:(context, constraints) => Wrap(spacing:10,runSpacing:10,children:[
+        for (final entry in entries)
+          SizedBox(width:(constraints.maxWidth-10)/2, child: Material(
+            color: Tokens.surface2, borderRadius: BorderRadius.circular(12),
+            child: InkWell(borderRadius:BorderRadius.circular(12),onTap:() => widget.onPick(entry.key),child:Container(
+              decoration:BoxDecoration(borderRadius:BorderRadius.circular(12),border:Border.all(color:widget.selected == entry.key ? Tokens.accent : Tokens.separator)),
+              child:Column(children:[
+                Container(height:88,padding:const EdgeInsets.all(10),alignment:Alignment.center,
+                  child:Container(padding:const EdgeInsets.symmetric(horizontal:5,vertical:2),
+                    color:entry.value['border'] == 3 ? hex(entry.value['preview_outline'],Colors.black) : null,
+                    child:Text(entry.value['sample'] as String? ?? 'Tell your story',textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,
+                      style:TextStyle(fontFamily:entry.value['font'] as String? ?? 'Roboto',fontSize:23,height:1.1,
+                        fontWeight:FontWeight.w700,fontStyle:entry.value['italic'] == true ? FontStyle.italic : FontStyle.normal,
+                        color:hex(entry.value['preview_color'],Colors.white),
+                        shadows:entry.value['border'] == 3 ? null : [Shadow(color:hex(entry.value['preview_outline'],Colors.black),blurRadius:category == 'Neon' ? 12 : 2,offset:const Offset(1,1))])))),
+                Padding(padding:const EdgeInsets.fromLTRB(10,0,10,10),child:Row(children:[
+                  Expanded(child:Text(entry.value['label'] as String,style:const TextStyle(fontSize:11,color:Tokens.text2),overflow:TextOverflow.ellipsis)),
+                  Icon(widget.selected == entry.key ? Icons.check_circle : Icons.add,size:15,color:widget.selected == entry.key ? Tokens.accent : Tokens.textDim),
+                ])),
+              ]),
+            )),
+          )),
+      ])),
+    ]);
   }
 }
 
-class _SliderRow extends StatelessWidget {
-  const _SliderRow({required this.label, required this.value, required this.onChanged});
-
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
-
+class _PositionPicker extends StatelessWidget {
+  const _PositionPicker({required this.x, required this.y, required this.onChanged});
+  final double x, y;
+  final void Function(double x, double y) onChanged;
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(width: 18, child: Text(label, style: const TextStyle(color: Tokens.textDim, fontSize: 12))),
-        Expanded(
-          child: Slider(
-            value: value.clamp(0.0, 1.0),
-            onChanged: onChanged,
-            activeColor: Tokens.accent,
-          ),
-        ),
-        SizedBox(width: 34, child: Text(value.toStringAsFixed(2), style: const TextStyle(fontSize: 11))),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    const Text('Posisi di dalam kanvas',style:TextStyle(fontWeight:FontWeight.w600)),
+    const SizedBox(height:10),
+    for (final row in [0,1,2]) Padding(padding:const EdgeInsets.only(bottom:6),child:Row(children:[
+      for (final col in [0,1,2]) Expanded(child:Padding(padding:const EdgeInsets.symmetric(horizontal:3),child:OutlinedButton(
+        style:OutlinedButton.styleFrom(backgroundColor:(x-[.18,.5,.82][col]).abs()<.08 && (y-[.18,.5,.82][row]).abs()<.08 ? Tokens.accent.withValues(alpha:.22) : Tokens.surface2),
+        onPressed:() => onChanged([.18,.5,.82][col],[.18,.5,.82][row]),
+        child:Semantics(label:'${['Atas','Tengah','Bawah'][row]} ${['kiri','tengah','kanan'][col]}',child:const Icon(Icons.circle,size:8)),
+      ))),
+    ])),
+    const SizedBox(height:8),
+    Row(children:[
+      Expanded(child:TextFormField(key:ValueKey('x$x'),initialValue:(x*100).round().toString(),keyboardType:TextInputType.number,
+        decoration:const InputDecoration(labelText:'X (%)'),onFieldSubmitted:(v) { final n=double.tryParse(v); if(n!=null) onChanged((n/100).clamp(0,1),y); })),
+      const SizedBox(width:12),
+      Expanded(child:TextFormField(key:ValueKey('y$y'),initialValue:(y*100).round().toString(),keyboardType:TextInputType.number,
+        decoration:const InputDecoration(labelText:'Y (%)'),onFieldSubmitted:(v) { final n=double.tryParse(v); if(n!=null) onChanged(x,(n/100).clamp(0,1)); })),
+    ]),
+    const SizedBox(height:8),
+    const Text('Pilih titik, atau isi persentase untuk posisi presisi.',style:TextStyle(fontSize:12,color:Tokens.textDim)),
+  ]);
 }

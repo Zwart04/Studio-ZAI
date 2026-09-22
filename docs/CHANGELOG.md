@@ -2,6 +2,16 @@
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).
 
+## 1.5.1 — 2026-09-22
+
+- Perbaiki track audio Indonesia, rasio kanvas asli/kotak, preview, subtitle otomatis, dan penerapan perubahan editor.
+- Tambah 24 template dengan font OFL lokal, preset posisi 3 × 3, serta input persentase; pertahankan palet Apple-style yang ada.
+- Perjelas pilihan sumber dan pengaturan, perbaiki layout responsif dan sinkronisasi daftar setelah penghapusan.
+- Wajibkan setup awal yang memverifikasi model; pindahkan ekstraksi dan ASR Android dari UI thread, serta baca audio panjang secara bertahap.
+- Perbaiki visibilitas logo dan area aman ikon Android. Sertakan paket sumber model desktop yang sebelumnya terabaikan oleh aturan Git.
+- Perbarui README ID/EN, screenshot, GIF, dan MP4. Uji video nyata 78 menit dengan audio Indonesia hingga ekspor; lihat [validasi](RELEASE-1.5.1.md).
+
+
 ## [1.5.0] — 2026-09-22
 
 ### Added

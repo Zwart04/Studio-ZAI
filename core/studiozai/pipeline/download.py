@@ -185,13 +185,6 @@ def download(
             progress_cb(0.0, "gagal mengunduh")
 
     fmt = format_id or f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
-    if audio_lang and not format_id:
-        # Pilih track audio bahasa tertentu bila tersedia (YouTube multi-audio),
-        # kalau tidak ada jatuh kembali ke audio terbaik.
-        fmt = (
-            f"bv*[height<={max_height}]+ba[language={audio_lang}]"
-            f"/bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
-        )
     options: dict[str, Any] = {
         "outtmpl": str(out_dir / "%(title).80s.%(ext)s"),
         "format": fmt,
@@ -211,6 +204,24 @@ def download(
 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
+            if audio_lang:
+                selector = ydl.build_format_selector(fmt)
+
+                def selected_language(ctx):
+                    # Preserve quality filters while excluding every other audio
+                    # language, including audio embedded in muxed formats.
+                    wanted = audio_lang.lower().replace("_", "-")
+                    allowed = [
+                        f for f in ctx["formats"]
+                        if f.get("acodec") == "none"
+                        or str(f.get("language") or "").lower().replace("_", "-") == wanted
+                        or str(f.get("language") or "").lower().replace("_", "-").startswith(wanted + "-")
+                    ]
+                    if not any(f.get("acodec") not in (None, "none") for f in allowed):
+                        raise ValueError(f"Track audio {audio_lang} tidak tersedia. Pilih track lain atau audio bawaan.")
+                    yield from selector({**ctx, "formats": allowed})
+
+                ydl.format_selector = selected_language
             info = ydl.extract_info(url, download=True)
             path = Path(ydl.prepare_filename(info))
             if not path.exists():
@@ -218,24 +229,7 @@ def download(
                 if candidates:
                     path = candidates[-1]
     except Exception as exc:
-        # Track audio bahasa tertentu bisa tidak tersedia untuk video itu ->
-        # ulangi sekali dengan audio terbaik supaya unduhan tidak gagal total.
-        if audio_lang and not format_id:
-            options["format"] = f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
-            if progress_cb:
-                progress_cb(0.0, "track audio itu tidak tersedia, memakai audio terbaik")
-            try:
-                with yt_dlp.YoutubeDL(options) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    path = Path(ydl.prepare_filename(info))
-                    if not path.exists():
-                        candidates = sorted(out_dir.glob(f"{path.stem}.*"), key=lambda p: p.stat().st_size)
-                        if candidates:
-                            path = candidates[-1]
-            except Exception as retry_exc:
-                raise RuntimeError(f"gagal mengunduh: {retry_exc}") from retry_exc
-        else:
-            raise RuntimeError(f"gagal mengunduh: {exc}") from exc
+        raise RuntimeError(f"gagal mengunduh: {exc}") from exc
     if not path.exists():
         raise RuntimeError("unduhan selesai tetapi berkas tidak ditemukan")
     if progress_cb:

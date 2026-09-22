@@ -19,6 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _sourceController = TextEditingController();
   int _count = 5;
   String _language = 'id';
+  String _audioLanguage = '';
+  String _canvas = 'portrait';
   bool _useTranscript = true;
 
   @override
@@ -51,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
         count: _count,
         language: _language,
         useTranscript: _useTranscript,
+        audioLanguage: _audioLanguage.isEmpty ? null : _audioLanguage,
+        canvas: _canvas,
       );
       if (!mounted) return;
       widget.onOpenClips();
@@ -69,15 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Row(
           children: [
-            ColorFiltered(
-              colorFilter: const ColorFilter.matrix(<double>[
-                0, 0, 0, 0, 255,
-                0, 0, 0, 0, 255,
-                0, 0, 0, 0, 255,
-                0, 0, 0, 1, 0,
-              ]),
-              child: Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.contain),
-            ),
+            Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.contain),
             const SizedBox(width: Tokens.space3),
             Expanded(
               child: Text(state.translate('home.title'),
@@ -139,6 +135,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 value: _useTranscript,
                 onChanged: (value) => setState(() => _useTranscript = value),
                 title: Text(state.translate('home.transcript'), style: const TextStyle(fontSize: 14)),
+                subtitle: const Text('Transkrip = teks ucapan. Subtitle = teks bertiming di video. Bahasa transkrip tidak mengganti atau menerjemahkan suara.'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _audioLanguage,
+                decoration: const InputDecoration(labelText: 'Track audio YouTube', helperText: 'Memilih dub yang tersedia di video sumber.'),
+                items: const [
+                  DropdownMenuItem(value: '', child: Text('Audio bawaan')),
+                  DropdownMenuItem(value: 'id', child: Text('Indonesia')),
+                  DropdownMenuItem(value: 'en', child: Text('English')),
+                ],
+                onChanged: (value) => setState(() => _audioLanguage = value ?? ''),
+              ),
+              const SizedBox(height: Tokens.space3),
+              DropdownButtonFormField<String>(
+                initialValue: _canvas,
+                decoration: const InputDecoration(labelText: 'Ukuran video'),
+                items: const [
+                  DropdownMenuItem(value: 'portrait', child: Text('Portrait 9:16')),
+                  DropdownMenuItem(value: 'original', child: Text('Asli (rasio sumber)')),
+                  DropdownMenuItem(value: 'square', child: Text('Kotak 1:1')),
+                  DropdownMenuItem(value: 'landscape', child: Text('Landscape 16:9')),
+                ],
+                onChanged: (value) => setState(() => _canvas = value ?? 'portrait'),
               ),
               const SizedBox(height: Tokens.space2),
               FilledButton(

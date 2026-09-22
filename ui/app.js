@@ -1,5 +1,6 @@
 const I18N = {
   id: {
+    "editor.style": "Tipografi subtitle", "editor.trimHint": "Framing mengikuti rasio kanvas pilihanmu.", "editor.timelineHint": "Pilih blok untuk mengedit. Geser tepi untuk durasi, lalu klik Pratinjau.",
     "nav.home": "Beranda", "nav.projects": "Proyek", "nav.voice": "Suara", "nav.models": "Model", "nav.settings": "Pengaturan",
     "common.refresh": "Muat ulang", "common.back": "Kembali", "common.save": "Simpan", "common.cancel": "Batal",
     "common.delete": "Hapus", "common.render": "Render", "common.edit": "Edit", "common.close": "Tutup", "common.preview": "Pratinjau",
@@ -43,6 +44,7 @@ const I18N = {
     "toast.done": "Selesai", "toast.error": "Terjadi kesalahan", "toast.saved": "Tersimpan",
   },
   en: {
+    "editor.style": "Subtitle typography", "editor.trimHint": "Framing follows the selected canvas ratio.", "editor.timelineHint": "Select a block to edit. Drag its edge to trim, then click Preview.",
     "nav.home": "Home", "nav.projects": "Projects", "nav.voice": "Voice", "nav.models": "Models", "nav.settings": "Settings",
     "common.refresh": "Refresh", "common.back": "Back", "common.save": "Save", "common.cancel": "Cancel",
     "common.delete": "Delete", "common.render": "Render", "common.edit": "Edit", "common.close": "Close", "common.preview": "Preview",
@@ -280,6 +282,7 @@ function playAudio(path) {
 function setPage(name) {
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
   $$("#nav button").forEach((button) => button.classList.toggle("active", button.dataset.page === name));
+  if (name === "home") renderHomeProjects();
   if (name === "projects") renderProjects();
   if (name === "models") renderModels();
   if (name === "settings") renderSettings();
@@ -507,7 +510,7 @@ async function renderProjects() {
         if (!window.confirm(t("projects.deleteConfirm"))) return;
         try {
           await api(`/api/projects/${node.dataset.delete}`, { method: "DELETE" });
-          renderProjects();
+          await Promise.all([renderProjects(), renderHomeProjects()]);
           toast(t("toast.done"), "ok");
         } catch (error) {
           toast(error.message, "error");
@@ -573,6 +576,7 @@ function renderProjectDetail() {
         await api(`/api/projects/${project.id}/clips/${node.dataset.remove}`, { method: "DELETE" });
         state.project = await api(`/api/projects/${project.id}`);
         renderProjectDetail();
+        await renderHomeProjects();
         toast(t("clips.deleted"), "ok");
       } catch (error) {
         toast(error.message, "error");
@@ -618,7 +622,14 @@ function openPanel(html) {
 }
 
 function closePanel() {
-  $("#editPanel").classList.remove("open");
+  const panel = $("#editPanel");
+  panel.querySelectorAll("video,audio").forEach((player) => {
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+  });
+  panel.classList.remove("open");
+  panel.replaceChildren();
 }
 
 /* ------------------------------------------------------------------ voice */
@@ -832,9 +843,9 @@ function wizardShow(step) {
       <div class="wizard-body-row"><span class="dot">3</span><span class="label">Unduh sekali, pakai offline<span class="sub">progress per model terlihat jelas</span></span></div>`;
     actions.innerHTML = `
       <button class="primary" id="wzStart">Mulai setup</button>
-      <button class="link" id="wzSkip">Nanti saja</button>`;
+      `;
     $("#wzStart").addEventListener("click", () => wizardDetect());
-    $("#wzSkip").addEventListener("click", wizardDone);
+
   }
 }
 
@@ -849,11 +860,13 @@ async function wizardDetect() {
     wizard.models = wizard.data.models;
     // Pilih otomatis model yang direkomendasikan perangkat ini.
     const tier = wizard.data.tier;
-    const recommended = [tier.asr, tier.tts].filter(Boolean);
+    const recommended = [tier.asr, tier.tts, "piper-en_US-lessac-medium"].filter(Boolean);
     wizard.chosen = recommended.slice();
     wizardShowRecommend();
   } catch (error) {
-    body.innerHTML = `<p class="muted">Gagal mendeteksi: ${error.message}</p>`;
+    body.textContent = `Gagal mendeteksi: ${error.message}`;
+    actions.innerHTML = `<button class="primary" id="wzRetry">Coba lagi</button>`;
+    $("#wzRetry").addEventListener("click", wizardDetect);
   }
 }
 
@@ -863,7 +876,7 @@ function wizardShowRecommend() {
   $("#wizardTitle").textContent = "Perangkatmu terdeteksi";
   $("#wizardSub").textContent = `${device.os} · RAM ${device.ram_gb ?? "?"} GB · ${device.cpu_count} core · disk bebas ${device.disk_free_gb} GB`;
 
-  const rows = wizard.models.map((model) => {
+  const rows = wizard.models.filter((model) => !model.requires_pip || model.kind === "asr").map((model) => {
     const rec = wizard.chosen.includes(model.id);
     const markSvg = model.kind === "asr"
       ? '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>'
@@ -885,10 +898,11 @@ function wizardShowRecommend() {
   const recTts = wizard.models.find((m) => m.id === tier.tts);
   $("#wizardBody").innerHTML = `
     <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${recAsr ? modelName(recAsr) : tier.asr}</strong> + <strong>${recTts ? modelName(recTts) : tier.tts}</strong></p>
+    <p class="muted">FFmpeg, transkripsi, dan Piper termasuk paket Windows. Kloning desktop memerlukan runtime tambahan; lihat panduan Model. LLM lokal memerlukan server Ollama yang dikonfigurasi terpisah.</p>
     ${rows}`;
   $("#wizardActions").innerHTML = `
     <button class="primary" id="wzInstall">Unduh & pasang</button>
-    <button class="link" id="wzLater">Lewati dulu</button>`;
+    `;
 
   $("#wizardBody").querySelectorAll("[data-model]").forEach((cb) =>
     cb.addEventListener("change", () => {
@@ -898,12 +912,13 @@ function wizardShowRecommend() {
     })
   );
   $("#wzInstall").addEventListener("click", wizardInstall);
-  $("#wzLater").addEventListener("click", wizardDone);
+
 }
 
 async function wizardInstall() {
   if (wizard.busy) return;
   wizard.busy = true;
+  wizard.chosen = [...new Set([...wizard.chosen, wizard.data.tier.asr, wizard.data.tier.tts])];
   const toInstall = wizard.chosen.filter((id) => {
     const model = wizard.models.find((m) => m.id === id);
     return model && !model.installed;
@@ -930,7 +945,7 @@ async function wizardInstall() {
     await wizardDownloadModel(id);
   }
   wizard.busy = false;
-  wizardFinish();
+  await wizardFinish();
 }
 
 function wizardDownloadModel(id) {
@@ -971,6 +986,17 @@ function wizardDownloadModel(id) {
 }
 
 async function wizardFinish() {
+  const current = await api("/api/models");
+  const required = [wizard.data.tier.asr, wizard.data.tier.tts];
+  const missing = [...new Set([...required, ...wizard.chosen])].filter((id) => !current.models.some((m) => m.id === id && m.installed));
+  if (missing.length) {
+    $("#wizardTitle").textContent = "Setup belum selesai";
+    $("#wizardSub").textContent = `Model belum terpasang: ${missing.join(", ")}. Coba lagi untuk melanjutkan unduhan.`;
+    $("#wizardActions").innerHTML = '<button class="primary" id="wzRetry">Coba lagi</button>';
+    $("#wzRetry").addEventListener("click", wizardDetect);
+    return;
+  }
+  await api("/api/settings", {method: "POST", body: JSON.stringify({values: {asr_model: required[0], tts_voice_id: required[1]}})});
   $("#wizardTitle").textContent = "Siap dipakai";
   $("#wizardSub").textContent = "Model terpasang. Semua fitur inti jalan lokal dan offline.";
   $("#wizardBody").innerHTML = "";
@@ -980,8 +1006,8 @@ async function wizardFinish() {
 }
 
 async function wizardDone() {
+  await api("/api/settings", { method: "POST", body: JSON.stringify({ values: { setup_done: true, setup_version: 2 } }) });
   $("#wizardOverlay").hidden = true;
-  await api("/api/settings", { method: "POST", body: JSON.stringify({ values: { setup_done: true } }) }).catch(() => {});
 }
 
 async function checkWizard() {
@@ -995,7 +1021,7 @@ async function checkWizard() {
     // Wizard layar penuh HANYA saat pertama kali (belum pernah selesai setup).
     // Sebelumnya wizard muncul terus selama model belum lengkap, sehingga
     // seluruh UI tampak kusam/terhalang overlay setiap dibuka.
-    if (!settings.setup_done) {
+    if (settings.setup_version !== 2) {
       wizardShow(0);
       return;
     }
@@ -1121,3 +1147,13 @@ async function boot() {
 }
 
 boot();
+
+// Explicit source modes keep the path visible and explain the next action.
+document.querySelectorAll('[data-source-mode]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-source-mode]').forEach(node => node.classList.toggle('active', node === button));
+  const local = button.dataset.sourceMode === 'file';
+  document.querySelector('#source').placeholder = local ? 'D:\\Video\\podcast.mp4' : 'https://youtube.com/watch?v=…';
+  document.querySelector('#sourceHelp').textContent = local ? 'Pilih video dari perangkat, atau tempel lokasi lengkap berkas. Video lokal tidak perlu diunduh.' : 'Tempel tautan YouTube, TikTok, atau Instagram. Kualitas dan track audio muncul setelah tautan terbaca.';
+  document.querySelector('#pickFile').hidden = !local;
+  document.querySelector('#source').focus();
+}));

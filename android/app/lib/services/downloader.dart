@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 /// Resolves and downloads media from a link.
@@ -31,13 +33,14 @@ class Downloader {
     String url,
     Directory outDir,
     void Function(double, String) onProgress,
+    {String? audioLanguage}
   ) async {
     outDir.createSync(recursive: true);
     if (looksLikeMediaFile(url)) {
       return _downloadDirect(url, outDir, onProgress);
     }
     if (isYoutube(url)) {
-      return _downloadYoutube(url, outDir, onProgress);
+      return _downloadYoutube(url, outDir, onProgress, audioLanguage: audioLanguage);
     }
     throw Exception(
       'Link ini butuh yt-dlp, yang untuk saat ini hanya jalan di aplikasi desktop '
@@ -79,39 +82,77 @@ class Downloader {
 
   // ----------------------------------------------------------------- youtube
 
+  /// YouTube track IDs may include a regional tag and a track suffix (id.4).
+  static bool matchesLanguage(String trackId, String language) =>
+      trackId.toLowerCase().split(RegExp(r'[-_.]')).first == language.toLowerCase();
+
   static Future<File> _downloadYoutube(
     String url,
     Directory outDir,
-    void Function(double, String) onProgress,
-  ) async {
+    void Function(double, String) onProgress, {
+    String? audioLanguage,
+  }) async {
     final youtube = YoutubeExplode();
+    final scratch = Directory('${outDir.path}/.download-${DateTime.now().microsecondsSinceEpoch}');
     try {
+      scratch.createSync(recursive: true);
       onProgress(3, 'membaca info video');
       final video = await youtube.videos.get(url);
       final manifest = await youtube.videos.streamsClient.getManifest(video.id);
-      if (manifest.muxed.isEmpty) {
-        throw Exception('Tidak ada stream video+audio untuk video ini.');
-      }
-      // Muxed streams already carry audio, so no remux step is needed.
-      final stream = manifest.muxed.withHighestBitrate();
       final target = File('${outDir.path}/${_safeName(video.title)}.mp4');
-      final sink = target.openWrite();
-      var received = 0;
-      final total = stream.size.totalBytes;
-      await for (final chunk in youtube.videos.streamsClient.get(stream)) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (total > 0) onProgress(5 + received / total * 93, 'mengunduh video');
+      final audio = manifest.audioOnly.where((stream) => audioLanguage == null
+          ? (stream.audioTrack == null || stream.audioTrack!.audioIsDefault)
+          : matchesLanguage(stream.audioTrack?.id ?? '', audioLanguage)).toList()
+        ..sort((a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
+      if (audioLanguage != null && audio.isEmpty) {
+        throw Exception('Track audio $audioLanguage tidak tersedia. Pilih audio bawaan atau bahasa lain.');
       }
-      await sink.flush();
-      await sink.close();
+      final videos = manifest.videoOnly.toList()
+        ..sort((a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
+      if (videos.isNotEmpty && audio.isNotEmpty) {
+        final v = File('${scratch.path}/video.${videos.first.container.name}');
+        final a = File('${scratch.path}/audio.${audio.first.container.name}');
+        await _saveStream(youtube, videos.first, v, (p) => onProgress(5 + p * 0.65, 'mengunduh video'));
+        await _saveStream(youtube, audio.first, a, (p) => onProgress(70 + p * 0.23, 'mengunduh audio ${audioLanguage ?? "bawaan"}'));
+        final session = await FFmpegKit.execute('-y -i "${v.path}" -i "${a.path}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -movflags +faststart "${target.path}"');
+        if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+          throw Exception('Gagal menggabungkan track video dan audio.');
+        }
+      } else if (audioLanguage == null && manifest.muxed.isNotEmpty) {
+        await _saveStream(youtube, manifest.muxed.withHighestBitrate(), target,
+            (p) => onProgress(5 + p * 0.93, 'mengunduh video'));
+      } else {
+        throw Exception('Stream video atau audio tidak tersedia.');
+      }
       onProgress(100, 'selesai');
       return target;
     } on YoutubeExplodeException catch (error) {
       throw Exception('YouTube menolak permintaan (${error.message}). Coba lagi nanti.');
     } finally {
       youtube.close();
+      if (scratch.existsSync()) scratch.deleteSync(recursive: true);
     }
+  }
+
+  static Future<void> _saveStream(YoutubeExplode youtube, StreamInfo stream, File target, void Function(double) progress) async {
+    final sink = target.openWrite();
+    var received = 0;
+    var buffered = 0;
+    final clock = Stopwatch()..start();
+    try {
+      await for (final chunk in youtube.videos.streamsClient.get(stream)) {
+        sink.add(chunk);
+        received += chunk.length;
+        buffered += chunk.length;
+        if (buffered >= 1024 * 1024) { await sink.flush(); buffered = 0; }
+        if (clock.elapsedMilliseconds >= 200 && stream.size.totalBytes > 0) {
+          progress(received / stream.size.totalBytes * 100);
+          clock.reset();
+        }
+      }
+      await sink.flush();
+    } finally { await sink.close(); }
+    if (received == 0) throw Exception('Unduhan kosong.');
   }
 
   static String _safeName(String input) {

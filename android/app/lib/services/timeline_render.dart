@@ -34,6 +34,7 @@ class TimelineRender {
     if (duration <= 0.2) duration = timeline.duration;
     if (duration <= 0.2) duration = 0.2;
 
+    await MediaTools.prepareFonts();
     final crop = base?.crop ?? 'center';
     final canvas = base?.canvas ?? 'portrait';
     final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
@@ -108,7 +109,7 @@ class TimelineRender {
 
     // ----------------------------------------------------------------- teks
     if (subtitlesPath != null) {
-      filters.add('$label' 'subtitles=${_quote(subtitlesPath)}[vfinal]');
+      filters.add('$label' '${MediaTools.subtitleFilter(subtitlesPath)}[vfinal]');
       label = '[vfinal]';
     }
 
@@ -176,9 +177,16 @@ class TimelineRender {
     );
     // `-s` adalah opsi keluaran dan tetap berlaku bersama -filter_complex,
     // jadi cukup memperkecil hasil akhir tanpa menyentuh graf filternya.
+    final base = timeline.trackOf('video')?.items;
+    final canvas = base == null || base.isEmpty ? 'portrait' : base.first.canvas;
+    final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
+    final longest = size[0] > size[1] ? size[0] : size[1];
+    final ratio = longest > 960 ? 960 / longest : 1.0;
+    final w = ((size[0] * ratio) ~/ 2 * 2).clamp(2, 960);
+    final h = ((size[1] * ratio) ~/ 2 * 2).clamp(2, 960);
     final preview = command.replaceFirst(
       '-c:v libx264 -preset veryfast -crf 21',
-      '-s 540x960 -c:v libx264 -preset ultrafast -crf 30',
+      '-s ${w}x$h -c:v libx264 -preset ultrafast -crf 30',
     );
     final session = await FFmpegKit.execute(preview);
     final code = await session.getReturnCode();

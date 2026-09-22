@@ -65,9 +65,9 @@ def test_write_subtitles_mode_off_tanpa_dialogue(tmp_path) -> None:
     assert Path(files["srt"]).read_text(encoding="utf-8").strip()  # SRT tidak berubah
 
 
-def test_delapan_template_tersedia() -> None:
+def test_template_kreator_tersedia() -> None:
     ids = [preset["id"] for preset in subtitle.preset_list()]
-    assert len(ids) == 8
+    assert len(ids) == 24
     for expected in ("clean", "bold_highlight", "tiktok_pop", "karaoke_fill", "title_card",
                      "minimal_lower", "neon", "subtitle_box"):
         assert expected in ids
@@ -79,6 +79,30 @@ def test_semua_template_bisa_dirender() -> None:
         ass = subtitle.to_ass(_captions(), preset=preset["id"])
         assert "Style: Default," in ass
         assert "Dialogue:" in ass
+
+
+def test_creator_fonts_colors_and_android_catalog_match() -> None:
+    import json
+    root = Path(__file__).resolve().parents[2]
+    mirror = (root / "android/app/lib/services/text_presets.dart").read_text(encoding="utf-8")
+    android = json.loads(mirror[mirror.index("{"):].rstrip(";\n"))
+    assert set(android) == set(subtitle.PRESETS)
+    for name, style in subtitle.PRESETS.items():
+        assert android[name]["primary"] == style["primary"]
+        assert android[name]["font"] == style["font"]
+    for font in ("Anton-Regular.ttf", "BarlowCondensed-Bold.ttf", "DMSerifDisplay-Italic.ttf", "Kalam-Bold.ttf"):
+        desktop = (root / "ui/assets/fonts" / font).read_bytes()
+        assert len(desktop) > 10000
+        assert desktop == (root / "android/app/assets/fonts" / font).read_bytes()
+
+
+def test_creator_style_and_position_survive_export() -> None:
+    ass = subtitle.to_ass([], play_res=(1280, 720), text_items=[{
+        "start": 0, "end": 3, "text": "Creator", "template": "editorial_cream", "x": .82, "y": .18,
+    }])
+    assert "Style: Tpl_editorial_cream,DM Serif Display," in ass
+    assert r"\pos(1049,129)" in ass
+    assert "&H00C5EAFF" in ass
 
 
 def test_item_teks_timeline_menambah_style_dan_pos() -> None:

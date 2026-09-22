@@ -33,6 +33,7 @@ class AppState extends ChangeNotifier {
   String cloneModelId = 'zipvoice-zh-en';
   String defaultCrop = 'center';
   bool cloneConsent = false;
+  bool setupComplete = false;
 
   List<ModelInfo> catalog = const [];
   DeviceReport? device;
@@ -53,6 +54,7 @@ class AppState extends ChangeNotifier {
     cloneModelId = _prefs!.getString('clone') ?? cloneModelId;
     defaultCrop = _prefs!.getString('crop') ?? defaultCrop;
     cloneConsent = _prefs!.getBool('cloneConsent') ?? false;
+    setupComplete = _prefs!.getInt('setupVersion') == 2;
 
     final base = await getApplicationSupportDirectory();
     _dataDir = Directory('${base.path}/studiozai')..createSync(recursive: true);
@@ -65,6 +67,16 @@ class AppState extends ChangeNotifier {
   }
 
   ModelManager get models => _models!;
+  Future<void> finishSetup() async {
+    await refreshModels();
+    final needed = [asrModelId, 'silero-vad', 'piper-id_ID-news_tts-medium', 'piper-en_US-lessac-medium'];
+    if (needed.any((id) => !catalog.any((m) => m.id == id && m.installed))) {
+      throw Exception('Pasang model inti sampai selesai sebelum melanjutkan.');
+    }
+    await _prefs!.setInt('setupVersion', 2);
+    setupComplete = true;
+    notifyListeners();
+  }
   SpeechService get speech => _speech!;
   Directory get dataDir => _dataDir!;
 
@@ -184,6 +196,8 @@ class AppState extends ChangeNotifier {
     required int count,
     required String language,
     required bool useTranscript,
+    String? audioLanguage,
+    String canvas = 'portrait',
   }) async {
     final project = Project(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -200,7 +214,7 @@ class AppState extends ChangeNotifier {
       final directory = projectDir(project);
       File media;
       if (project.sourceIsUrl) {
-        media = await Downloader.download(source, directory, _report);
+        media = await Downloader.download(source, directory, _report, audioLanguage: audioLanguage);
       } else {
         media = File(source);
         if (!media.existsSync()) throw Exception('Berkas tidak ditemukan: $source');
@@ -218,19 +232,11 @@ class AppState extends ChangeNotifier {
       var segments = <TranscriptSegment>[];
       if (useTranscript) {
         _report(30, 'menranskripsi');
-        await speech.loadAsr(asrModelId);
-        segments = await speech.transcribeWav(wav.path, language: language);
+        segments = await speech.transcribeFile(wav.path, asrModelId, language);
       }
 
       _report(60, 'mencari momen terbaik');
-      final samples = MediaTools.readWavSamples(wav.path);
-      final candidates = Pipeline.pickClips(
-        samples: samples,
-        sampleRate: 16000,
-        duration: project.duration,
-        segments: segments,
-        count: count,
-      );
+      final candidates = await Pipeline.pickClipsFromWav(wav.path, project.duration, segments, count);
 
       project.clips = [];
       for (var i = 0; i < candidates.length; i++) {
@@ -243,6 +249,7 @@ class AppState extends ChangeNotifier {
           score: candidate.score,
           reason: candidate.reason,
           crop: defaultCrop,
+          canvas: canvas,
           captions: Pipeline.captionsForRange(segments, candidate.start, candidate.end).map((c) => c.toJson()).toList(),
         ));
       }
@@ -271,6 +278,24 @@ class AppState extends ChangeNotifier {
       setJob(JobState.done, progress: 100, stage: 'selesai');
     } catch (error) {
       setJob(JobState.error, stage: 'error', message: error.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> generateCaptions(Clip clip) async {
+    if (jobState == JobState.running) throw Exception('Tunggu pekerjaan aktif selesai.');
+    final project = currentProject;
+    if (project == null) throw Exception('Tidak ada proyek aktif.');
+    setJob(JobState.running, progress: 5, stage: 'membuat subtitle');
+    try {
+      final path = '${projectDir(project).path}/captions-${clip.index}.wav';
+      await MediaTools.extractAudioRange(project.source, path, clip.start, clip.end);
+      final segments = await speech.transcribeFile(path, asrModelId, project.language);
+      clip.captions = Pipeline.captionsForRange(segments, 0, clip.duration).map((c) => c.toJson()).toList();
+      await saveProject(project);
+      setJob(JobState.done, progress: 100, stage: 'subtitle siap');
+    } catch (error) {
+      setJob(JobState.error, stage: 'error', message: '$error');
       rethrow;
     }
   }
@@ -404,6 +429,8 @@ class AppState extends ChangeNotifier {
       // Verifikasi akhir: model harus benar-benar bisa dipakai, bukan sekadar file ada.
       final ok = await _verifyModelUsable(model);
       if (!ok) {
+        final marker = File('${models.dirFor(model.id).path}/.installed');
+        if (marker.existsSync()) marker.deleteSync();
         throw Exception('Model selesai diunduh tapi verifikasi gagal. Coba hapus lalu unduh ulang.');
       }
       await refreshModels();

@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../models.dart';
 import 'media_tools.dart';
+import 'wav_chunks.dart';
 import 'model_manager.dart';
 import 'speech.dart';
 import 'subtitle_builder.dart';
@@ -71,8 +73,9 @@ class Pipeline {
     int sampleRate, {
     double thresholdDb = -38,
     double minSilence = 0.4,
+    List<double>? envelope,
   }) {
-    final rms = rmsEnvelope(samples, sampleRate);
+    final rms = envelope ?? rmsEnvelope(samples, sampleRate);
     if (rms.isEmpty) return const [];
     final peak = rms.reduce(math.max);
     final intervals = <List<double>>[];
@@ -106,6 +109,7 @@ class Pipeline {
     required Float32List samples,
     required int sampleRate,
     required double duration,
+    List<double>? envelope,
     List<TranscriptSegment> segments = const [],
     int count = 5,
     double minLength = 15,
@@ -142,9 +146,9 @@ class Pipeline {
       if (windows.isEmpty) windows.add([0, duration]);
     }
 
-    final rms = rmsEnvelope(samples, sampleRate);
+    final rms = envelope ?? rmsEnvelope(samples, sampleRate);
     final peak = rms.isEmpty ? 1.0 : rms.reduce(math.max);
-    final silences = silenceIntervals(samples, sampleRate);
+    final silences = silenceIntervals(samples, sampleRate, envelope: rms);
     final densities = windows.map((w) {
       final words = segments
           .where((s) => s.end > w[0] && s.start < w[1])
@@ -200,6 +204,14 @@ class Pipeline {
     }
     return result;
   }
+
+  static Future<List<ClipCandidate>> pickClipsFromWav(String path, double duration, List<TranscriptSegment> segments, int count) => Isolate.run(() {
+    final envelope = <double>[];
+    for (final samples in readWavChunks(path, sampleCount: 8000)) {
+      envelope.addAll(rmsEnvelope(samples, 16000));
+    }
+    return pickClips(samples:Float32List(0),sampleRate:16000,duration:duration,segments:segments,count:count,envelope:envelope);
+  });
 
   /// Captions for a clip window, with clip-relative timings.
   static List<Caption> captionsForRange(List<TranscriptSegment> segments, double start, double end) {
@@ -324,7 +336,7 @@ class Pipeline {
     final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
     final assPath = _writeAss(clip, directory, 'preview', size, textItems);
 
-    final output = '${directory.path}/preview.mp4';
+    final output = '${directory.path}/preview-${DateTime.now().microsecondsSinceEpoch}.mp4';
     onProgress(10, 'menyiapkan pratinjau');
     await TimelineRender.renderPreview(
       source: project.source,
@@ -333,7 +345,7 @@ class Pipeline {
       sourceWidth: sourceWidth,
       sourceHeight: sourceHeight,
       subtitlesPath: assPath,
-      voicePath: clip.files['voice'],
+      voicePath: clip.audioMode != 'original' ? clip.files['voice'] : null,
       originalVolume: _baseVolume(clip),
     );
     onProgress(100, 'pratinjau siap');

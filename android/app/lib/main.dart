@@ -5,6 +5,7 @@ import 'screens/clips_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/models_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/setup_screen.dart';
 import 'screens/voice_screen.dart';
 import 'state/app_state.dart';
 import 'theme/tokens.dart';
@@ -49,7 +50,7 @@ class _StudioZaiAppState extends State<StudioZaiApp> {
               ? const Scaffold(body: Center(child: CircularProgressIndicator()))
               : ListenableBuilder(
                   listenable: _state,
-                  builder: (context, _) => RootShell(state: _state),
+                  builder: (context, _) => _state.setupComplete ? RootShell(state: _state) : SetupScreen(state: _state),
                 )),
     );
   }
@@ -63,15 +64,7 @@ class _LogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Grayscale version of the brand logo so it blends with the dark UI.
-    return ColorFiltered(
-      colorFilter: const ColorFilter.matrix(<double>[
-        0, 0, 0, 0, 255,
-        0, 0, 0, 0, 255,
-        0, 0, 0, 0, 255,
-        0, 0, 0, 1, 0,
-      ]),
-      child: Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain),
-    );
+    return Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain);
   }
 }
 

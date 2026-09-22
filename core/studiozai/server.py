@@ -257,7 +257,7 @@ def process_project(project_id: str, payload: ProcessRequest) -> dict[str, Any]:
 def _narration_text(project: Any, clip: Any) -> str:
     """Gabungkan transkrip yang jatuh di rentang klip -> teks narasi sulih suara."""
     parts: list[str] = []
-    for segment in project.transcript or []:
+    for segment in (project.transcript or {}).get("segments", []):
         try:
             start = float(segment.get("start", 0.0))
             end = float(segment.get("end", 0.0))
@@ -384,6 +384,25 @@ def preview_clip(project_id: str, index: int) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     job = jobs.MANAGER.submit("preview", f"Pratinjau klip {index + 1}", _preview_task(project_id, index))
     return job.as_dict()
+
+
+@app.post("/api/projects/{project_id}/clips/{index}/captions")
+def generate_clip_captions(project_id: str, index: int) -> dict[str, Any]:
+    project = _project(project_id)
+    try:
+        project.clip(index)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    def run(job: jobs.Job) -> dict[str, Any]:
+        current = projects.load_project(project_id)
+        service.ensure_transcript(current, job=job)
+        clip = current.clip(index)
+        service.refresh_captions(current, clip)
+        current.save()
+        return {"captions": clip.captions}
+
+    return jobs.MANAGER.submit("captions", "Subtitle otomatis", run).as_dict()
 
 
 def _preview_task(project_id: str, index: int):

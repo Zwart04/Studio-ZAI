@@ -4,9 +4,24 @@ import 'dart:typed_data';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// FFmpeg/FFprobe helpers running fully on-device (ffmpeg-kit maintained fork).
 class MediaTools {
+  static String? _fontDirectory;
+  static Future<void> prepareFonts() async {
+    if (_fontDirectory != null) return;
+    final root = await getApplicationSupportDirectory();
+    final dir = Directory('${root.path}/creator-fonts')..createSync(recursive: true);
+    for (final name in ['Anton-Regular.ttf', 'BarlowCondensed-Bold.ttf', 'DMSerifDisplay-Italic.ttf', 'Kalam-Bold.ttf']) {
+      final data = await rootBundle.load('assets/fonts/$name');
+      await File('${dir.path}/$name').writeAsBytes(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    }
+    _fontDirectory = dir.path;
+  }
+
+  static String subtitleFilter(String path) => 'subtitles=${_quote(path)}${_fontDirectory == null ? '' : ':fontsdir=${_quote(_fontDirectory!)}'}';
   static Future<bool> _run(String command) async {
     final session = await FFmpegKit.execute(command);
     final code = await session.getReturnCode();
@@ -58,6 +73,12 @@ class MediaTools {
   }
 
   /// Ukuran kanvas keluaran (mirror `core/pipeline/crop.py:canvas_size`).
+  static Future<File> extractAudioRange(String input, String output, double start, double end) async {
+    final ok = await _run('-y -ss $start -t ${end - start} -i ${_quote(input)} -vn -ac 1 -ar 16000 -acodec pcm_s16le ${_quote(output)}');
+    if (!ok) throw Exception('Gagal membaca audio klip.');
+    return File(output);
+  }
+
   static List<int> canvasSize(String canvas, int width, int height) {
     if (canvas == 'original') {
       if (width <= 0 || height <= 0) return const [1080, 1920];
@@ -139,6 +160,7 @@ class MediaTools {
     String? voicePath,
     double originalVolume = 0.25,
   }) async {
+    await prepareFonts();
     final filter = cropFilter(crop, width, height, canvas: canvas);
     final complex = filter.contains(';');
     final duration = (end - start).clamp(0.5, 3600.0);
@@ -152,12 +174,12 @@ class MediaTools {
     if (complex) {
       videoChain.write(filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2', '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vsrc]'));
       videoChain.write(subtitlesPath != null
-          ? ';[vsrc]subtitles=${_quote(subtitlesPath)}[v]'
+          ? ';[vsrc]${subtitleFilter(subtitlesPath)}[v]'
           : '');
     } else {
       videoChain.write('[0:v]$filter');
       if (subtitlesPath != null) {
-        videoChain.write(',subtitles=${_quote(subtitlesPath)}');
+        videoChain.write(',${subtitleFilter(subtitlesPath)}');
       }
       videoChain.write('[v]');
     }

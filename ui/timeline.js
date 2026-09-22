@@ -21,6 +21,8 @@ const StudioTimeline = (() => {
     presets: [],
     previewPath: null,
     busy: false,
+    inspectorTab: "subtitles",
+    templateCategory: "Pop",
     el: null,
 
     /* ---------------------------------------------------------------- lifecycle */
@@ -45,7 +47,14 @@ const StudioTimeline = (() => {
     },
 
     close() {
-      if (this.el) this.el.hidden = true;
+      if (this.el) {
+        this.el.querySelectorAll("video,audio").forEach((player) => {
+          player.pause();
+          player.removeAttribute("src");
+          player.load();
+        });
+        this.el.hidden = true;
+      }
     },
 
     /** Timeline awal dari sebuah klip (satu item video + track kosong). */
@@ -117,12 +126,12 @@ const StudioTimeline = (() => {
       this.el.innerHTML = `
         <div class="editor-shell">
           <header class="editor-head">
-            <strong id="tlTitle"></strong>
+            <div class="editor-brand"><span>Editor video</span><strong id="tlTitle"></strong></div>
             <div class="row" style="gap:var(--s2)">
               <button class="ghost" data-tl="preview">${t("editor.previewDraft")}</button>
-              <button class="primary" data-tl="save">${t("common.save")}</button>
-              <button class="ghost" data-tl="render">${t("common.render")}</button>
-              <button class="mini" data-tl="close">${t("common.close")}</button>
+              <button class="ghost" data-tl="save">${t("common.save")}</button>
+              <button class="primary" data-tl="render">Ekspor video</button>
+              <button class="tl-close" data-tl="close" aria-label="Tutup editor" title="Tutup editor">×</button>
             </div>
           </header>
           <div class="editor-body">
@@ -169,7 +178,7 @@ const StudioTimeline = (() => {
       const stage = this.el.querySelector("#tlStage");
       if (!stage) return;
       if (this.previewPath) {
-        stage.innerHTML = `<video id="tlVideo" controls autoplay src="${mediaUrl(this.previewPath)}"></video>`;
+        stage.innerHTML = `<video id="tlVideo" controls src="${mediaUrl(this.previewPath)}&v=${Date.now()}"></video>`;
         return;
       }
       const thumb = this.clip.files && this.clip.files.thumb ? mediaUrl(this.clip.files.thumb) : "";
@@ -220,6 +229,7 @@ const StudioTimeline = (() => {
       const item = this.items(kind).find((i) => i.id === node.dataset.id);
       if (!item) return;
       this.selected = { kind, id: item.id };
+      this.inspectorTab = kind === "video" ? "clip" : "element";
       const mode = event.target.dataset.handle || "move";
       const lane = node.parentElement;
       const secondsPerPx = this.duration() / lane.getBoundingClientRect().width;
@@ -277,6 +287,7 @@ const StudioTimeline = (() => {
       };
       track.items.push(item);
       this.selected = { kind: "text", id: item.id };
+      this.inspectorTab = "element";
       this.renderAll();
     },
 
@@ -312,6 +323,7 @@ const StudioTimeline = (() => {
         };
         track.items.push(item);
         this.selected = { kind, id: item.id };
+      this.inspectorTab = kind === "video" ? "clip" : "element";
         this.renderAll();
       } catch (error) {
         toast(error.message, "error");
@@ -320,136 +332,74 @@ const StudioTimeline = (() => {
 
     /* ----------------------------------------------------------------- inspector */
 
+    presetGallery(value, attr) {
+      const category = this.templateCategory;
+      return `<div class="template-filters" aria-label="Kategori template">${["Semua", "Pop", "Neon", "Editorial", "Label", "Essential"].map(c => `<button data-category="${c}" class="${c === category ? 'active' : ''}">${c}</button>`).join('')}</div>
+        <div class="tl-presets">${this.presets.filter(p => category === "Semua" || p.category === category).map(p => `
+          <button class="tl-preset ${value === p.id ? 'active' : ''}" ${attr}="${p.id}" aria-pressed="${value === p.id}" title="${escapeHtml(p.label)}">
+            <div class="preset-swatch ${p.category === 'Neon' ? 'glow' : ''}" style="--preset-color:${p.color};--preset-outline:${p.outline}"><strong style="font-family:'${p.font}';font-style:${p.italic === 'yes' ? 'italic' : 'normal'};${p.box === 'yes' ? 'background:var(--preset-outline);text-shadow:none;padding:3px 6px;' : ''}">${escapeHtml(p.sample)}</strong></div>
+            <span>${escapeHtml(p.label)} <i>${value === p.id ? '✓' : '+'}</i></span>
+          </button>`).join('')}</div>`;
+    },
+
+    positionPicker(item) {
+      return `<div class="position-control"><label>Posisi di dalam kanvas</label><div class="position-grid">${[.18,.5,.82].flatMap((y, r) => [.18,.5,.82].map((x,c) => `<button data-position="${x},${y}" title="${['Atas','Tengah','Bawah'][r]} ${['kiri','tengah','kanan'][c]}" aria-label="${['Atas','Tengah','Bawah'][r]} ${['kiri','tengah','kanan'][c]}" class="${Math.abs(item.x-x)<.08 && Math.abs(item.y-y)<.08 ? 'active' : ''}"><span></span></button>`)).join('')}</div><div class="grid-2"><label>X (%)<input id="tlX" type="number" min="0" max="100" value="${Math.round(item.x*100)}"></label><label>Y (%)<input id="tlY" type="number" min="0" max="100" value="${Math.round(item.y*100)}"></label></div><p class="field-help">Pilih titik jangkar, atau isi persentase untuk posisi presisi.</p></div>`;
+    },
+
     renderInspector() {
       const host = this.el.querySelector("#tlInspector");
       if (!host) return;
-      const selected = this.selectedItem();
-      const clip = this.clip;
-      const videoItem = this.items("video")[0] || null;
-      const parts = [];
-
-      parts.push(`<div class="stack" style="gap:var(--s4)">
-        <div>
-          <label>${t("editor.trim")} — mulai / selesai (s)</label>
-          <div class="row" style="gap:var(--s2)">
-            <input type="number" step="0.1" id="tlClipStart" value="${clip.start}" />
-            <input type="number" step="0.1" id="tlClipEnd" value="${clip.end}" />
-          </div>
-        </div>`);
-
-      if (videoItem) {
-        parts.push(`
-        <div>
-          <label>${t("editor.crop")}</label>
-          <select id="tlCrop">
-            ${["center", "blur", "fit", "none"].map((mode) => {
-              const label = { center: "Center 9:16", blur: "Blur background", fit: "Fit (tidak memotong)", none: "Letterbox" }[mode];
-              return `<option value="${mode}" ${videoItem.crop === mode ? "selected" : ""}>${label}</option>`;
-            }).join("")}
-          </select>
-          <p class="muted" style="margin:6px 0 0">${t("editor.trimHint") || ""}</p>
-        </div>
-        <div>
-          <label>Ukuran klip</label>
-          <select id="tlCanvas">
-            <option value="portrait" ${videoItem.canvas === "portrait" ? "selected" : ""}>Potrait 9:16 (TikTok/Reels)</option>
-            <option value="original" ${videoItem.canvas === "original" ? "selected" : ""}>Ukuran asli video</option>
-            <option value="square" ${videoItem.canvas === "square" ? "selected" : ""}>Kotak 1:1</option>
-            <option value="landscape" ${videoItem.canvas === "landscape" ? "selected" : ""}>Landscape 16:9</option>
-          </select>
-        </div>`);
-      }
-
-      parts.push(`
-        <div>
-          <label>${t("editor.audio")}</label>
-          <select id="tlAudio">
-            <option value="original" ${clip.audio_mode === "original" ? "selected" : ""}>${t("audio.original")}</option>
-            <option value="voice" ${clip.audio_mode === "voice" ? "selected" : ""}>${t("audio.voice")}</option>
-            <option value="mix" ${clip.audio_mode === "mix" ? "selected" : ""}>${t("audio.mix")}</option>
-          </select>
-        </div>`);
-
-      parts.push(`<div>
-          <label>${t("editor.style")}</label>
-          <div class="tl-presets">
-            ${this.presets.map((preset) => `
-              <button class="tl-preset ${clip.subtitle_preset === preset.id ? "active" : ""}" data-preset="${preset.id}">
-                <strong>Aa</strong><span>${escapeHtml(preset.label)}</span>
-              </button>`).join("")}
-          </div>
-        </div>
-        <div>
-          <label>${t("editor.captions")}</label>
-          <textarea id="tlCaptions" rows="6">${escapeHtml(captionsToText(clip.captions))}</textarea>
-        </div>
-        <div>
-          <label>${t("editor.narration")}</label>
-          <textarea id="tlNarration" rows="2" placeholder="Teks narasi…"></textarea>
-          <button class="ghost" data-tl-clip="tts" style="margin-top:8px">${t("editor.ttsClip")}</button>
-        </div>`);
-
-      if (selected) {
-        parts.push(`<hr class="tl-sep" />`);
-        const kind = this.selected.kind;
-        if (kind === "text") {
-          parts.push(`
-            <div>
-              <label>Teks</label>
-              <textarea id="tlText" rows="3">${escapeHtml(selected.text || "")}</textarea>
-            </div>
-            <div>
-              <label>${t("editor.template")}</label>
-              <div class="tl-presets">
-                ${this.presets.map((preset) => `
-                  <button class="tl-preset ${selected.template === preset.id ? "active" : ""}" data-item-preset="${preset.id}">
-                    <strong>Aa</strong><span>${escapeHtml(preset.label)}</span>
-                  </button>`).join("")}
-              </div>
-            </div>
-            <div><label>Posisi X <span class="muted">${selected.x.toFixed(2)}</span></label>
-              <input type="range" min="0" max="1" step="0.01" id="tlX" value="${selected.x}" /></div>
-            <div><label>Posisi Y <span class="muted">${selected.y.toFixed(2)}</span></label>
-              <input type="range" min="0" max="1" step="0.01" id="tlY" value="${selected.y}" /></div>`);
-        }
-        if (kind === "media") {
-          parts.push(`
-            <div><label>Ukuran <span class="muted">${selected.scale.toFixed(2)}</span></label>
-              <input type="range" min="0.1" max="1" step="0.01" id="tlScale" value="${selected.scale}" /></div>
-            <div><label>Posisi X <span class="muted">${selected.x.toFixed(2)}</span></label>
-              <input type="range" min="0" max="1" step="0.01" id="tlX" value="${selected.x}" /></div>
-            <div><label>Posisi Y <span class="muted">${selected.y.toFixed(2)}</span></label>
-              <input type="range" min="0" max="1" step="0.01" id="tlY" value="${selected.y}" /></div>`);
-        }
-        if (kind === "audio") {
-          parts.push(`
-            <div><label>Volume <span class="muted">${selected.gain.toFixed(2)}</span></label>
-              <input type="range" min="0" max="2" step="0.05" id="tlGain" value="${selected.gain}" /></div>`);
-        }
-        parts.push(`
-          <div>
-            <label>Waktu item (mulai / selesai)</label>
-            <div class="row" style="gap:var(--s2)">
-              <input type="number" step="0.1" id="tlItemStart" value="${selected.start.toFixed(2)}" />
-              <input type="number" step="0.1" id="tlItemEnd" value="${selected.end.toFixed(2)}" />
-            </div>
-          </div>
-          <button class="ghost" data-tl-item="delete" style="color:var(--red)">${t("editor.deleteItem")}</button>`);
-      }
-
-      parts.push(`</div>`);
-      host.innerHTML = parts.join("");
+      const selected = this.selectedItem(), clip = this.clip;
+      const base = this.items("video")[0] || {};
+      const options = (values, value) => values.map(([id,label]) => `<option value="${id}" ${id === value ? 'selected' : ''}>${label}</option>`).join('');
+      host.innerHTML = `<div class="inspector-tabs">${[['clip','Klip'],['subtitles','Subtitle'],['element','Elemen']].map(([id,label]) => `<button data-inspector="${id}" class="${this.inspectorTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
+        <section class="inspector-section" ${this.inspectorTab !== 'clip' ? 'hidden' : ''}>
+          <h3>Video & audio</h3>
+          <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
+          <label>Penyesuaian gambar<select id="tlCrop">${options([['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
+          <p class="field-help">Fit mempertahankan seluruh gambar. Ukuran asli mengikuti rasio video sumber.</p>
+          <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlClipStart" value="${clip.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlClipEnd" value="${clip.end}"></label></div>
+          <label>Audio<select id="tlAudio">${options([['original','Suara asli video'],['voice','Ganti dengan narasi'],['mix','Campur suara & narasi']],clip.audio_mode)}</select></label>
+          <label>Naskah narasi<textarea id="tlNarration" rows="3" placeholder="Tulis kalimat untuk sulih suara…"></textarea></label><button class="ghost" data-tl-clip="tts">Buat suara dari teks</button>
+        </section>
+        <section class="inspector-section" ${this.inspectorTab !== 'subtitles' ? 'hidden' : ''}>
+          <h3>Gaya subtitle</h3><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Pilih, lalu klik Pratinjau cepat untuk melihat hasilnya.</p>
+          <button class="caption-generate" data-tl="captions">Buat subtitle otomatis</button>
+          ${this.presetGallery(clip.subtitle_preset, 'data-preset')}
+          <details><summary>Edit teks & waktu · ${(clip.captions || []).length} baris</summary><p class="field-help">Transkrip adalah teks ucapan. Subtitle mengatur kapan teks tampil. Format: mulai|selesai|teks dalam detik.</p><textarea id="tlCaptions" rows="7">${escapeHtml(captionsToText(clip.captions))}</textarea></details>
+        </section>
+        <section class="inspector-section" ${this.inspectorTab !== 'element' ? 'hidden' : ''}>
+          <h3>Pengaturan elemen</h3>
+          ${selected && this.selected.kind !== 'video' ? `
+            ${this.selected.kind === 'text' ? `<label>Teks overlay<textarea id="tlText" rows="3">${escapeHtml(selected.text || '')}</textarea></label>${this.presetGallery(selected.template, 'data-item-preset')}` : ''}
+            ${['text','media'].includes(this.selected.kind) ? this.positionPicker(selected) : ''}
+            ${this.selected.kind === 'media' ? `<label>Ukuran (%)<input type="number" id="tlScale" min="5" max="100" value="${Math.round(selected.scale*100)}"></label>` : ''}
+            ${this.selected.kind === 'audio' ? `<label>Volume (%)<input type="number" id="tlGain" min="0" max="200" value="${Math.round(selected.gain*100)}"></label>` : ''}
+            <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlItemStart" value="${selected.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlItemEnd" value="${selected.end}"></label></div><button class="ghost danger" data-tl-item="delete">Hapus elemen</button>
+          ` : '<div class="empty">Pilih elemen di timeline, atau tambahkan teks, media, dan musik melalui tombol di bawah pratinjau.</div>'}
+        </section>`;
       this.bindInspector();
     },
 
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
       const selected = this.selectedItem();
+      host.querySelectorAll('[data-inspector]').forEach(node => node.addEventListener('click', () => { this.inspectorTab = node.dataset.inspector; this.renderInspector(); }));
+      host.querySelectorAll('[data-category]').forEach(node => node.addEventListener('click', () => { this.templateCategory = node.dataset.category; this.renderInspector(); }));
+      host.querySelectorAll('[data-position]').forEach(node => node.addEventListener('click', () => { if (selected) { [selected.x, selected.y] = node.dataset.position.split(',').map(Number); this.renderInspector(); } }));
+      host.querySelector('[data-tl="captions"]').addEventListener("click", () => this.generateCaptions());
 
       const clipStart = host.querySelector("#tlClipStart");
       const clipEnd = host.querySelector("#tlClipEnd");
-      if (clipStart) clipStart.addEventListener("change", () => { this.clip.start = Number(clipStart.value) || 0; });
-      if (clipEnd) clipEnd.addEventListener("change", () => { this.clip.end = Number(clipEnd.value) || this.clip.start + 1; });
+      const updateTrim = () => {
+        this.clip.start = Math.max(0, Number(clipStart.value) || 0);
+        this.clip.end = Math.max(this.clip.start + 0.2, Number(clipEnd.value) || 0);
+        const base = this.items("video")[0];
+        if (base) { base.srcStart = this.clip.start; base.start = 0; base.end = this.clip.end - this.clip.start; }
+        this.renderTracks();
+      };
+      if (clipStart) clipStart.addEventListener("change", updateTrim);
+      if (clipEnd) clipEnd.addEventListener("change", updateTrim);
 
       const videoItem = this.items("video")[0];
       const crop = host.querySelector("#tlCrop");
@@ -468,7 +418,7 @@ const StudioTimeline = (() => {
       );
 
       const captions = host.querySelector("#tlCaptions");
-      if (captions) captions.addEventListener("change", () => {
+      if (captions) captions.addEventListener("input", () => {
         this.clip.captions = textToCaptions(captions.value);
       });
 
@@ -504,7 +454,7 @@ const StudioTimeline = (() => {
         const node = host.querySelector(`#${id}`);
         if (!node) return;
         node.addEventListener("input", () => {
-          apply(Number(node.value));
+          apply(Number(node.value) / 100);
           this.renderTracks();
           const label = node.previousElementSibling;
           if (label) {
@@ -513,10 +463,10 @@ const StudioTimeline = (() => {
           }
         });
       };
-      slider("tlX", (value) => { selected.x = value; });
-      slider("tlY", (value) => { selected.y = value; });
-      slider("tlScale", (value) => { selected.scale = value; });
-      slider("tlGain", (value) => { selected.gain = value; });
+      slider("tlX", (value) => { selected.x = clamp(value, 0, 1); });
+      slider("tlY", (value) => { selected.y = clamp(value, 0, 1); });
+      slider("tlScale", (value) => { selected.scale = clamp(value, .05, 1); });
+      slider("tlGain", (value) => { selected.gain = clamp(value, 0, 2); });
 
       const itemStart = host.querySelector("#tlItemStart");
       const itemEnd = host.querySelector("#tlItemEnd");
@@ -535,12 +485,29 @@ const StudioTimeline = (() => {
 
     /* ------------------------------------------------------------------ actions */
 
+    async generateCaptions() {
+      if (this.busy) return;
+      this.busy = true;
+      try {
+        await this.save();
+        toast("Membuat subtitle dari audio sumber…");
+        const job = await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/captions`, { method: "POST" });
+        const result = await waitJob(job.id);
+        this.clip.captions = result.captions || [];
+        this.clip.subtitle_position = "bottom";
+        this.renderInspector();
+        toast(this.clip.captions.length ? "Subtitle siap. Pilih tipografi lalu Pratinjau atau Render." : "Tidak ada ucapan terdeteksi.");
+      } catch (error) { toast(error.message, "error"); }
+      finally { this.busy = false; }
+    },
+
     /** Simpan timeline + field turunan (crop/kanvas/trim) ke proyek. */
     async save() {
       const videoItem = this.items("video")[0];
       const payload = {
         timeline: this.timeline,
         subtitle_preset: this.clip.subtitle_preset,
+        subtitle_position: this.clip.subtitle_position,
         audio_mode: this.clip.audio_mode,
         captions: this.clip.captions,
         start: this.clip.start,
@@ -562,6 +529,8 @@ const StudioTimeline = (() => {
 
     async preview() {
       if (this.busy) return;
+      this.el.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
+      this.el.querySelector('#tlStage').innerHTML = '<div class="editor-stage-inner"><div class="spinner"></div><p>Menyusun pratinjau…</p></div>';
       this.busy = true;
       try {
         await this.save();
@@ -569,7 +538,7 @@ const StudioTimeline = (() => {
         const result = await waitJob(job.id);
         if (result && result.mp4) {
           this.previewPath = result.mp4;
-          this.renderStage();
+          if (!this.el.hidden) this.renderStage();
         }
       } catch (error) {
         toast(error.message, "error");

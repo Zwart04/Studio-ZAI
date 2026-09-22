@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import 'media_tools.dart';
+import 'wav_chunks.dart';
 import 'model_manager.dart';
 
 class TranscriptSegment {
@@ -35,11 +37,23 @@ class SpeechService {
 
   sherpa.OfflineRecognizer? _recognizer;
   String? _loadedAsr;
+  String? _loadedLanguage;
   sherpa.OfflineTts? _tts;
   String? _loadedTts;
 
   bool get asrReady => _recognizer != null;
   bool get ttsReady => _tts != null;
+
+  Future<List<TranscriptSegment>> transcribeFile(String path, String modelId, String language) async {
+    final modelRoot = models.modelsDir.path;
+    return Isolate.run(() async {
+      final worker = SpeechService(ModelManager.forDirectory(Directory(modelRoot)));
+      try {
+        await worker.loadAsr(modelId, language: language);
+        return await worker.transcribeWav(path, language: language);
+      } finally { worker.reset(); }
+    });
+  }
 
   void reset() {
     // Urutan bebas yang aman: stream dulu (tidak ada di sini), lalu
@@ -59,8 +73,8 @@ class SpeechService {
 
   // ------------------------------------------------------------------- asr
 
-  Future<void> loadAsr(String modelId) async {
-    if (_loadedAsr == modelId && _recognizer != null) return;
+  Future<void> loadAsr(String modelId, {String language = 'id'}) async {
+    if (_loadedAsr == modelId && _loadedLanguage == language && _recognizer != null) return;
     final model = models.find(modelId);
     if (model == null || !models.isInstalled(model)) {
       throw Exception('Model transkripsi belum terpasang: $modelId');
@@ -80,6 +94,8 @@ class SpeechService {
           whisper: sherpa.OfflineWhisperModelConfig(
             encoder: encoder.path,
             decoder: decoder.path,
+            language: language,
+            task: 'transcribe',
           ),
           tokens: tokens.path,
           modelType: 'whisper',
@@ -90,15 +106,17 @@ class SpeechService {
       ),
     );
     _loadedAsr = modelId;
+    _loadedLanguage = language;
   }
 
   /// Transcribe a 16 kHz mono WAV; silero VAD splits it into speech segments.
   Future<List<TranscriptSegment>> transcribeWav(String wavPath, {String? language}) async {
+    if (language != null && language != _loadedLanguage && _loadedAsr != null) {
+      await loadAsr(_loadedAsr!, language: language);
+    }
     final recognizer = _recognizer;
     if (recognizer == null) throw Exception('Model transkripsi belum dimuat.');
 
-    final samples = MediaTools.readWavSamples(wavPath);
-    if (samples.isEmpty) return const [];
 
     final vadModel = models.find('silero-vad');
     final vadFile = vadModel == null ? null : models.fileWith(vadModel, ['silero_vad.onnx']);
@@ -122,9 +140,7 @@ class SpeechService {
         ),
         bufferSizeInSeconds: 60,
       );
-      vad.acceptWaveform(samples);
-      vad.flush();
-      try {
+      void drain() {
         while (!vad.isEmpty()) {
           final speech = vad.front();
           String text = '';
@@ -143,15 +159,26 @@ class SpeechService {
             ));
           }
         }
+      }
+      try {
+        for (final samples in readWavChunks(wavPath)) {
+          vad.acceptWaveform(samples);
+          drain();
+        }
+        vad.flush();
+        drain();
       } finally {
         try {
           vad.free();
         } catch (_) {}
       }
     } else {
-      final text = _decode(recognizer, samples);
-      if (text.trim().isNotEmpty) {
-        segments.add(TranscriptSegment(0, samples.length / 16000.0, text.trim()));
+      var offset = 0.0;
+      for (final samples in readWavChunks(wavPath, sampleCount: 20 * 16000)) {
+        final text = _decode(recognizer, samples);
+        final end = offset + samples.length / 16000.0;
+        if (text.trim().isNotEmpty) segments.add(TranscriptSegment(offset, end, text.trim()));
+        offset = end;
       }
     }
     return segments;

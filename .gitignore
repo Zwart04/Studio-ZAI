@@ -15,6 +15,9 @@ build/
 output/
 projects/
 models/
+!core/studiozai/models/
+!core/studiozai/models/*.py
+!core/studiozai/models/registry.json
 *.log
 
 # Samples (large media, keep folder)

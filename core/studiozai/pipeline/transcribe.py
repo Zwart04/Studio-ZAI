@@ -51,7 +51,11 @@ def load_model(model_id: str = "whisper-small-int8") -> Any:
     device, compute_type = _device()
     key = (size, device)
     if key not in ModelCache:
-        ModelCache[key] = WhisperModel(size, device=device, compute_type=compute_type)
+        if model_id in MODEL_ALIASES:
+            if not models.manager.is_installed(model_id):
+                models.manager.download(model_id)
+            size = str(models.manager.model_dir(model_id))
+        ModelCache[key] = WhisperModel(size, device=device, compute_type=compute_type, local_files_only=True)
     return ModelCache[key]
 
 

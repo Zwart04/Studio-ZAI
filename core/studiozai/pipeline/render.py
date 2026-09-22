@@ -31,7 +31,9 @@ def encoder_args(encoder: str | None = None) -> list[str]:
 def escape_filter_path(path: str | Path) -> str:
     """Escape a path for use inside an ffmpeg filter argument."""
     text = str(path).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-    return f"filename='{text}'"
+    from .. import config
+    fonts = str(config.ui_dir() / "assets" / "fonts").replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    return f"filename='{text}':fontsdir='{fonts}'"
 
 
 def render_clip(

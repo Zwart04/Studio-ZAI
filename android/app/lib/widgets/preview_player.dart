@@ -19,13 +19,14 @@ class VideoPreview extends StatefulWidget {
   State<VideoPreview> createState() => _VideoPreviewState();
 }
 
-class _VideoPreviewState extends State<VideoPreview> {
+class _VideoPreviewState extends State<VideoPreview> with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   Object? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _open();
   }
 
@@ -37,13 +38,11 @@ class _VideoPreviewState extends State<VideoPreview> {
     }
     try {
       final controller = VideoPlayerController.file(file);
+      _controller = controller;
       await controller.initialize();
+      if (!mounted || _controller != controller) return;
       await controller.setLooping(true);
-      await controller.play();
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
+      if (!mounted || _controller != controller) return;
       setState(() => _controller = controller);
     } catch (error) {
       if (mounted) setState(() => _error = error);
@@ -52,15 +51,23 @@ class _VideoPreviewState extends State<VideoPreview> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.pause();
     _controller?.dispose();
+    _controller = null;
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _controller?.pause();
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
     if (_error != null) return _fallback();
-    if (controller == null) {
+    if (controller == null || !controller.value.isInitialized) {
       return const SizedBox(height: 260, child: Center(child: CircularProgressIndicator()));
     }
     final ratio = controller.value.aspectRatio;

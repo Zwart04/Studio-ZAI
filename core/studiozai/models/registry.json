@@ -1,0 +1,279 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "whisper-tiny-int8",
+      "kind": "asr",
+      "langs": [
+        "id",
+        "en",
+        "multi"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 75,
+      "license": "MIT",
+      "note": "Paling cepat, akurasi dasar. Untuk perangkat sangat lemah.",
+      "homepage": "https://huggingface.co/Systran/faster-whisper-tiny",
+      "download": {
+        "type": "lib",
+        "provider": "faster-whisper",
+        "repo": "Systran/faster-whisper-tiny",
+        "android_asset": "sherpa-onnx-whisper-tiny",
+        "note": "Bobot diunduh otomatis oleh faster-whisper (desktop) / sherpa-onnx (Android)."
+      },
+      "sha256": null
+    },
+    {
+      "id": "whisper-base-int8",
+      "kind": "asr",
+      "langs": [
+        "id",
+        "en",
+        "multi"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 1,
+      "size_mb": 150,
+      "license": "MIT",
+      "note": "Seimbang untuk Bahasa Inggris dan perangkat RAM kecil.",
+      "homepage": "https://huggingface.co/Systran/faster-whisper-base",
+      "download": {
+        "type": "lib",
+        "provider": "faster-whisper",
+        "repo": "Systran/faster-whisper-base",
+        "android_asset": "sherpa-onnx-whisper-base",
+        "note": "Bobot diunduh otomatis oleh library."
+      },
+      "sha256": null
+    },
+    {
+      "id": "whisper-small-int8",
+      "kind": "asr",
+      "langs": [
+        "id",
+        "en",
+        "multi"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 2,
+      "size_mb": 250,
+      "license": "MIT",
+      "note": "Default untuk Bahasa Indonesia (rekomendasi).",
+      "homepage": "https://huggingface.co/Systran/faster-whisper-small",
+      "download": {
+        "type": "lib",
+        "provider": "faster-whisper",
+        "repo": "Systran/faster-whisper-small",
+        "android_asset": "sherpa-onnx-whisper-small",
+        "note": "Bobot diunduh otomatis oleh library."
+      },
+      "sha256": null
+    },
+    {
+      "id": "whisper-medium-int8",
+      "kind": "asr",
+      "langs": [
+        "id",
+        "en",
+        "multi"
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "tier": 3,
+      "size_mb": 750,
+      "license": "MIT",
+      "note": "Akurasi terbaik di kelas ringan; butuh RAM >= 8GB.",
+      "homepage": "https://huggingface.co/Systran/faster-whisper-medium",
+      "download": {
+        "type": "lib",
+        "provider": "faster-whisper",
+        "repo": "Systran/faster-whisper-medium",
+        "note": "Bobot diunduh otomatis oleh library."
+      },
+      "sha256": null
+    },
+    {
+      "id": "piper-id_ID-news_tts-medium",
+      "kind": "tts",
+      "langs": [
+        "id"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "MIT",
+      "note": "Suara Bahasa Indonesia resmi Piper (news). Ringan, realtime di CPU.",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "id_ID-news_tts-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/id/id_ID/news_tts/medium/id_ID-news_tts-medium.onnx",
+            "sha256": null
+          },
+          {
+            "name": "id_ID-news_tts-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/id/id_ID/news_tts/medium/id_ID-news_tts-medium.onnx.json",
+            "sha256": null
+          }
+        ]
+      },
+      "sha256": null
+    },
+    {
+      "id": "piper-en_US-lessac-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "MIT",
+      "note": "Suara Bahasa Inggris (US) Piper.",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_US-lessac-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+            "sha256": null
+          },
+          {
+            "name": "en_US-lessac-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+            "sha256": null
+          }
+        ]
+      },
+      "sha256": null
+    },
+    {
+      "id": "piper-en_GB-alba-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "MIT",
+      "note": "Suara Bahasa Inggris (UK) Piper - opsional.",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_GB-alba-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
+            "sha256": null
+          },
+          {
+            "name": "en_GB-alba-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json",
+            "sha256": null
+          }
+        ]
+      },
+      "sha256": null
+    },
+    {
+      "id": "chatterbox-base",
+      "kind": "clone",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 2,
+      "size_mb": 1500,
+      "license": "MIT",
+      "note": "Zero-shot voice cloning (EN). Output otomatis ber-watermark PerTh. Di Android hanya eksperimental (GGUF Q4).",
+      "homepage": "https://huggingface.co/ResembleAI/chatterbox",
+      "download": {
+        "type": "lib",
+        "provider": "chatterbox-tts",
+        "repo": "ResembleAI/chatterbox",
+        "note": "Instal dengan: pip install -e \"core[clone]\". Bobot diunduh otomatis."
+      },
+      "sha256": null
+    },
+    {
+      "id": "chatterbox-id-finetune",
+      "kind": "clone",
+      "langs": [
+        "id"
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "tier": 2,
+      "size_mb": 600,
+      "license": "Apache-2.0",
+      "note": "Checkpoint fine-tune Bahasa Indonesia untuk Chatterbox (grandhigh). Butuh chatterbox-base.",
+      "homepage": "https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian",
+      "download": {
+        "type": "files",
+        "provider": "huggingface",
+        "files": [
+          {
+            "name": "t3_cfg.safetensors",
+            "url": "https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian/resolve/main/t3_cfg.safetensors",
+            "sha256": null
+          }
+        ]
+      },
+      "sha256": null
+    },
+    {
+      "id": "zipvoice-zh-en",
+      "kind": "clone",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "android",
+        "desktop"
+      ],
+      "tier": 1,
+      "size_mb": 350,
+      "license": "Apache-2.0",
+      "note": "Cloning EN ringan via sherpa-onnx (butuh reference audio + teksnya). Cocok untuk Android.",
+      "homepage": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models",
+      "download": {
+        "type": "archive",
+        "provider": "sherpa-onnx",
+        "name": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2"
+      },
+      "sha256": null
+    }
+  ]
+}

@@ -372,7 +372,7 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
             timeline,
             src_size=(src_w, src_h),
             subtitles=files.get("ass"),
-            voice_path=voice_path,
+            voice_path=voice_path if clip.audio_mode != "original" else None,
             original_volume=base_volume,
             voice_volume=clip.voice_volume,
             progress_cb=lambda p, m: _report(job, 60 + p * 0.35, "merender", m),
@@ -465,7 +465,7 @@ def render_preview(project: projects.Project, clip: projects.Clip, job: Job | No
         voice_path=voice_path if clip.audio_mode != "original" else None,
         original_volume=base_volume,
         voice_volume=clip.voice_volume,
-        scale_to=(540, 960),
+        scale_to=tuple(max(2, int(side * min(1.0, 960 / max(canvas))) // 2 * 2) for side in canvas),
         progress_cb=lambda p, m: _report(job, 20 + p * 0.75, "pratinjau", m),
     )
     _report(job, 100, "pratinjau siap")

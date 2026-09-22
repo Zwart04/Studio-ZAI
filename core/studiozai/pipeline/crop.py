@@ -45,12 +45,13 @@ class CropPlan:
 
 
 def center_crop_chain(src_w: int, src_h: int, out_w: int, out_h: int) -> str:
-    crop_w = min(src_w, even(src_h * TARGET_RATIO) if src_h * TARGET_RATIO <= src_w else src_w)
-    crop_h = min(src_h, even(src_w / TARGET_RATIO))
-    if crop_w / max(1, crop_h) > TARGET_RATIO:
-        crop_w = even(crop_h * TARGET_RATIO)
+    ratio = out_w / out_h
+    crop_w = max(2, even(src_w))
+    crop_h = max(2, even(src_h))
+    if crop_w / crop_h > ratio:
+        crop_w = max(2, even(crop_h * ratio))
     else:
-        crop_h = even(crop_w / TARGET_RATIO)
+        crop_h = max(2, even(crop_w / ratio))
     x = max(0, (src_w - crop_w) // 2)
     y = max(0, (src_h - crop_h) // 2)
     return f"crop={crop_w}:{crop_h}:{x}:{y},scale={out_w}:{out_h}:flags=lanczos,setsar=1"
@@ -64,7 +65,7 @@ def fit_chain(out_w: int, out_h: int) -> str:
     `center_crop_chain` yang memang membuang sisi luar.
     """
     return (
-        f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,"
         f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
     )
 

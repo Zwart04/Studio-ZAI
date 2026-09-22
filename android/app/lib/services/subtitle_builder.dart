@@ -1,3 +1,4 @@
+import 'text_presets.dart';
 // Subtitle builders: SRT and ASS (burned-in), ported from
 // core/studiozai/pipeline/subtitle.py.
 //
@@ -39,120 +40,7 @@ class SubtitleBuilder {
 
   /// Template tipografi. Ukuran ditulis untuk tinggi kanvas 1920 lalu
   /// diskalakan (lihat [toAss]) sehingga proporsional di kanvas lain.
-  static const presets = <String, Map<String, Object>>{
-    'clean': {
-      'label': 'Clean',
-      'size': 56,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H00FFFFFF',
-      'outlineColour': '&H00101010',
-      'bold': 0,
-      'outline': 3,
-      'shadow': 1,
-      'border': 1,
-      'marginV': 220,
-      'karaoke': false,
-      'anim': r'{\fad(120,120)}',
-    },
-    'bold_highlight': {
-      'label': 'Bold highlight',
-      'size': 68,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H0000E1FF',
-      'outlineColour': '&H00101010',
-      'bold': -1,
-      'outline': 4,
-      'shadow': 1,
-      'border': 1,
-      'marginV': 250,
-      'karaoke': true,
-      'anim': '',
-    },
-    'tiktok_pop': {
-      'label': 'TikTok pop',
-      'size': 76,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H0000E1FF',
-      'outlineColour': '&H00000000',
-      'bold': -1,
-      'outline': 5,
-      'shadow': 2,
-      'border': 1,
-      'marginV': 300,
-      'karaoke': true,
-      'anim': r'{\fad(80,80)\fscx94\fscy94\t(0,150,\fscx100\fscy100)}',
-    },
-    'karaoke_fill': {
-      'label': 'Karaoke fill',
-      'size': 66,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H0000D158',
-      'outlineColour': '&H00101010',
-      'bold': -1,
-      'outline': 3,
-      'shadow': 1,
-      'border': 1,
-      'marginV': 250,
-      'karaoke': true,
-      'anim': '',
-    },
-    'title_card': {
-      'label': 'Title card',
-      'size': 96,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H00FFFFFF',
-      'outlineColour': '&H00101010',
-      'bold': -1,
-      'outline': 4,
-      'shadow': 2,
-      'border': 1,
-      'marginV': 0,
-      'karaoke': false,
-      'anim': r'{\fad(160,160)}',
-    },
-    'minimal_lower': {
-      'label': 'Minimal lower',
-      'size': 44,
-      'primary': '&H00F2F2F7',
-      'secondary': '&H00F2F2F7',
-      'outlineColour': '&H00101010',
-      'bold': 0,
-      'outline': 2,
-      'shadow': 0,
-      'border': 1,
-      'marginV': 140,
-      'karaoke': false,
-      'anim': r'{\fad(100,100)}',
-    },
-    'neon': {
-      'label': 'Neon',
-      'size': 70,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H00FF453A',
-      'outlineColour': '&H00FF453A',
-      'bold': -1,
-      'outline': 5,
-      'shadow': 4,
-      'border': 1,
-      'marginV': 260,
-      'karaoke': false,
-      'anim': r'{\fad(120,120)}',
-    },
-    'subtitle_box': {
-      'label': 'Subtitle box',
-      'size': 54,
-      'primary': '&H00FFFFFF',
-      'secondary': '&H00FFFFFF',
-      'outlineColour': '&H99000000',
-      'bold': 0,
-      'outline': 12,
-      'shadow': 0,
-      'border': 3,
-      'marginV': 220,
-      'karaoke': false,
-      'anim': r'{\fad(120,120)}',
-    },
-  };
+  static const presets = creatorTextPresets;
 
   static const defaultPreset = 'clean';
 
@@ -278,9 +166,12 @@ class SubtitleBuilder {
 
   static String _styleLine(String name, Map<String, Object> style, double scale, int alignment, int marginV) {
     final marginH = (SubtitleBuilder.marginH * scale).round();
-    return 'Style: $name,Roboto,${style['size']},${style['primary']},${style['secondary']},'
-        '${style['outlineColour']},&H80000000,${style['bold']},0,0,0,100,100,0,0,'
-        '${style['border']},${style['outline']},${style['shadow']},$alignment,'
+    final fontSize = (((style['size'] as num?) ?? 56) * scale).round().clamp(10, 300);
+    final outline = ((style['outline'] as num?) ?? 3) * scale;
+    final shadow = ((style['shadow'] as num?) ?? 1) * scale;
+    return 'Style: $name,${style['font'] ?? 'Roboto'},$fontSize,${style['primary']},${style['secondary']},'
+        '${style['outlineColour']},&H80000000,${style['bold']},${style['italic'] == true ? -1 : 0},0,0,100,100,0,0,'
+        '${style['border']},$outline,$shadow,$alignment,'
         '$marginH,$marginH,$marginV,1';
   }
 
