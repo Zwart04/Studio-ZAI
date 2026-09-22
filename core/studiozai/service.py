@@ -95,7 +95,13 @@ def _version() -> str:
 # --------------------------------------------------------------------------- ingest
 
 
-def ingest(project: projects.Project, source: str, cookies: str | None = None, job: Job | None = None) -> Path:
+def ingest(
+    project: projects.Project,
+    source: str,
+    cookies: str | None = None,
+    job: Job | None = None,
+    format_id: str | None = None,
+) -> Path:
     """Bring the source video into the project (download for URLs, copy for local files)."""
     project.source_dir.mkdir(parents=True, exist_ok=True)
     if download.is_url(source):
@@ -104,6 +110,7 @@ def ingest(project: projects.Project, source: str, cookies: str | None = None, j
             source,
             project.source_dir,
             cookies=cookies or None,
+            format_id=format_id,
             progress_cb=lambda p, m: _report(job, 3 + p * 0.32, "mengunduh", m),
         )
         project.source = info["path"]

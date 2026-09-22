@@ -41,6 +41,11 @@
           <button class="ghost" id="pickFile" data-i18n="home.pick">Pilih berkas</button>
         </div>
 
+        <div class="row" id="linkPreviewWrap" style="margin-top:var(--s4); display:none">
+          <div class="card tight" id="linkPreview" style="width:100%"></div>
+        </div>
+
+        <!-- Pengaturan dasar -->
         <div class="grid-2" style="margin-top:20px">
           <div>
             <label for="count" data-i18n="home.count">Jumlah klip</label>
@@ -53,24 +58,44 @@
               <option value="en">English</option>
             </select>
           </div>
-          <div>
-            <label for="minLen" data-i18n="home.min">Durasi minimum (detik)</label>
-            <input type="number" id="minLen" value="15" min="5" max="120" />
-          </div>
-          <div>
-            <label for="maxLen" data-i18n="home.max">Durasi maksimum (detik)</label>
-            <input type="number" id="maxLen" value="60" min="10" max="180" />
-          </div>
         </div>
 
-        <div class="stack" style="margin-top:var(--s5); gap:var(--s2)">
-          <label style="margin:0">
-            <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useTranscript" checked /> <span data-i18n="home.transcript">Transkrip otomatis (subtitle)</span></span>
-          </label>
-          <label style="margin:0">
-            <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useLlm" /> <span data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span></span>
-          </label>
+        <!-- Pilihan kualitas video (muncul setelah link terbaca) -->
+        <div id="qualityWrap" style="margin-top:20px; display:none">
+          <label for="quality" data-i18n="home.quality">Kualitas video</label>
+          <select id="quality">
+            <option value="720p">720p — disarankan (cepat, hemat)</option>
+            <option value="1080p">1080p — full HD</option>
+            <option value="480p">480p — paling cepat</option>
+            <option value="best">Terbaik — ukuran besar</option>
+            <option value="audio">Audio saja — tanpa gambar</option>
+          </select>
+          <p class="muted" id="qualityHint" style="margin:var(--s2) 0 0"></p>
         </div>
+
+        <!-- Opsi lanjutan (tersembunyi, simpel di awal) -->
+        <details id="advDetails" style="margin-top:20px">
+          <summary style="cursor:pointer; color:var(--text-dim)" data-i18n="home.advanced">Pengaturan lanjutan</summary>
+          <div class="grid-2" style="margin-top:var(--s3)">
+            <div>
+              <label for="minLen" data-i18n="home.min">Durasi minimum (detik)</label>
+              <input type="number" id="minLen" value="15" min="5" max="120" />
+            </div>
+            <div>
+              <label for="maxLen" data-i18n="home.max">Durasi maksimum (detik)</label>
+              <input type="number" id="maxLen" value="60" min="10" max="180" />
+            </div>
+          </div>
+
+          <div class="stack" style="margin-top:var(--s4); gap:var(--s2)">
+            <label style="margin:0">
+              <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useTranscript" checked /> <span data-i18n="home.transcript">Transkrip otomatis (subtitle)</span></span>
+            </label>
+            <label style="margin:0">
+              <span class="row" style="gap:var(--s2)"><input type="checkbox" id="useLlm" /> <span data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span></span>
+            </label>
+          </div>
+        </details>
 
         <div class="row" style="margin-top:var(--s6)">
           <button class="primary" id="startBtn" data-i18n="home.start">Mulai buat klip</button>

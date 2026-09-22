@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -41,12 +42,82 @@ def is_supported_host(url: str) -> bool:
     return any(host in lowered for host in SUPPORTED_HOSTS)
 
 
+def fetch_info(
+    url: str,
+    cookies: str | Path | None = None,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Ambil metadata + daftar format tanpa mengunduh. Timeout agar UI tidak macet."""
+    if not is_url(url):
+        raise ValueError("bukan URL yang valid")
+    yt_dlp = _yt_dlp()
+    options: dict[str, Any] = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "socket_timeout": timeout,
+        "retries": 2,
+    }
+    if cookies:
+        options["cookiefile"] = str(cookies)
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:  # noqa: BLE001 - berikan pesan yang bisa dipakai UI
+        raise RuntimeError(f"gagal membaca link: {exc}") from exc
+    formats: list[dict[str, Any]] = []
+    for fmt in info.get("formats") or []:
+        if not fmt.get("url"):
+            continue
+        vcodec = str(fmt.get("vcodec") or "none")
+        acodec = str(fmt.get("acodec") or "none")
+        if vcodec == "none" and acodec == "none":
+            continue
+        formats.append(
+            {
+                "format_id": str(fmt.get("format_id") or ""),
+                "ext": fmt.get("ext") or "mp4",
+                "resolution": fmt.get("resolution") or f"{fmt.get('width') or '?'}x{fmt.get('height') or '?'}",
+                "height": fmt.get("height") or 0,
+                "fps": fmt.get("fps") or 0,
+                "vcodec": vcodec,
+                "acodec": acodec,
+                "filesize": fmt.get("filesize") or fmt.get("filesize_approx") or 0,
+                "tbr": round(float(fmt.get("tbr") or 0), 1),
+                "has_video": vcodec != "none",
+                "has_audio": acodec != "none",
+            }
+        )
+    formats.sort(key=lambda f: (f["has_video"], f["height"], f["tbr"]))
+    return {
+        "title": info.get("title") or url,
+        "duration": float(info.get("duration") or 0.0),
+        "uploader": info.get("uploader") or "",
+        "webpage_url": info.get("webpage_url") or url,
+        "thumbnail": info.get("thumbnail") or "",
+        "formats": formats,
+    }
+
+
+def pick_format_id(formats: list[dict[str, Any]], quality: str) -> str:
+    """Pilih format_id yt-dlp dari pilihan kualitas UI."""
+    video = [f for f in formats if f["has_video"]]
+    if quality == "audio":
+        return "bestaudio[ext=m4a]/bestaudio/best"
+    if quality == "best":
+        return "bv*+ba/b"
+    match = re.search(r"(\d{3,4})p", quality)
+    height = int(match.group(1)) if match else 1080
+    return f"bv*[height<={height}]+ba/b[height<={height}]/b"
+
+
 def download(
     url: str,
     out_dir: str | Path,
     cookies: str | Path | None = None,
     max_height: int = 1080,
     progress_cb: ProgressCb | None = None,
+    format_id: str | None = None,
 ) -> dict[str, Any]:
     """Download a video and return {path, title, duration, webpage_url}."""
     if not is_url(url):
@@ -54,6 +125,8 @@ def download(
     yt_dlp = _yt_dlp()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    state: dict[str, Any] = {"speed": 0.0, "eta": 0, "last_emit": 0.0}
 
     def hook(payload: dict[str, Any]) -> None:
         if not progress_cb:
@@ -63,32 +136,52 @@ def download(
             total = payload.get("total_bytes") or payload.get("total_bytes_estimate") or 0
             done = payload.get("downloaded_bytes") or 0
             percent = (done / total * 100) if total else 0.0
-            progress_cb(min(99.0, percent), "mengunduh video")
+            state["speed"] = payload.get("speed") or 0
+            state["eta"] = payload.get("eta") or 0
+            # emit maksimal 5x/detik supaya SSE tidak banjir
+            if time.time() - state["last_emit"] < 0.2:
+                return
+            state["last_emit"] = time.time()
+            speed = state["speed"]
+            eta = state["eta"]
+            speed_txt = f"{speed / 1024 / 1024:.1f} MB/s" if speed else "…"
+            detail = f"{done / 1024 / 1024:.0f}/{total / 1024 / 1024:.0f} MB · {speed_txt}"
+            if eta:
+                detail += f" · sisa {int(eta // 60)}:{int(eta % 60):02d}"
+            progress_cb(min(99.0, percent), detail)
         elif status == "finished":
             progress_cb(99.0, "menyimpan berkas")
         elif status == "error":
             progress_cb(0.0, "gagal mengunduh")
 
+    fmt = format_id or f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
     options: dict[str, Any] = {
         "outtmpl": str(out_dir / "%(title).80s.%(ext)s"),
-        "format": f"bv*[height<={max_height}][ext=mp4]+ba[ext=m4a]/b[height<={max_height}]/b",
+        "format": fmt,
         "merge_output_format": "mp4",
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "restrictfilenames": True,
         "progress_hooks": [hook],
+        "socket_timeout": 30,
+        "retries": 10,
+        "fragment_retries": 10,
+        "continuedl": True,
     }
     if cookies:
         options["cookiefile"] = str(cookies)
 
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=True)
-        path = Path(ydl.prepare_filename(info))
-        if not path.exists():
-            candidates = sorted(out_dir.glob(f"{path.stem}.*"), key=lambda p: p.stat().st_size)
-            if candidates:
-                path = candidates[-1]
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=True)
+            path = Path(ydl.prepare_filename(info))
+            if not path.exists():
+                candidates = sorted(out_dir.glob(f"{path.stem}.*"), key=lambda p: p.stat().st_size)
+                if candidates:
+                    path = candidates[-1]
+    except Exception as exc:  # noqa: BLE001 - sampaikan alasan yt-dlp apa adanya
+        raise RuntimeError(f"gagal mengunduh: {exc}") from exc
     if not path.exists():
         raise RuntimeError("unduhan selesai tetapi berkas tidak ditemukan")
     if progress_cb:

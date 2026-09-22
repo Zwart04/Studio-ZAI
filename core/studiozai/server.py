@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, config, jobs, models, projects, service
+from .pipeline import download as download_pipeline
 from .pipeline import voice
 from .utils.text import clock
 
@@ -33,6 +34,12 @@ class ProcessRequest(BaseModel):
     use_transcript: bool = True
     use_llm: bool = False
     model: str | None = None
+    quality: str = "720p"
+    format_id: str | None = None
+
+
+class LinkInfoRequest(BaseModel):
+    url: str
 
 
 class ClipUpdate(BaseModel):
@@ -172,6 +179,19 @@ def create_project(payload: NewProject) -> dict[str, Any]:
     return project.as_dict()
 
 
+@app.post("/api/link-info")
+def link_info(payload: LinkInfoRequest) -> dict[str, Any]:
+    """Baca metadata link (judul, durasi, daftar kualitas) tanpa mengunduh."""
+    try:
+        info = download_pipeline.fetch_info(
+            payload.url,
+            cookies=config.load_settings().get("cookies_path") or None,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return info
+
+
 def _ingest_task(project_id: str, source: str):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
@@ -208,7 +228,14 @@ def _process_task(project_id: str, payload: ProcessRequest):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
         if not project.source:
-            service.ingest(project, payload.source, cookies=config.load_settings().get("cookies_path") or None, job=job)
+            fmt = payload.format_id or download_pipeline.pick_format_id([], payload.quality)
+            service.ingest(
+                project,
+                payload.source,
+                cookies=config.load_settings().get("cookies_path") or None,
+                job=job,
+                format_id=fmt,
+            )
         service.generate_clips(
             project,
             count=payload.count,

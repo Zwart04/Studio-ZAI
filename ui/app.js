@@ -9,6 +9,9 @@ const I18N = {
     "home.lang": "Bahasa konten", "home.min": "Durasi minimum (detik)", "home.max": "Durasi maksimum (detik)",
     "home.transcript": "Transkrip otomatis (subtitle)", "home.llm": "Pakai LLM lokal untuk pilih momen",
     "home.start": "Mulai buat klip", "home.doctor": "Cek perangkat", "home.recent": "Proyek terakhir",
+    "home.quality": "Kualitas video", "home.advanced": "Pengaturan lanjutan",
+    "home.linkReading": "Membaca link…", "home.linkReady": "Link siap", "home.linkFail": "Link tidak bisa dibaca",
+    "home.localReady": "Berkas lokal siap",
     "projects.title": "Proyek", "projects.export": "Export gabungan", "projects.empty": "Belum ada proyek. Buat dari halaman Beranda.",
     "voice.title": "Suara otomatis",
     "voice.lead": "Buat voiceover Bahasa Indonesia atau Inggris dengan Piper (super ringan), atau kloning suaramu sendiri dengan Chatterbox.",
@@ -41,6 +44,9 @@ const I18N = {
     "home.lang": "Content language", "home.min": "Minimum length (seconds)", "home.max": "Maximum length (seconds)",
     "home.transcript": "Automatic transcript (subtitles)", "home.llm": "Use local LLM to pick moments",
     "home.start": "Start clipping", "home.doctor": "Check device", "home.recent": "Recent projects",
+    "home.quality": "Video quality", "home.advanced": "Advanced settings",
+    "home.linkReading": "Reading link…", "home.linkReady": "Link ready", "home.linkFail": "Could not read link",
+    "home.localReady": "Local file ready",
     "projects.title": "Projects", "projects.export": "Export combined", "projects.empty": "No projects yet. Create one from Home.",
     "voice.title": "Voice",
     "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with Chatterbox.",
@@ -229,6 +235,96 @@ function setPage(name) {
 
 /* ------------------------------------------------------------------ home */
 
+let linkInfoTimer = null;
+let linkInfoCache = null;
+
+function humanMB(bytes) {
+  if (!bytes) return "?";
+  const mb = bytes / 1024 / 1024;
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
+}
+
+function fmtDuration(seconds) {
+  const total = Math.round(seconds || 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function showLinkPreview(info) {
+  const wrap = $("#linkPreviewWrap");
+  const box = $("#linkPreview");
+  const qwrap = $("#qualityWrap");
+  wrap.style.display = "flex";
+  qwrap.style.display = "block";
+  linkInfoCache = info;
+  const hint = $("#qualityHint");
+  const best = (info.formats || []).filter((f) => f.has_video);
+  const perSize = {};
+  for (const f of best) {
+    const key = f.height >= 2160 ? "best" : f.height >= 1080 ? "1080p" : f.height >= 720 ? "720p" : "480p";
+    if (!perSize[key] || (f.filesize && f.filesize > perSize[key])) perSize[key] = f.filesize || 0;
+  }
+  const order = ["best", "1080p", "720p", "480p"];
+  hint.textContent = order
+    .filter((k) => perSize[k])
+    .map((k) => `${k} ≈ ${humanMB(perSize[k])}`)
+    .join("  ·  ") || `${info.title} · ${fmtDuration(info.duration)}`;
+  box.innerHTML = `
+    <div class="row settings">
+      <div style="display:grid;gap:2px;min-width:0">
+        <span style="font-weight:600">✓ ${t("home.linkReady")}</span>
+        <span class="muted">${info.title} · ${fmtDuration(info.duration)}${info.uploader ? " · " + info.uploader : ""}</span>
+      </div>
+    </div>`;
+}
+
+function showLinkError(message) {
+  const wrap = $("#linkPreviewWrap");
+  const box = $("#linkPreview");
+  wrap.style.display = "flex";
+  $("#qualityWrap").style.display = "none";
+  linkInfoCache = null;
+  box.innerHTML = `<span class="muted">✗ ${t("home.linkFail")}: ${message}</span>`;
+}
+
+function hideLinkPreview() {
+  $("#linkPreviewWrap").style.display = "none";
+  $("#qualityWrap").style.display = "none";
+  linkInfoCache = null;
+}
+
+function onSourceChanged() {
+  const value = $("#source").value.trim();
+  clearTimeout(linkInfoTimer);
+  if (!value) { hideLinkPreview(); return; }
+  const isUrl = /^https?:\/\//i.test(value);
+  if (!isUrl) {
+    // berkas lokal: tampilkan siap langsung
+    const wrap = $("#linkPreviewWrap");
+    const box = $("#linkPreview");
+    wrap.style.display = "flex";
+    $("#qualityWrap").style.display = "none";
+    linkInfoCache = null;
+    box.innerHTML = `<span class="muted">✓ ${t("home.localReady")}: ${fileName(value)}</span>`;
+    return;
+  }
+  // debounce 800ms supaya tidak request tiap ketikan
+  const wrap = $("#linkPreviewWrap");
+  const box = $("#linkPreview");
+  wrap.style.display = "flex";
+  box.innerHTML = `<span class="muted">… ${t("home.linkReading")}</span>`;
+  linkInfoTimer = setTimeout(async () => {
+    try {
+      const info = await api("/api/link-info", { method: "POST", body: JSON.stringify({ url: value }) });
+      showLinkPreview(info);
+    } catch (error) {
+      showLinkError(error.message);
+    }
+  }, 800);
+}
+
 async function startClipping() {
   const source = $("#source").value.trim();
   if (!source) {
@@ -249,6 +345,7 @@ async function startClipping() {
         max_len: Number($("#maxLen").value) || 60,
         use_transcript: $("#useTranscript").checked,
         use_llm: $("#useLlm").checked,
+        quality: $("#quality").value || "720p",
       }),
     });
     trackJob(job);
@@ -841,17 +938,17 @@ async function refreshAll() {
   if ($("#page-models").classList.contains("active")) renderModels();
 }
 
-async function pickFile(target) {
+function pickFile(target) {
   if (window.pywebview && window.pywebview.api) {
-    const path = await window.pywebview.api.pick_file();
-    if (path) $(target).value = path;
-    return;
+    return window.pywebview.api.pick_file().then((path) => {
+      if (path) { $(target).value = path; onSourceChanged(); }
+    });
   }
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "video/*,audio/*";
   input.onchange = () => {
-    if (input.files[0]) $(target).value = input.files[0].name;
+    if (input.files[0]) { $(target).value = input.files[0].name; onSourceChanged(); }
   };
   input.click();
 }
@@ -887,6 +984,7 @@ async function boot() {
   });
   $("#startBtn").addEventListener("click", startClipping);
   $("#doctorBtn").addEventListener("click", showDoctor);
+  $("#source").addEventListener("input", onSourceChanged);
   $("#pickFile").addEventListener("click", () => pickFile("#source"));
   $("#pickSample").addEventListener("click", () => pickFile("#cloneSample"));
   $("#refreshProjects").addEventListener("click", () => { state.project = null; renderProjects(); });
