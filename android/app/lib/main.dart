@@ -55,6 +55,26 @@ class _StudioZaiAppState extends State<StudioZaiApp> {
   }
 }
 
+class _LogoMark extends StatelessWidget {
+  const _LogoMark({this.size = 76});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    // Grayscale version of the brand logo so it blends with the dark UI.
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix(<double>[
+        0, 0, 0, 0, 255,
+        0, 0, 0, 0, 255,
+        0, 0, 0, 0, 255,
+        0, 0, 0, 1, 0,
+      ]),
+      child: Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain),
+    );
+  }
+}
+
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.error});
 
@@ -69,6 +89,8 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const _LogoMark(size: 76),
+              const SizedBox(height: Tokens.space3),
               const Icon(Icons.error_outline, color: Tokens.danger, size: 40),
               const SizedBox(height: Tokens.space3),
               const Text('Gagal memulai Studio ZAI'),
@@ -106,6 +128,14 @@ class _RootShellState extends State<RootShell> {
     ];
 
     return Scaffold(
+      appBar: AppBar(
+        leadingWidth: 52,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 12, top: 8, bottom: 8),
+          child: _LogoMark(size: 32),
+        ),
+        title: const Text('Studio ZAI'),
+      ),
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,

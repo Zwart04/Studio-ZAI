@@ -518,16 +518,15 @@ pre { font-family: var(--font-mono); font-size: var(--t-caption); line-height: 1
   to { opacity: 1; transform: none; }
 }
 
+.brand-logo { width: 30px; height: 30px; object-fit: contain; }
+
 .wizard-logo {
   width: 88px;
   height: 88px;
-  border-radius: 22px;
-  object-fit: cover;
-  filter: drop-shadow(0 0 0 rgba(255,255,255,0)) brightness(0) invert(1);
-  background: var(--bg-raised);
-  padding: 10px;
-  box-sizing: content-box;
+  object-fit: contain;
 }
+
+.logo-hide { display: none; }
 
 .wizard-title { font-size: var(--t-title2); margin: var(--s4) 0 var(--s2); letter-spacing: -0.02em; }
 

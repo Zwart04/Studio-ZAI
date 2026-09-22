@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <title>Studio ZAI</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png" />
+<link rel="apple-touch-icon" href="/assets/icon-180.png" />
 <link rel="stylesheet" href="/tokens.css" />
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 <div id="app">
   <aside class="nav">
-    <div class="brand"><span class="dot"></span><span>Studio ZAI</span></div>
+    <div class="brand"><img class="brand-logo" src="/assets/logo.png" alt="" /><span>Studio ZAI</span></div>
     <nav id="nav">
       <button data-page="home" class="active" data-i18n="nav.home">Beranda</button>
       <button data-page="projects" data-i18n="nav.projects">Proyek</button>
@@ -281,7 +283,7 @@
 <!-- Wizard setup pertama (model lokal) -->
 <div id="wizardOverlay" class="wizard-overlay" hidden>
   <div class="wizard" role="dialog" aria-modal="true">
-    <img class="wizard-logo" src="/assets/logo.png" alt="Studio ZAI" />
+    <img class="wizard-logo" src="/assets/logo.png" alt="Studio ZAI" onerror="this.classList.add('logo-hide')" />
     <h1 class="wizard-title" id="wizardTitle">Selamat datang</h1>
     <p class="wizard-sub" id="wizardSub"></p>
     <div id="wizardBody"></div>

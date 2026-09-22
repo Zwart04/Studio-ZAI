@@ -67,8 +67,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.all(Tokens.space4),
       children: [
-        Text(state.translate('home.title'),
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4)),
+        Row(
+          children: [
+            ColorFiltered(
+              colorFilter: const ColorFilter.matrix(<double>[
+                0, 0, 0, 0, 255,
+                0, 0, 0, 0, 255,
+                0, 0, 0, 0, 255,
+                0, 0, 0, 1, 0,
+              ]),
+              child: Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.contain),
+            ),
+            const SizedBox(width: Tokens.space3),
+            Expanded(
+              child: Text(state.translate('home.title'),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4)),
+            ),
+          ],
+        ),
         const SizedBox(height: Tokens.space2),
         Text(state.translate('home.lead'), style: const TextStyle(color: Tokens.textDim)),
         const SizedBox(height: Tokens.space4),

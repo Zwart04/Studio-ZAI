@@ -98,6 +98,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(ROOT / "desktop" / "packaging" / "icons" / "studiozai.ico"),
 )
 
 coll = COLLECT(
