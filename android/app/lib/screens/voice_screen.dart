@@ -97,13 +97,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 onPressed: installed.isEmpty || state.jobState == JobState.running
                     ? null
                     : () async {
+                        // Messenger diambil SEBELUM await supaya `context` tidak
+                        // dipakai lagi setelah jeda async.
+                        final messenger = ScaffoldMessenger.of(context);
                         try {
                           final file = await state.quickVoice(_text.text, _modelId, _language);
+                          if (!mounted) return;
                           setState(() => _lastFile = file.path);
                         } catch (error) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
-                          }
+                          messenger.showSnackBar(SnackBar(content: Text('$error')));
                         }
                       },
                 child: Text(state.translate('voice.generate')),
@@ -168,6 +170,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 onPressed: !state.cloneConsent
                     ? null
                     : () async {
+                        // Messenger diambil SEBELUM await supaya `context` tidak
+                        // dipakai lagi setelah jeda async.
+                        final messenger = ScaffoldMessenger.of(context);
                         try {
                           setState(() => _cloning = true);
                           final file = await state.speech.cloneWithZipVoice(
@@ -177,20 +182,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
                             outputPath: '${state.dataDir.path}/voices/clone-'
                                 '${DateTime.now().millisecondsSinceEpoch}.wav',
                           );
-                          if (mounted) {
-                            setState(() {
-                              _cloning = false;
-                              _lastFile = file.path;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(state.translate('common.done'))),
-                            );
-                          }
+                          if (!mounted) return;
+                          setState(() {
+                            _cloning = false;
+                            _lastFile = file.path;
+                          });
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(state.translate('common.done'))),
+                          );
                         } catch (error) {
-                          if (mounted) {
-                            setState(() => _cloning = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
-                          }
+                          if (mounted) setState(() => _cloning = false);
+                          messenger.showSnackBar(SnackBar(content: Text('$error')));
                         }
                       },
                 child: _cloning

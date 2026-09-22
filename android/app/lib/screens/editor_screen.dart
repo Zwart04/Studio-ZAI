@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -141,10 +142,9 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _addMediaOrMusic({required bool music}) async {
-    final files = await FilePicker.pickFiles(
-      type: music ? FileType.audio : FileType.media,
-      allowMultiple: !music,
-    );
+    // `pickFiles` di file_picker 13 sudah mengizinkan pilih satu atau banyak
+    // berkas, jadi tidak ada parameter allowMultiple.
+    final files = await FilePicker.pickFiles(type: music ? FileType.audio : FileType.media);
     if (files.isEmpty) return;
     final track = _timeline.trackOf(music ? 'audio' : 'media');
     if (track == null) return;
@@ -266,7 +266,8 @@ class _EditorScreenState extends State<EditorScreen> {
         color: Tokens.surface,
         borderRadius: BorderRadius.circular(Tokens.radius),
       ),
-      clipBehavior: Clip.antiAlias,
+      // `ui.Clip` (bukan `Clip` milik models.dart) yang dipakai di sini.
+      clipBehavior: ui.Clip.antiAlias,
       child: path != null
           ? VideoPreview(path: path)
           : Center(
