@@ -218,7 +218,24 @@ def download(
                 if candidates:
                     path = candidates[-1]
     except Exception as exc:
-        raise RuntimeError(f"gagal mengunduh: {exc}") from exc
+        # Track audio bahasa tertentu bisa tidak tersedia untuk video itu ->
+        # ulangi sekali dengan audio terbaik supaya unduhan tidak gagal total.
+        if audio_lang and not format_id:
+            options["format"] = f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b"
+            if progress_cb:
+                progress_cb(0.0, "track audio itu tidak tersedia, memakai audio terbaik")
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    path = Path(ydl.prepare_filename(info))
+                    if not path.exists():
+                        candidates = sorted(out_dir.glob(f"{path.stem}.*"), key=lambda p: p.stat().st_size)
+                        if candidates:
+                            path = candidates[-1]
+            except Exception as retry_exc:
+                raise RuntimeError(f"gagal mengunduh: {retry_exc}") from retry_exc
+        else:
+            raise RuntimeError(f"gagal mengunduh: {exc}") from exc
     if not path.exists():
         raise RuntimeError("unduhan selesai tetapi berkas tidak ditemukan")
     if progress_cb:

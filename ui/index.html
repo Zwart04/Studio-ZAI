@@ -75,10 +75,35 @@
           <p class="muted" id="qualityHint" style="margin:var(--s2) 0 0"></p>
         </div>
 
-        <!-- Opsi lanjutan (tersembunyi, simpel di awal) -->
-        <details id="advDetails" style="margin-top:20px">
-          <summary style="cursor:pointer; color:var(--text-dim)" data-i18n="home.advanced">Pengaturan lanjutan</summary>
-          <div class="grid-2" style="margin-top:var(--s3)">
+        <!-- Pengaturan klip (selalu terlihat) -->
+        <div id="advDetails" class="stack" style="margin-top:var(--s5); padding-top:var(--s5); border-top:1px solid var(--separator); gap:var(--s4)">
+          <div class="grid-2">
+            <div>
+              <label for="canvasSize">Ukuran klip</label>
+              <select id="canvasSize">
+                <option value="portrait">Potrait 9:16 (TikTok/Reels)</option>
+                <option value="original">Ukuran asli video</option>
+                <option value="square">Kotak 1:1</option>
+                <option value="landscape">Landscape 16:9</option>
+              </select>
+            </div>
+            <div>
+              <label for="subPos">Posisi subtitle</label>
+              <select id="subPos">
+                <option value="bottom">Bawah (standar)</option>
+                <option value="middle">Tengah (hindari subtitle bawaan)</option>
+                <option value="top">Atas (paling aman)</option>
+                <option value="off">Tanpa subtitle</option>
+              </select>
+            </div>
+            <div>
+              <label for="audioMode">Audio klip</label>
+              <select id="audioMode">
+                <option value="original">Asli dari video</option>
+                <option value="voice">Sulih suara TTS (ganti)</option>
+                <option value="mix">Sulih suara TTS (campur)</option>
+              </select>
+            </div>
             <div>
               <label for="minLen" data-i18n="home.min">Durasi minimum (detik)</label>
               <input type="number" id="minLen" value="15" min="5" max="120" />
@@ -87,31 +112,15 @@
               <label for="maxLen" data-i18n="home.max">Durasi maksimum (detik)</label>
               <input type="number" id="maxLen" value="60" min="10" max="180" />
             </div>
-            <div>
-              <label for="subPos">Posisi subtitle</label>
-              <select id="subPos">
-                <option value="bottom">Bawah — standar</option>
-                <option value="middle">Tengah — hindari subtitle bawaan video</option>
-                <option value="top">Atas — paling aman dari teks bawaan</option>
-                <option value="off">Tanpa subtitle — video sudah punya sendiri</option>
-              </select>
-            </div>
-            <div>
-              <label for="audioMode">Audio klip</label>
-              <select id="audioMode">
-                <option value="original">Asli dari video</option>
-                <option value="voice">Sulih suara TTS — ganti audio</option>
-                <option value="mix">Sulih suara TTS — campur (video pelan)</option>
-              </select>
-            </div>
-            <div id="audioTrackWrap" style="display:none">
-              <label for="audioTrack">Track audio sumber</label>
-              <select id="audioTrack"></select>
-              <p class="muted" id="audioTrackHint" style="margin:8px 0 0"></p>
-            </div>
           </div>
 
-          <div class="stack" style="margin-top:var(--s4); gap:var(--s3)">
+          <div id="audioTrackWrap" style="display:none">
+            <label for="audioTrack">Track audio sumber</label>
+            <select id="audioTrack"></select>
+            <p class="muted" id="audioTrackHint" style="margin:8px 0 0"></p>
+          </div>
+
+          <div class="stack" style="gap:var(--s3)">
             <label class="switch">
               <input type="checkbox" id="useTranscript" checked />
               <span class="track"></span>
@@ -123,7 +132,7 @@
               <span class="switch-label" data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span>
             </label>
           </div>
-        </details>
+        </div>
 
         <div class="row" style="margin-top:var(--s6)">
           <button class="primary" id="startBtn" data-i18n="home.start">Mulai buat klip</button>
@@ -228,7 +237,10 @@
 
     <!-- -------------------------------------------------------- models -->
     <section id="page-models" class="page">
-      <h1 data-i18n="models.title">Model</h1>
+      <div class="spread">
+        <h1 data-i18n="models.title">Model</h1>
+        <button class="ghost" id="openWizard">Siapkan model</button>
+      </div>
       <p class="lead" data-i18n="models.lead">Model tidak dibundel dalam aplikasi. Studio ZAI mendeteksi perangkatmu dan menyarankan model paling ringan yang cocok.</p>
       <div class="card" id="hardwareCard"></div>
       <div id="modelList" class="stack"></div>

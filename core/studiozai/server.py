@@ -37,6 +37,7 @@ class ProcessRequest(BaseModel):
     quality: str = "720p"
     format_id: str | None = None
     subtitle_position: str = "bottom"  # bottom | middle | top | off
+    canvas: str = "portrait"  # portrait | original | square | landscape
     audio_lang: str | None = None  # pilih track audio multi-bahasa (mis. "id")
     audio_mode: str = "original"  # original | voice (ganti) | mix (campur)
     voice_id: str | None = None  # model suara untuk sulih suara TTS
@@ -285,6 +286,7 @@ def _process_task(project_id: str, payload: ProcessRequest):
         )
         for clip in list(project.clips):
             clip.subtitle_position = payload.subtitle_position
+            clip.canvas = payload.canvas
             if payload.audio_mode != "original":
                 # Sulih suara: buat narasi TTS dari transkrip klip lalu ganti/campur audio.
                 text = _narration_text(project, clip)

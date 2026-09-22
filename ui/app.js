@@ -406,6 +406,7 @@ async function startClipping() {
         use_llm: $("#useLlm").checked,
         quality: $("#quality").value || "720p",
         subtitle_position: ($("#subPos") || {}).value || "bottom",
+        canvas: ($("#canvasSize") || {}).value || "portrait",
         audio_mode: ($("#audioMode") || {}).value || "original",
         audio_lang: (($("#audioTrack") || {}).value || "") || null,
       }),
@@ -1152,6 +1153,9 @@ async function boot() {
   });
   $("#startBtn").addEventListener("click", startClipping);
   $("#doctorBtn").addEventListener("click", showDoctor);
+  // Wizard bisa dibuka kapan saja dari halaman Model (tidak hanya saat pertama kali).
+  const wizardBtn = $("#openWizard");
+  if (wizardBtn) wizardBtn.addEventListener("click", () => wizardShow(0));
   $("#source").addEventListener("input", onSourceChanged);
   $("#pickFile").addEventListener("click", () => pickFile("#source"));
   $("#pickSample").addEventListener("click", () => pickFile("#cloneSample"));

@@ -32,6 +32,7 @@ class Clip:
     crop: str = DEFAULT_CROP
     subtitle_preset: str = DEFAULT_SUBTITLE_PRESET
     subtitle_position: str = "bottom"  # bottom | middle | top | off
+    canvas: str = "portrait"  # portrait | original | square | landscape
     audio_mode: str = "original"
     original_volume: float = 0.25
     voice_volume: float = 1.0

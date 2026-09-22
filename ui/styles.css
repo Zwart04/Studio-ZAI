@@ -138,10 +138,15 @@ p.lead {
   max-width: 62ch;
 }
 
-p.muted, span.muted, pre.muted, .muted { color: var(--text-dim); font-size: var(--t-footnote); }
+p.muted, span.muted, pre.muted, .muted { color: var(--text-dim); font-size: var(--t-footnote); overflow-wrap: anywhere; }
 
 .card { background: var(--surface); border-radius: var(--r-md); padding: var(--s5); margin-bottom: var(--s4); }
-.card.tight { padding: 2px var(--s4); }
+.card.tight { padding: 6px var(--s4); }
+
+/* Teks panjang (URL, nama berkas, judul) harus membungkus, bukan keluar kartu. */
+.card, .card * { overflow-wrap: anywhere; word-break: break-word; }
+#linkPreview { min-height: 52px; display: flex; align-items: center; padding: 12px var(--s4); }
+#linkPreview .row.settings, #linkPreview .row { min-height: 0; padding: 0; border-bottom: 0; width: 100%; }
 .card.plain { background: transparent; padding: 0; }
 
 .row.settings {

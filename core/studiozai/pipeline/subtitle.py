@@ -197,10 +197,13 @@ def to_ass(
     width, height = play_res
     # Posisi subtitle: "off" -> tidak ada event (tidak ada yang dibakar).
     alignment = POSITIONS.get(position, 2)
+    scale = height / 1920.0  # margin disetel untuk kanvas 1920 tinggi
     if position == "middle":
         style["margin_v"] = 0
     elif position == "top":
-        style["margin_v"] = 150
+        style["margin_v"] = int(150 * scale)
+    else:
+        style["margin_v"] = int(style["margin_v"] * scale)
     style["alignment"] = alignment
     header = [
         "[Script Info]",
@@ -238,6 +241,7 @@ def write_subtitles(
     stem: str,
     preset: str = "clean",
     play_res: tuple[int, int] = (1080, 1920),
+    position: str = "bottom",
 ) -> dict[str, str]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -246,7 +250,7 @@ def write_subtitles(
     ass_path = out_dir / f"{stem}.ass"
     srt_path.write_text(to_srt(captions), encoding="utf-8")
     vtt_path.write_text(to_vtt(captions), encoding="utf-8")
-    ass_path.write_text(to_ass(captions, preset, play_res), encoding="utf-8")
+    ass_path.write_text(to_ass(captions, preset, play_res, position=position), encoding="utf-8")
     return {"srt": str(srt_path), "vtt": str(vtt_path), "ass": str(ass_path)}
 
 

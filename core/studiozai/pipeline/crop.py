@@ -66,6 +66,40 @@ def blur_background_graph(src_w: int, out_w: int, out_h: int, sigma: int = 24) -
     )
 
 
+CANVAS_SHAPES = ("portrait", "original", "square", "landscape")
+CANVAS_LABELS = {
+    "portrait": "Potrait 9:16",
+    "original": "Ukuran asli video",
+    "square": "Kotak 1:1",
+    "landscape": "Landscape 16:9",
+}
+
+
+def canvas_size(shape: str, src_w: int, src_h: int) -> tuple[int, int]:
+    """Ukuran kanvas keluaran sesuai pilihan pengguna.
+
+    - portrait  : 1080x1920 (default, TikTok/Reels/Shorts)
+    - original  : mengikuti ukuran video sumber (dibatasi sisi terpanjang 1920)
+    - square    : 1080x1080 (feed Instagram)
+    - landscape : 1920x1080 (YouTube)
+    Semua dimensi dibuat genap karena encoder H.264 mensyaratkannya.
+    """
+    if shape == "original":
+        width = max(2, src_w - src_w % 2)
+        height = max(2, src_h - src_h % 2)
+        longest = max(width, height)
+        if longest > 1920:
+            ratio = 1920 / longest
+            width = max(2, int(width * ratio) // 2 * 2)
+            height = max(2, int(height * ratio) // 2 * 2)
+        return width, height
+    if shape == "square":
+        return 1080, 1080
+    if shape == "landscape":
+        return 1920, 1080
+    return target_size(src_w, src_h)
+
+
 def plan(mode: str = "center", src_w: int = 1920, src_h: int = 1080, out_size: tuple[int, int] | None = None) -> CropPlan:
     """Build the ffmpeg plan for the requested framing mode."""
     mode = (mode or "center").lower()

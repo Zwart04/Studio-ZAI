@@ -316,9 +316,13 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
 
     captions = clip.captions or refresh_captions(project, clip)
     files: dict[str, str] = {}
+    src_w = project.width or 1920
+    src_h = project.height or 1080
+    # Kanvas keluaran: potrait (default) / ukuran asli / kotak / landscape.
+    canvas = crop_mod.canvas_size(getattr(clip, "canvas", "portrait"), src_w, src_h)
     if captions:
         captions_objs = [subtitle.Caption(**c) for c in captions]
-        plan = crop_mod.plan(clip.crop, project.width or 1920, project.height or 1080)
+        plan = crop_mod.plan(clip.crop, src_w, src_h, out_size=canvas)
         files.update(
             subtitle.write_subtitles(
                 captions_objs,
@@ -350,7 +354,8 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
         clip.start,
         clip.end,
         crop_mode=clip.crop,
-        src_size=(project.width or 1920, project.height or 1080),
+        src_size=(src_w, src_h),
+        out_size=canvas,
         subtitles=files.get("ass"),
         audio_mode=clip.audio_mode if voice_path else "original",
         voice_path=voice_path,

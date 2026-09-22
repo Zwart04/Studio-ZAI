@@ -41,6 +41,7 @@ def render_clip(
     end: float,
     crop_mode: str = "center",
     src_size: tuple[int, int] | None = None,
+    out_size: tuple[int, int] | None = None,
     subtitles: str | Path | None = None,
     audio_mode: str = "original",
     voice_path: str | Path | None = None,
@@ -49,7 +50,11 @@ def render_clip(
     encoder: str | None = None,
     progress_cb: ProgressCb | None = None,
 ) -> Path:
-    """Render one vertical clip. audio_mode: original | voice | mix."""
+    """Render one clip. audio_mode: original | voice | mix.
+
+    out_size menentukan kanvas keluaran (potrait 9:16 / ukuran asli / kotak /
+    landscape); kalau None dipakai default potrait.
+    """
     src = Path(src)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -58,7 +63,7 @@ def render_clip(
     if src_size is None:
         info = probe.probe(src)
         src_size = (info.width or 1920, info.height or 1080)
-    plan = crop.plan(crop_mode, src_size[0], src_size[1])
+    plan = crop.plan(crop_mode, src_size[0], src_size[1], out_size=out_size)
 
     filters: list[str] = []
     if plan.is_complex:
