@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 import uuid
@@ -12,6 +13,9 @@ from typing import Any
 
 from . import config
 from .utils.text import sanitize_filename
+
+# Id proyek dipakai langsung sebagai nama folder -> batasi ke karakter aman.
+PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 DEFAULT_CROP = "center"
 DEFAULT_SUBTITLE_PRESET = "clean"
@@ -254,15 +258,31 @@ def list_projects() -> list[Project]:
     return projects
 
 
+def _project_root(project_id: str) -> Path:
+    """Folder proyek dengan validasi id.
+
+    Id datang dari URL (`/api/projects/{id}`) dan dipakai sebagai nama folder.
+    Tanpa validasi, id seperti `..` bisa membuat operasi baca/hapus keluar dari
+    folder data (mis. `DELETE /api/projects/..` menghapus seluruh data aplikasi).
+    """
+    if not project_id or not PROJECT_ID_RE.match(project_id):
+        raise KeyError(f"id proyek tidak valid: {project_id!r}")
+    base = config.projects_dir().resolve()
+    root = (base / project_id).resolve()
+    if root.parent != base:
+        raise KeyError(f"id proyek di luar folder data: {project_id!r}")
+    return root
+
+
 def load_project(project_id: str) -> Project:
-    path = config.projects_dir() / project_id / "project.json"
+    path = _project_root(project_id) / "project.json"
     if not path.exists():
         raise KeyError(f"proyek {project_id} tidak ditemukan")
     return Project.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
 def delete_project(project_id: str) -> None:
-    directory = config.projects_dir() / project_id
+    directory = _project_root(project_id)
     if directory.exists():
         shutil.rmtree(directory, ignore_errors=True)
 

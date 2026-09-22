@@ -55,3 +55,20 @@ Buka *security advisory* privat/issue di repo `Zwart04/Studio-ZAI`, atau email p
 - [ ] File rahasia berizin ketat + redaksi log teruji.
 - [ ] Konfirmasi izin cloning tampil di web & Android.
 - [ ] Model registry HTTPS + sha256 lengkap.
+
+## 8. Penguatan 1.3.3 (hasil audit)
+
+Audit menyeluruh pada 2026-09-22 menemukan dan menutup hal berikut. Semua ada tes regresinya di `core/tests/test_security.py` (20 tes).
+
+| Temuan | Dampak | Perbaikan |
+|---|---|---|
+| `project_id` dari URL dipakai langsung sebagai nama folder | `DELETE /api/projects/..` bisa menghapus **seluruh folder data** (model, suara, proyek) | `_project_root()` memvalidasi id dengan `^[A-Za-z0-9_-]{1,64}$` dan memastikan hasil `resolve()` tepat di dalam `projects/` |
+| Ekstraksi arsip model tanpa filter (`tarfile.extractall`) | Arsip berbahaya dari internet bisa menulis file di luar folder tujuan | `_validate_members()` menolak path absolut/`..`/keluar tujuan, menolak symlink/hardlink, dan memakai `filter="data"` di Python 3.12+ |
+| Server lokal bisa disalahgunakan dari LAN | Orang lain di jaringan bisa memicu render/unduhan | Bind default `127.0.0.1` (desktop launcher & `serve --host`), tanpa `CORSMiddleware` |
+| `/api/media` menerima path bebas | Membaca berkas sembarang di disk | Hanya berkas yang `resolve()`-nya di dalam folder data (403 jika di luar) |
+| Android: backup cloud & transfer perangkat aktif | Proyek, model, dan rekaman suara ikut tercadangkan ke Google | `android:allowBackup="false"`, `data_extraction_rules` mengecualikan domain root |
+| Android: lalu lintas HTTP polos diizinkan | Unduhan bisa dibajak/downgrade ke HTTP | `network_security_config` menolak cleartext, semua unduhan HTTPS |
+
+Hasil audit lain: tidak ada rahasia ter-hardcode di repo, tidak ada berkas sensitif (keystore/`key.properties`/`cookies.txt`) yang ter-commit, APK **tidak** `debuggable`, dan Windows Defender tidak menemukan ancaman pada EXE/APK hasil build.
+
+> Catatan: APK rilis ditandatangani dengan **debug key** agar bisa langsung di-*sideload*. Untuk distribusi luas, buat keystore rilis sendiri (lihat `docs/BUILD.md`) — debug key tidak boleh dipakai untuk update publik.

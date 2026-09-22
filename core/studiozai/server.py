@@ -218,13 +218,20 @@ def get_project(project_id: str) -> dict[str, Any]:
 
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str) -> dict[str, Any]:
-    projects.delete_project(project_id)
+    try:
+        projects.delete_project(project_id)
+    except KeyError as exc:
+        # id tidak valid/berbahaya -> 404, bukan 500 (dan tidak menghapus apa pun)
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"deleted": project_id}
 
 
 @app.post("/api/projects/{project_id}/duplicate")
 def duplicate_project(project_id: str) -> dict[str, Any]:
-    return projects.duplicate_project(project_id).as_dict()
+    try:
+        return projects.duplicate_project(project_id).as_dict()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/projects/{project_id}/process")

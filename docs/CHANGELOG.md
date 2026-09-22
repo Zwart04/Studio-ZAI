@@ -2,6 +2,21 @@
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).
 
+## [1.3.3] — 2026-09-22
+
+### Security
+- `project_id` dari URL kini divalidasi (`^[A-Za-z0-9_-]{1,64}$`) sebelum dipakai sebagai nama folder —
+  sebelumnya `DELETE /api/projects/..` dapat menghapus seluruh folder data aplikasi.
+- Ekstraksi arsip model (`tar`/`zip`) memakai validasi anggota: menolak path absolut, `..`, keluar
+  folder tujuan, dan symlink/hardlink; memakai `filter="data"` pada Python 3.12+.
+- Android: `allowBackup=false` + aturan ekstraksi data (proyek/model/rekaman tidak ikut backup cloud),
+  dan `network_security_config` menolak lalu lintas HTTP polos.
+- 20 tes keamanan baru di `core/tests/test_security.py` (total 63 tes lulus).
+
+### Verified
+- Audit: tidak ada rahasia ter-hardcode, tidak ada berkas sensitif ter-commit, APK tidak `debuggable`,
+  Windows Defender tidak menemukan ancaman pada artefak hasil build.
+
 ## [1.3.2] — 2026-09-22
 
 ### Fixed
