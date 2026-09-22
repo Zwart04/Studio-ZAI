@@ -15,11 +15,21 @@ python -m pip install --quiet --upgrade pip
 python -m pip install --quiet -e "core[media,asr,tts,desktop]"
 python -m pip install --quiet pyinstaller
 
-echo [3/4] Membangun aplikasi...
+echo [3/4] Mendeteksi ffmpeg untuk dibundel...
+set "STUDIOZAI_FFMPEG_DIR="
+for /f "delims=" %%i in ('where ffmpeg 2^>nul') do if not defined FFMPEG_EXE set "FFMPEG_EXE=%%i"
+if defined FFMPEG_EXE for %%i in ("%FFMPEG_EXE%") do set "STUDIOZAI_FFMPEG_DIR=%%~dpi"
+if defined STUDIOZAI_FFMPEG_DIR (
+  echo   ffmpeg dibundel dari: %STUDIOZAI_FFMPEG_DIR%
+) else (
+  echo   PERINGATAN: ffmpeg tidak ada di PATH - aplikasi akan mencari ffmpeg di PATH target.
+)
+
+echo [4/4] Membangun aplikasi...
 pyinstaller desktop\packaging\studiozai.spec --noconfirm --distpath dist --workpath build
 
-echo [4/4] Selesai.
+echo Selesai.
 echo   Aplikasi : dist\StudioZAI\StudioZAI.exe
-echo   Catatan  : FFmpeg tidak dibundel. Pastikan ffmpeg ada di PATH komputer target.
-echo              Model diunduh dari dalam aplikasi (halaman Model).
+echo   Arsip    : jalankan  python tools\zip_exe.py  untuk membuat ZIP rilis
+echo   Model    : diunduh dari dalam aplikasi (halaman Model)
 endlocal

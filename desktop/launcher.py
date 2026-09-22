@@ -259,18 +259,26 @@ def open_window(url: str) -> int:
     try:
         import webview
 
-        kwargs: dict = {
-            "js_api": Bridge(),
-            "width": 1280,
-            "height": 880,
-            "min_size": (900, 620),
-        }
+        webview.create_window(
+            "Studio ZAI",
+            url,
+            js_api=Bridge(),
+            width=1280,
+            height=880,
+            min_size=(900, 620),
+        )
+        log("launcher: membuka jendela (pywebview)")
         if sys.platform == "win32":
             # Backend winforms butuh .NET; edgechromium hanya butuh WebView2.
-            kwargs["gui"] = "edgechromium"
-        webview.create_window("Studio ZAI", url, **kwargs)
-        log("launcher: membuka jendela (pywebview)")
-        webview.start()
+            # Catatan: 'gui' adalah argumen webview.start(), bukan create_window()
+            # - kesalahan ini dulu membuat jendela native selalu gagal dan
+            # aplikasi jatuh ke jendela Chrome.
+            try:
+                webview.start(gui="edgechromium")
+            except TypeError:
+                webview.start(gui="cef")
+        else:
+            webview.start()
         log("launcher: jendela ditutup")
         return 0
     except ImportError:

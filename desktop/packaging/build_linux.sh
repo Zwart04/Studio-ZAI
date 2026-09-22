@@ -16,6 +16,14 @@ python -m pip install --quiet --upgrade pip
 python -m pip install --quiet -e "core[media,asr,tts,desktop]"
 python -m pip install --quiet pyinstaller
 
+# Bundel ffmpeg/ffprobe bila tersedia supaya arsip mandiri (opsional tapi disarankan).
+if command -v ffmpeg >/dev/null 2>&1; then
+  export STUDIOZAI_FFMPEG_DIR="$(dirname "$(command -v ffmpeg)")"
+  echo "      ffmpeg dibundel dari: $STUDIOZAI_FFMPEG_DIR"
+else
+  echo "      PERINGATAN: ffmpeg tidak ada; aplikasi akan mencari ffmpeg di PATH"
+fi
+
 echo "[3/5] Membangun aplikasi..."
 pyinstaller desktop/packaging/studiozai.spec --noconfirm --distpath dist --workpath build
 
@@ -26,6 +34,12 @@ echo "[5/5] AppImage (opsional)..."
 if command -v linuxdeploy >/dev/null 2>&1; then
   rm -rf AppDir && mkdir -p AppDir/usr
   cp -r dist/StudioZAI/* AppDir/usr/
+  # Ikon wajib ada, kalau tidak AppImage akan dibuat tanpa ikon.
+  if [ -f "Logo Studio ZAI.png" ]; then
+    cp "Logo Studio ZAI.png" AppDir/studiozai.png
+    mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+    cp "Logo Studio ZAI.png" AppDir/usr/share/icons/hicolor/512x512/apps/studiozai.png
+  fi
   cat > AppDir/studio-zai.desktop <<'EOF'
 [Desktop Entry]
 Name=Studio ZAI
