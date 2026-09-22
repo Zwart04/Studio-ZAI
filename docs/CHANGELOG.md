@@ -44,6 +44,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic V
 - Aksen utama tetap biru; merah dipakai hemat untuk rekam/hapus/peringatan.
 - Versi: core `1.5.0`, APK `1.5.0+9`.
 
+### Tests & tooling
+- 86 tes lulus, termasuk `core/tests/test_timeline_render.py` — render timeline **sungguhan** dengan
+  FFmpeg (video + overlay gambar + teks ber-template + musik, sumber tanpa audio, perintah pratinjau)
+  yang dilewati otomatis kalau ffmpeg tidak ada.
+- `tools/check_dart_refs.py` — pemeriksa `Tokens.<nama>` dan `translate('<kunci>')` tanpa perlu Flutter,
+  menangkap kesalahan yang biasanya baru ketahuan saat build.
+- `flutter analyze` bersih (No issues found).
+
 ## [1.4.0] — 2026-09-22
 
 ### Fixed

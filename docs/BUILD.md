@@ -106,6 +106,10 @@ Copy-Item -Recurse -Force .\android_overrides\* .\android\
 konfigurasi penting di `android/app/android/app/build.gradle.kts` (sudah di-set di repo):
 `compileSdk = 37`, **`compileSdkMinor = 0`** (wajib: platform Android 17 bernama `android-37.0`, tanpa minor AGP mencari `android-37` dan gagal), `targetSdk = 37`, `minSdk = 26`, `jniLibs.useLegacyPackaging = true` (untuk ffmpeg-kit & sherpa-onnx).
 
+- Kalau Flutter belum terpasang, `python tools\check_dart_refs.py` memeriksa dua kesalahan yang paling
+  mahal tanpa perlu SDK: `Tokens.<nama>` yang tidak ada di `theme/tokens.dart` dan `translate('<kunci>')`
+  yang tidak ada di `i18n/strings.dart` (penyebab teks mentah seperti "voice.text" muncul di aplikasi).
+  `flutter analyze` tetap pemeriksa utama begitu Flutter tersedia.
 - APK **tidak berisi model** (diunduh dari halaman Model) → tetap ringan.
 - Uji cepat ke HP: `flutter run --release` (HP dengan USB debugging).
 - **Signing**: rilis default memakai debug key agar bisa langsung di-*sideload*. Untuk kunci rilis sendiri:
