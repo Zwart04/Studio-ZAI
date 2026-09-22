@@ -126,7 +126,15 @@ class Bridge:
         return True
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    # Mode CLI: teruskan perintah ke engine studiozai (doctor, serve, download, ...).
+    # Berguna untuk debugging EXE tanpa GUI: `StudioZAI.exe doctor`.
+    if args and args[0] in {"doctor", "serve", "download", "probe", "transcribe", "clip", "tts", "clone", "models", "projects", "--help", "-h", "--version"}:
+        from studiozai.cli import main as cli_main
+
+        return int(cli_main(args) or 0)
+
     log("=== Studio ZAI launcher start ===")
     port = free_port()
     log(f"launcher: port {port}")
