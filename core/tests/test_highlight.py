@@ -42,6 +42,7 @@ def test_slide_windows_and_selection_are_deterministic():
 
 
 def test_sentence_windows_respect_bounds():
+    # Dua segmen pendek -> satu scoring window (openshorts-style: ~90 dtk).
     transcript = {
         "segments": [
             {"start": 0, "end": 20, "text": "pertama", "words": [{"word": "pertama", "start": 0, "end": 20}]},
@@ -49,8 +50,75 @@ def test_sentence_windows_respect_bounds():
         ]
     }
     windows = highlight.sentence_windows(transcript, min_len=15, max_len=60)
-    assert len(windows) == 2
-    assert windows[0]["duration"] == 20
+    assert len(windows) == 1
+    assert windows[0]["start"] == 0.0
+    assert windows[0]["end"] == 40.0
+    assert windows[0]["duration"] == 40.0
+
+
+def test_sentence_windows_overlap_and_cover_long_video():
+    # Segmen 30 detik x 8 (=240 dtk) -> beberapa window yang overlap & menutup semua.
+    segments = []
+    for i in range(8):
+        segments.append(
+            {
+                "start": i * 30.0,
+                "end": (i + 1) * 30.0,
+                "text": f"bagian {i}",
+                "words": [{"word": f"b{i}", "start": i * 30.0, "end": (i + 1) * 30.0}],
+            }
+        )
+    windows = highlight.sentence_windows({"segments": segments}, min_len=15, max_len=60)
+    assert len(windows) >= 3
+    assert windows[0]["start"] == 0.0
+    assert windows[-1]["end"] == 240.0
+    # ada overlap antar window berurutan
+    assert any(windows[i + 1]["start"] < windows[i]["end"] for i in range(len(windows) - 1))
+    # tiap window ditutup rapat (tidak terbuka)
+    assert all(w["end"] - w["start"] <= 90 * 1.25 + 1e-6 for w in windows)
+
+
+def test_carve_clip_windows_never_exceed_max():
+    window = {
+        "start": 0.0,
+        "end": 110.0,
+        "duration": 110.0,
+        "text": "x",
+        "words": [{"word": f"k{i}", "start": i * 0.7, "end": i * 0.7 + 0.4} for i in range(150)],
+    }
+    carved = highlight.carve_clip_windows(window, [], min_len=15, max_len=60)
+    assert carved, "window berisi kata harus menghasilkan kandidat"
+    assert all(c["end"] - c["start"] <= 60 for c in carved), "kandidat tidak boleh lebih dari max"
+    assert all(c["end"] - c["start"] >= 5 for c in carved), "kandidat ekor terlalu pendek"
+    # kandidat berurutan dan menutup window tanpa celah besar
+    assert carved[0]["start"] == 0.0
+    assert all(carved[i + 1]["start"] >= carved[i]["start"] for i in range(len(carved) - 1))
+
+
+def test_pick_clips_bounded_and_spread():
+    # Transkrip sintetis 330 detik: 5 klip harus DALAM 15-60 dtk dan TERSBAR.
+    words = []
+    t = 0.0
+    for i in range(600):
+        words.append({"word": f"k{i}", "start": round(t, 2), "end": round(t + 0.35, 2)})
+        t += 0.55
+    segments = []
+    for s in range(0, 600, 40):
+        chunk = words[s : s + 40]
+        segments.append(
+            {
+                "start": chunk[0]["start"],
+                "end": chunk[-1]["end"],
+                "text": " ".join(w["word"] for w in chunk),
+                "words": chunk,
+            }
+        )
+    duration = segments[-1]["end"]
+    clips = highlight.pick_clips(duration, None, [], {"segments": segments}, count=5, min_len=15, max_len=60)
+    assert len(clips) == 5
+    assert all(15 <= (c.end - c.start) <= 60 for c in clips)
+    starts = [c.start for c in clips]
+    assert max(starts) - min(starts) >= 60, "klip harus tersebar, tidak menumpuk di awal"
 
 
 def test_pick_clips_without_ai():

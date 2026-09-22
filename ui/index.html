@@ -291,10 +291,19 @@
   </div>
 </div>
 <div id="jobbar">
-  <span id="jobStage" class="muted"></span>
+  <div class="processing-head" style="margin:0; flex:1">
+    <div class="spinner" id="jobSpinner"></div>
+    <div style="flex:1; min-width:0">
+      <div class="processing-title" id="jobTitle" style="font-size:var(--t-body)">Memproses…</div>
+      <div class="muted" id="jobStage" style="font-size:var(--t-footnote)">Menyiapkan</div>
+    </div>
+  </div>
   <div class="bar"><span id="jobFill"></span></div>
-  <span id="jobPercent" class="muted">0%</span>
-  <button class="mini" id="jobCancel" data-i18n="common.cancel">Batal</button>
+  <div class="row" style="gap:var(--s2); align-items:center">
+    <span class="muted" id="jobPercent">0%</span>
+    <span class="muted" id="jobElapsed">0:00</span>
+    <button class="mini" id="jobCancel" data-i18n="common.cancel">Batal</button>
+  </div>
 </div>
 <div id="toast"></div>
 

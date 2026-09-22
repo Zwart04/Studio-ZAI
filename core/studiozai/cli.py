@@ -96,7 +96,11 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
 
     job = ConsoleJob(args.quiet)
     transcript = transcribe.transcribe(
-        args.file, model_id=args.model, lang=args.lang, progress_cb=job.report
+        args.file,
+        model_id=args.model,
+        lang=args.lang,
+        progress_cb=job.report,
+        chunk_minutes=args.chunk_minutes,
     )
     out = Path(args.out) if args.out else Path(args.file).with_suffix(".transcript.json")
     transcribe.write_transcript(out, transcript)
@@ -224,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe_cmd.add_argument("--model", default="whisper-small-int8")
     transcribe_cmd.add_argument("--lang", default="auto")
     transcribe_cmd.add_argument("--out", default="")
+    transcribe_cmd.add_argument("--chunk-minutes", type=float, default=10.0)
     transcribe_cmd.add_argument("--quiet", action="store_true")
     transcribe_cmd.set_defaults(func=cmd_transcribe)
 

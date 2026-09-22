@@ -60,6 +60,102 @@ def transcribe(
     model_id: str = "whisper-small-int8",
     lang: str | None = None,
     progress_cb: ProgressCb | None = None,
+    chunk_minutes: float = 10.0,
+) -> dict[str, Any]:
+    """Transkrip dengan chunking agar video panjang tidak macet di tengah jalan.
+
+    faster-whisper memproses file besar sekaligus; pada video 20+ menit proses
+    bisa terlihat "menggantung" berjam-jam tanpa progres (bug yang dilaporkan:
+    video MrBeast 23 menit macet di ~58%). Dengan chunk 10 menit, tiap potong
+    selesai dalam hitungan menit dan progres terus bergerak. Hasil tiap chunk
+    digeser waktunya lalu digabung — word timestamps tetap akurat global.
+    """
+    from ..utils import ffmpeg as ffmpeg_utils
+
+    media_path = Path(media_path)
+    try:
+        total_duration = float(ffmpeg_utils.ffprobe_json(media_path).get("format", {}).get("duration") or 0.0)
+    except Exception:
+        total_duration = 0.0
+
+    chunk_seconds = max(60.0, float(chunk_minutes) * 60.0)
+    if not total_duration or total_duration <= chunk_seconds * 1.2:
+        return _transcribe_single(media_path, model_id, lang, progress_cb, offset=0.0)
+
+    cache_dir = media_path.parent / ".transcript_chunks"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    all_segments: list[dict[str, Any]] = []
+    language = lang or "unknown"
+    language_probability = 0.0
+    cursor = 0.0
+    index = 0
+    while cursor < total_duration - 0.5:
+        end = min(cursor + chunk_seconds, total_duration)
+        chunk_path = cache_dir / f"chunk_{index:03d}.wav"
+        if not chunk_path.exists() or chunk_path.stat().st_size == 0:
+            ffmpeg_utils.run_ffmpeg(
+                [
+                    "-ss",
+                    f"{cursor:.3f}",
+                    "-t",
+                    f"{end - cursor:.3f}",
+                    "-i",
+                    str(media_path),
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    "-acodec",
+                    "pcm_s16le",
+                    str(chunk_path),
+                ],
+                timeout=600,
+            )
+        base = (cursor / total_duration * 95.0) if total_duration else 0.0
+        span = ((end - cursor) / total_duration * 95.0) if total_duration else 0.0
+
+        def _chunk_progress(p: float, m: str, _base: float = base, _span: float = span) -> None:
+            if progress_cb:
+                progress_cb(
+                    min(95.0, _base + p / 100.0 * _span),
+                    f"menranskripsi audio (bagian {index + 1})",
+                )
+
+        part = _transcribe_single(chunk_path, model_id, lang, _chunk_progress, offset=cursor)
+        if index == 0:
+            language = part.get("language", language)
+            language_probability = part.get("language_probability", 0.0)
+        all_segments.extend(part.get("segments", []))
+        index += 1
+        cursor = end
+
+    try:
+        for leftover in cache_dir.glob("chunk_*.wav"):
+            leftover.unlink(missing_ok=True)
+        cache_dir.rmdir()
+    except OSError:
+        pass
+
+    transcript = {
+        "language": language,
+        "language_probability": round(float(language_probability or 0), 3),
+        "duration": round(total_duration, 3),
+        "model": model_id,
+        "segments": all_segments,
+        "text": " ".join(s["text"] for s in all_segments).strip(),
+    }
+    if progress_cb:
+        progress_cb(100.0, "transkrip selesai")
+    return transcript
+
+
+def _transcribe_single(
+    media_path: str | Path,
+    model_id: str = "whisper-small-int8",
+    lang: str | None = None,
+    progress_cb: ProgressCb | None = None,
+    offset: float = 0.0,
 ) -> dict[str, Any]:
     model = load_model(model_id)
     if progress_cb:
@@ -69,20 +165,23 @@ def transcribe(
         language=None if lang in (None, "auto") else lang,
         word_timestamps=True,
         vad_filter=True,
-        beam_size=5,
+        beam_size=1,
+        best_of=1,
+        temperature=0.0,
+        condition_on_previous_text=False,
     )
     total = float(getattr(info, "duration", 0.0) or 0.0)
     segments: list[dict[str, Any]] = []
     for segment in segments_iter:
         words = [
-            {"word": w.word.strip(), "start": round(w.start, 3), "end": round(w.end, 3)}
+            {"word": w.word.strip(), "start": round(w.start + offset, 3), "end": round(w.end + offset, 3)}
             for w in (segment.words or [])
             if w.word.strip()
         ]
         segments.append(
             {
-                "start": round(segment.start, 3),
-                "end": round(segment.end, 3),
+                "start": round(segment.start + offset, 3),
+                "end": round(segment.end + offset, 3),
                 "text": segment.text.strip(),
                 "words": words,
             }
@@ -98,7 +197,7 @@ def transcribe(
         "segments": segments,
         "text": " ".join(s["text"] for s in segments).strip(),
     }
-    if progress_cb:
+    if progress_cb and offset == 0.0:
         progress_cb(100.0, "transkrip selesai")
     return transcript
 

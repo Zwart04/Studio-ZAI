@@ -164,28 +164,67 @@ def sentence_windows(
     transcript: dict[str, Any],
     min_len: float = DEFAULT_MIN_LEN,
     max_len: float = DEFAULT_MAX_LEN,
+    window_seconds: float = 90.0,
 ) -> list[dict[str, Any]]:
-    """Group whisper segments into clip-sized windows that respect sentence boundaries."""
-    windows: list[dict[str, Any]] = []
-    current: list[dict[str, Any]] = []
+    """Build scoring windows aligned to whisper segment boundaries (openshorts-style).
+
+    Windows grow segment-by-segment to ~window_seconds (toleransi 1.25x agar
+    kalimat tidak terpotong), dan window berikutnya overlap ~30 detik dari
+    ujung window sebelumnya — supaya momen viral tidak terbelah di tengah.
+    Berbeda dari pengelompokan 1-segment-1-window yang lama: tiap window
+    SELALU ditutup rapat sehingga kandidat tidak pernah "membesar" keluar batas.
+    """
+    segments = []
     for segment in transcript.get("segments", []):
-        if segment.get("end", 0) - segment.get("start", 0) <= 0:
+        text = str(segment.get("text") or "").strip()
+        if not text:
             continue
-        candidate = current + [segment]
-        span = candidate[-1]["end"] - candidate[0]["start"]
-        if current and span > max_len:
-            windows.append(_window_from_segments(current))
-            current = [segment]
-        elif not current and span >= min_len:
-            windows.append(_window_from_segments([segment]))
-        else:
-            current = candidate
-            if span >= min_len:
-                windows.append(_window_from_segments(current))
-                current = []
-    if current:
-        windows.append(_window_from_segments(current))
-    return [w for w in windows if w["duration"] > 1.0]
+        start = float(segment.get("start", 0))
+        end = float(segment.get("end", 0))
+        if end <= start:
+            continue
+        segments.append((start, end, text, segment.get("words") or []))
+
+    overlap_seconds = 30.0
+    windows: list[dict[str, Any]] = []
+    i = 0
+    n = len(segments)
+    while i < n:
+        w_start = segments[i][0]
+        j = i
+        while j + 1 < n and segments[j + 1][1] - w_start <= window_seconds * 1.25:
+            j += 1
+            if segments[j][1] - w_start >= window_seconds:
+                break
+        w_end = segments[j][1]
+        text = " ".join(seg[2] for seg in segments[i : j + 1]).strip()
+        words: list[dict[str, Any]] = []
+        for seg in segments[i : j + 1]:
+            words.extend(seg[3])
+        if text and w_end > w_start:
+            windows.append(
+                {
+                    "start": w_start,
+                    "end": w_end,
+                    "duration": round(w_end - w_start, 3),
+                    "text": text,
+                    "words": words,
+                }
+            )
+        if j >= n - 1:
+            break
+        target = w_end - overlap_seconds
+        k = i + 1
+        while k <= j and segments[k][0] < target:
+            k += 1
+        i = max(k, i + 1)
+
+    if not windows:
+        text = str(transcript.get("text", "") or "").strip()
+        words = _segment_words(transcript)
+        if text:
+            windows.append({"start": 0.0, "end": 0.0, "duration": 0.0, "text": text, "words": words})
+    return [w for w in windows if w["duration"] > 1.0 or w["duration"] == 0.0]
 
 
 def _window_from_segments(segments: list[dict[str, Any]]) -> dict[str, Any]:
@@ -202,6 +241,101 @@ def _window_from_segments(segments: list[dict[str, Any]]) -> dict[str, Any]:
         "text": text,
         "words": words,
     }
+
+
+def carve_clip_windows(
+    window: dict[str, Any],
+    silences: Sequence[tuple[float, float]],
+    min_len: float = DEFAULT_MIN_LEN,
+    max_len: float = DEFAULT_MAX_LEN,
+) -> list[dict[str, Any]]:
+    """Potong SATU scoring window menjadi kandidat klip yang SELALU dalam batas.
+
+    Aturan: kandidat tumbuh kata-per-kata; begitu mencapai min_len, kandidat
+    ditutup di jeda terdekat (batas kalimat) SELAMBATNYA max_len. Hasilnya
+    kandidat tidak pernah lebih panjang dari max_len — tidak ada lagi "klip
+    60+ detik membesar" seperti bug sebelumnya.
+    """
+    words = list(window.get("words") or [])
+    if not words:
+        text = str(window.get("text", "")).strip()
+        if not text or window["end"] - window["start"] <= 0:
+            return []
+        span = window["end"] - window["start"]
+        out: list[dict[str, Any]] = []
+        cursor = window["start"]
+        while cursor < window["end"] - 1.0:
+            end = min(cursor + max_len, window["end"])
+            if end - cursor < min(3.0, min_len):
+                break
+            chunk_words = [w for w in words if w.get("start", 0) >= cursor and w.get("end", 0) <= end]
+            out.append(
+                {
+                    "start": round(cursor, 3),
+                    "end": round(end, 3),
+                    "duration": round(end - cursor, 3),
+                    "text": text,
+                    "words": chunk_words,
+                }
+            )
+            cursor = end
+        return out
+
+    carved: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
+    for word in words:
+        current.append(word)
+        span = float(current[-1].get("end", 0)) - float(current[0].get("start", 0))
+        if span < min_len:
+            continue
+        # Sudah cukup panjang: tutup di sini (batas kata = batas kalimat alami).
+        start = float(current[0].get("start", 0))
+        end = float(current[-1].get("end", 0))
+        if end - start > max_len:
+            # Kata ini membuat kelebihan: tutup kandidat SEBELUM kata ini,
+            # lalu mulai kandidat baru dari kata ini.
+            prev = current[:-1]
+            if prev:
+                p_start = float(prev[0].get("start", 0))
+                p_end = float(prev[-1].get("end", 0))
+                if p_end - p_start >= min(5.0, min_len):
+                    carved.append(
+                        {
+                            "start": round(p_start, 3),
+                            "end": round(p_end, 3),
+                            "duration": round(p_end - p_start, 3),
+                            "text": " ".join(str(w.get("word", "")) for w in prev).strip(),
+                            "words": list(prev),
+                        }
+                    )
+            current = [word]
+            continue
+        text = " ".join(str(w.get("word", "")) for w in current).strip()
+        carved.append(
+            {
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "duration": round(end - start, 3),
+                "text": text,
+                "words": list(current),
+            }
+        )
+        current = []
+    if current:
+        start = float(current[0].get("start", 0))
+        end = float(current[-1].get("end", 0))
+        if end - start >= min(5.0, min_len) and end - start <= max_len:
+            carved.append(
+                {
+                    "start": round(start, 3),
+                    "end": round(end, 3),
+                    "duration": round(end - start, 3),
+                    "text": " ".join(str(w.get("word", "")) for w in current).strip(),
+                    "words": list(current),
+                }
+            )
+    _ = silences  # jeda dipakai di tahap snap, bukan di sini
+    return [c for c in carved if c["duration"] > 1.0]
 
 
 def slide_windows(
@@ -400,10 +534,14 @@ def _reason(window: dict[str, Any]) -> str:
 def select_top(
     scored: Sequence[dict[str, Any]],
     requested_count: int = 5,
-    overlap_tolerance: float = 1.0,
+    overlap_tolerance: float = 5.0,
     video_duration: float = 0.0,
 ) -> list[dict[str, Any]]:
-    """Best-k selection, openshorts-style: longer sources deserve more clips."""
+    """Best-k selection, openshorts-style: longer sources deserve more clips.
+
+    overlap_tolerance default 5 detik: potongan di batas kalimat yang sedikit
+    bersinggungan masih boleh (terlalu ketat -> klip menumpuk di awal saja).
+    """
     count = requested_count
     if video_duration > 0:
         _, ceiling = clip_count_targets(video_duration, requested_count)
@@ -435,9 +573,23 @@ def pick_clips(
     windows = []
     if transcript and transcript.get("segments"):
         windows = sentence_windows(transcript, min_len, max_len)
-    if not windows:
+    candidates_pool: list[dict[str, Any]] = []
+    if windows:
+        # Scoring window (besar, overlap) -> skor dulu, BARU dipotong jadi klip.
+        # Catatan: top_windows sengaja diurut waktu (bukan skor) supaya cakupan
+        # video merata — kalau hanya window skor tertinggi, kandidat menumpuk
+        # di satu bagian video saja (bug yang baru saja direproduksi).
+        scored_windows = score_windows(windows, envelope, silences)
+        ranked = sorted(scored_windows, key=lambda w: (-w["score"], w["start"]))
+        keep_n = max(count * 3, 3)
+        top_windows = sorted(ranked[:keep_n], key=lambda w: w["start"])
+        for window in top_windows:
+            for carved in carve_clip_windows(window, silences, min_len, max_len):
+                candidates_pool.append(carved)
+    if not candidates_pool:
         windows = slide_windows(duration, min_len, max_len)
-    scored = score_windows(windows, envelope, silences)
+        candidates_pool = list(windows)
+    scored = score_windows(candidates_pool, envelope, silences)
     chosen = select_top(scored, count, video_duration=duration)
     candidates: list[ClipCandidate] = []
     for window in chosen:
@@ -448,10 +600,13 @@ def pick_clips(
             )
         else:
             start, end = window["start"], window["end"]
+        # Jaminan akhir: tidak pernah keluar dari batas durasi yang diminta.
+        if end - start > max_len:
+            end = start + max_len
         candidates.append(
             ClipCandidate(
-                start=start,
-                end=end,
+                start=round(start, 3),
+                end=round(end, 3),
                 score=window["score"],
                 reason=_reason(window),
                 title=title_from_text(window.get("text", "")),

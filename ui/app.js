@@ -139,29 +139,41 @@ let jobTimer = null;
 let jobStartedAt = 0;
 
 function fmtElapsed(seconds) {
-  if (seconds < 60) return `${Math.floor(seconds)} detik`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m} mnt ${s} dtk`;
+  const total = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function showProcessing(title) {
   const card = $("#processingCard");
-  card.classList.add("visible");
-  $("#procTitle").textContent = title || t("common.processing");
-  $("#procStage").textContent = t("common.processing");
-  $("#procFill").style.width = "2%";
-  $("#procFill").classList.add("indeterminate");
-  $("#procElapsed").textContent = "0 detik";
+  if (card) {
+    card.classList.add("visible");
+    $("#procTitle").textContent = title || t("common.processing");
+    $("#procStage").textContent = t("common.processing");
+    const fill = $("#procFill");
+    fill.style.width = "2%";
+    fill.classList.add("indeterminate");
+    $("#procElapsed").textContent = "0:00";
+  }
+  const titleEl = $("#jobTitle");
+  if (titleEl) titleEl.textContent = title || t("common.processing");
   jobStartedAt = Date.now();
   clearInterval(jobTimer);
-  jobTimer = setInterval(() => {
-    $("#procElapsed").textContent = fmtElapsed((Date.now() - jobStartedAt) / 1000);
-  }, 1000);
+  const tick = () => {
+    const label = fmtElapsed((Date.now() - jobStartedAt) / 1000);
+    const pe = $("#procElapsed");
+    if (pe) pe.textContent = label;
+    const je = $("#jobElapsed");
+    if (je) je.textContent = label;
+  };
+  tick();
+  jobTimer = setInterval(tick, 1000);
 }
 
 function hideProcessing() {
-  $("#processingCard").classList.remove("visible");
+  const card = $("#processingCard");
+  if (card) card.classList.remove("visible");
   clearInterval(jobTimer);
   jobTimer = null;
 }
@@ -171,10 +183,16 @@ function trackJob(job) {
   state.jobId = job.id;
   const startBtn = $("#startBtn");
   if (startBtn) { startBtn.disabled = true; startBtn.textContent = t("common.processing") + "…"; }
-  $("#jobbar").classList.add("visible");
-  $("#jobStage").textContent = job.title || "";
-  $("#jobFill").style.width = "2%";
-  $("#jobPercent").textContent = "0%";
+  const jobbar = $("#jobbar");
+  if (jobbar) jobbar.classList.add("visible");
+  const jt = $("#jobTitle");
+  if (jt) jt.textContent = job.title || t("common.processing");
+  const js = $("#jobStage");
+  if (js) js.textContent = t("common.processing");
+  const jf = $("#jobFill");
+  if (jf) jf.style.width = "2%";
+  const jp = $("#jobPercent");
+  if (jp) jp.textContent = "0%";
   showProcessing(job.title);
 
   const source = new EventSource(`/api/jobs/${job.id}/events`);
@@ -183,20 +201,30 @@ function trackJob(job) {
     const percent = Math.round(data.progress || 0);
     // Indeterminate hanya saat belum ada angka nyata (mis. unduh model pertama).
     const fill = $("#procFill");
-    if (percent > 2) fill.classList.remove("indeterminate");
-    fill.style.width = `${Math.max(2, percent)}%`;
-    $("#jobFill").style.width = `${percent}%`;
-    $("#jobPercent").textContent = `${percent}%`;
+    if (fill) {
+      if (percent > 2) fill.classList.remove("indeterminate");
+      fill.style.width = `${Math.max(2, percent)}%`;
+    }
+    const bar = $("#jobFill");
+    if (bar) bar.style.width = `${percent}%`;
+    const pct = $("#jobPercent");
+    if (pct) pct.textContent = `${percent}%`;
     if (data.type === "progress") {
       const stageText = data.stage ? `${data.stage} — ${data.message || ""}` : (data.message || "");
-      $("#jobStage").textContent = stageText;
-      $("#procStage").textContent = data.stage || t("common.processing");
-      $("#procTitle").textContent = data.message || job.title || t("common.processing");
+      const stageEl = $("#jobStage");
+      if (stageEl) stageText && (stageEl.textContent = stageText);
+      const ps = $("#procStage");
+      if (ps) ps.textContent = data.stage || t("common.processing");
+      const pt = $("#procTitle");
+      if (pt) pt.textContent = data.message || job.title || t("common.processing");
+      const titleEl = $("#jobTitle");
+      if (titleEl && data.message) titleEl.textContent = data.message;
       return;
     }
     if (data.type === "end") {
       source.close();
-      $("#jobbar").classList.remove("visible");
+      const bar2 = $("#jobbar");
+      if (bar2) bar2.classList.remove("visible");
       state.jobId = null;
       hideProcessing();
       if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
@@ -208,7 +236,8 @@ function trackJob(job) {
   };
   source.onerror = () => {
     source.close();
-    $("#jobbar").classList.remove("visible");
+    const bar3 = $("#jobbar");
+    if (bar3) bar3.classList.remove("visible");
     hideProcessing();
     if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
     state.jobId = null;
