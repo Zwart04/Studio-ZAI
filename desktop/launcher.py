@@ -1,13 +1,14 @@
-"""Studio ZAI desktop shell: a pywebview window around the local server.
+"""Studio ZAI desktop shell: a native window around the local server.
 
-Falls back to the default browser when pywebview is unavailable.
-All startup diagnostics go to <data dir>/launcher.log so problems are visible
-even though the packaged app runs without a console.
+The frozen EXE always opens its own window (pywebview EdgeChromium).
+A real browser is only used when the user explicitly runs `serve`.
+All startup diagnostics go to <data dir>/launcher.log.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -90,6 +91,62 @@ def serve(port: int) -> None:
         log("server: FAILED\n" + traceback.format_exc())
 
 
+def find_chrome_exe() -> str | None:
+    """Chrome/Edge executable for --app fallback mode."""
+    candidates = [
+        shutil.which("chrome"),
+        shutil.which("chrome.exe"),
+        shutil.which("msedge"),
+        shutil.which("msedge.exe"),
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def open_app_window(url: str, profile_dir: Path) -> int:
+    """Buka URL sebagai jendela aplikasi Chrome/Edge (--app, tanpa tab browser).
+
+    Dipakai HANYA jika pywebview gagal total. Profil terpisah di folder data
+    supaya tidak mengganggu browser utama pengguna.
+    """
+    chrome = find_chrome_exe()
+    if not chrome:
+        log("app-window: tidak ada Chrome/Edge, membuka browser biasa")
+        webbrowser.open(url)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            return 1
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        chrome or "",
+        f"--app={url}",
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--disable-features=Translate",
+    ]
+    log(f"app-window: {chrome} --app {url}")
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        log("app-window: gagal start, membuka browser biasa")
+        webbrowser.open(url)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
 class Bridge:
     """JS API exposed to the web UI (file picker, open folder)."""
 
@@ -143,46 +200,34 @@ def main(argv: list[str] | None = None) -> int:
     url = f"http://127.0.0.1:{port}"
 
     if not wait_ready(port, timeout=60.0):
-        log("launcher: server tidak siap, membuka browser sebagai fallback")
-        webbrowser.open(url)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            return 1
+        log("launcher: server tidak siap dalam 60 detik")
+        return open_app_window(url, data_dir() / "webprofile")
 
     log("launcher: server siap")
     try:
         import webview
 
-        webview.create_window(
-            "Studio ZAI",
-            url,
-            js_api=Bridge(),
-            width=1280,
-            height=880,
-            min_size=(900, 620),
-        )
-        log("launcher: membuka jendela")
+        # Paksa EdgeChromium di Windows: backend winforms butuh .NET,
+        # sedangkan edgechromium hanya butuh WebView2 runtime (bawaan Win10/11).
+        kwargs: dict = {
+            "js_api": Bridge(),
+            "width": 1280,
+            "height": 880,
+            "min_size": (900, 620),
+        }
+        if sys.platform == "win32":
+            kwargs["gui"] = "edgechromium"
+        webview.create_window("Studio ZAI", url, **kwargs)
+        log("launcher: membuka jendela (pywebview)")
         webview.start()
         log("launcher: jendela ditutup")
         return 0
     except ImportError:
-        log("launcher: pywebview tidak ada, memakai browser")
-        webbrowser.open(url)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            return 0
+        log("launcher: pywebview tidak ada, memakai jendela aplikasi Chrome/Edge")
+        return open_app_window(url, data_dir() / "webprofile")
     except Exception:  # noqa: BLE001
         log("launcher: webview gagal\n" + traceback.format_exc())
-        webbrowser.open(url)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            return 1
+        return open_app_window(url, data_dir() / "webprofile")
 
 
 if __name__ == "__main__":

@@ -59,6 +59,39 @@ def cache_dir() -> Path:
     return d
 
 
+def transcript_cache_dir() -> Path:
+    """Satu folder cache untuk SEMUA chunk transkrip (bukan per folder sumber).
+
+    Chunk wav bisa besar (10 mnt = ~20 MB); menaruhnya di folder sumber video
+    membuat 'data sisa' yang dikeluhkan pengguna. Satu folder cache global
+    memudahkan pembersihan + tidak mengotori folder proyek.
+    """
+    d = cache_dir() / "transcript_chunks"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def cleanup_stale_transcript_chunks(max_age_hours: float = 24.0) -> int:
+    """Hapus file chunk yatim (tidak disentuh > max_age_hours). Return jumlah file."""
+    import time
+
+    cache = transcript_cache_dir()
+    removed = 0
+    now = time.time()
+    try:
+        entries = list(cache.glob("chunk_*.wav"))
+    except OSError:
+        return 0
+    for entry in entries:
+        try:
+            if now - entry.stat().st_mtime > max_age_hours * 3600:
+                entry.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 def settings_path() -> Path:
     return data_dir() / "settings.json"
 

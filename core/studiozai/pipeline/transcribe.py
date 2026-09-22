@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .. import models
+from .. import config, models
 
 ProgressCb = Callable[[float, str], None]
 ModelCache: dict[tuple[str, str], Any] = {}
@@ -82,7 +82,10 @@ def transcribe(
     if not total_duration or total_duration <= chunk_seconds * 1.2:
         return _transcribe_single(media_path, model_id, lang, progress_cb, offset=0.0)
 
-    cache_dir = media_path.parent / ".transcript_chunks"
+    import hashlib
+
+    fingerprint = hashlib.sha1(f"{media_path.resolve()}|{total_duration:.1f}".encode()).hexdigest()[:12]
+    cache_dir = config.transcript_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
     all_segments: list[dict[str, Any]] = []
     language = lang or "unknown"
@@ -91,7 +94,7 @@ def transcribe(
     index = 0
     while cursor < total_duration - 0.5:
         end = min(cursor + chunk_seconds, total_duration)
-        chunk_path = cache_dir / f"chunk_{index:03d}.wav"
+        chunk_path = cache_dir / f"{fingerprint}_{index:03d}.wav"
         if not chunk_path.exists() or chunk_path.stat().st_size == 0:
             ffmpeg_utils.run_ffmpeg(
                 [
@@ -131,9 +134,8 @@ def transcribe(
         cursor = end
 
     try:
-        for leftover in cache_dir.glob("chunk_*.wav"):
+        for leftover in cache_dir.glob(f"{fingerprint}_*.wav"):
             leftover.unlink(missing_ok=True)
-        cache_dir.rmdir()
     except OSError:
         pass
 

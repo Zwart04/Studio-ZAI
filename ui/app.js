@@ -145,7 +145,10 @@ function fmtElapsed(seconds) {
   return `${m}:${s}`;
 }
 
+let displayedProgress = 0;
+
 function showProcessing(title) {
+  displayedProgress = 0;
   const card = $("#processingCard");
   if (card) {
     card.classList.add("visible");
@@ -198,7 +201,12 @@ function trackJob(job) {
   const source = new EventSource(`/api/jobs/${job.id}/events`);
   source.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    const percent = Math.round(data.progress || 0);
+    // Progress MONOTON: angka yang tampil tidak pernah mundur. Backend
+    // melaporkan per-tahap (unduh 3-35%, transkrip 45-75%, dst) sehingga
+    // tanpa clamp, bar akan "melompat mundur" tiap ganti tahap.
+    const raw = Math.round(data.progress || 0);
+    const percent = Math.max(displayedProgress, Math.min(100, raw));
+    displayedProgress = percent;
     // Indeterminate hanya saat belum ada angka nyata (mis. unduh model pertama).
     const fill = $("#procFill");
     if (fill) {
@@ -487,9 +495,10 @@ function renderProjectDetail() {
   }
   grid.innerHTML = project.clips.map((clip) => {
     const thumb = clip.files && clip.files.thumb
-      ? `<img class="thumb" src="${mediaUrl(clip.files.thumb)}" alt="" />`
-      : `<div class="thumb"></div>`;
-    const status = clip.files && clip.files.mp4 ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`;
+      ? `<img class="thumb" src="${mediaUrl(clip.files.thumb)}" alt="" loading="lazy" />`
+      : `<div class="thumb skeleton"></div>`;
+    const ready = Boolean(clip.files && clip.files.mp4);
+    const status = ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`;
     return `<article class="clip">
       ${thumb}
       <div class="meta">
@@ -498,10 +507,10 @@ function renderProjectDetail() {
         <span>${status} <span class="badge">${clip.crop}</span></span>
       </div>
       <div class="actions">
-        <button class="mini" data-preview="${clip.index}">${t("common.preview")}</button>
-        <button class="mini" data-edit="${clip.index}">${t("common.edit")}</button>
-        <button class="mini" data-render="${clip.index}">${t("common.render")}</button>
-        <button class="mini" data-remove="${clip.index}">${t("common.delete")}</button>
+        <button class="icon-btn" data-preview="${clip.index}" ${ready ? "" : "disabled style='opacity:.4'"}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${t("common.preview")}</button>
+        <button class="icon-btn" data-edit="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>${t("common.edit")}</button>
+        <button class="icon-btn" data-render="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg>${t("common.render")}</button>
+        <button class="icon-btn" data-remove="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"/></svg>${t("common.delete")}</button>
       </div>
     </article>`;
   }).join("");
@@ -808,11 +817,15 @@ function wizardShow(step) {
   overlay.hidden = false;
 
   if (step === 0) {
+    // Ganti checkbox mentah dengan toggle custom + ikon langkah.
     title.textContent = "Selamat datang di Studio ZAI";
-    sub.textContent = "Studio ZAI berjalan lokal di perangkatmu. Sekali pasang model AI kecil (unduh sekali), lalu semua fitur jalan offline.";
-    body.innerHTML = "";
+    sub.textContent = "3 langkah cepat sampai siap dipakai — semua model jalan lokal di perangkatmu.";
+    body.innerHTML = `
+      <div class="wizard-body-row"><span class="dot">1</span><span class="label">Deteksi perangkat<span class="sub">RAM, CPU/GPU, ruang disk dicek otomatis</span></span></div>
+      <div class="wizard-body-row"><span class="dot">2</span><span class="label">Pilih model<span class="sub">rekomendasi paling ringan sudah dicentang</span></span></div>
+      <div class="wizard-body-row"><span class="dot">3</span><span class="label">Unduh sekali, pakai offline<span class="sub">progress per model terlihat jelas</span></span></div>`;
     actions.innerHTML = `
-      <button class="primary" id="wzStart">Pasang sekarang</button>
+      <button class="primary" id="wzStart">Mulai setup</button>
       <button class="link" id="wzSkip">Nanti saja</button>`;
     $("#wzStart").addEventListener("click", () => wizardDetect());
     $("#wzSkip").addEventListener("click", wizardDone);
@@ -846,14 +859,15 @@ function wizardShowRecommend() {
 
   const rows = wizard.models.map((model) => {
     const rec = wizard.chosen.includes(model.id);
+    const mark = model.kind === "asr" ? "🎙️" : model.kind === "tts" ? "🔊" : "🧬";
     return `
     <label class="wizard-body-row" style="cursor:pointer">
-      <input type="checkbox" data-model="${model.id}" ${rec ? "checked" : ""} />
+      <input type="checkbox" data-model="${model.id}" ${rec ? "checked" : ""} ${model.installed ? "disabled" : ""} />
       <span class="label">
-        ${model.id}
-        <span class="sub">${model.kind} · ${model.size_mb ?? "?"} MB · ${model.note || ""}</span>
+        ${mark} ${model.id}
+        <span class="sub">${model.size_mb ?? "?"} MB · ${model.note || ""}</span>
       </span>
-      ${model.installed ? `<span class="stage-pill" style="background:rgba(48,209,88,.16);color:var(--green)">terpasang</span>` : ""}
+      ${model.installed ? `<span class="stage-pill" style="background:rgba(48,209,88,.16);color:var(--green)">✓</span>` : ""}
     </label>`;
   }).join("");
 
@@ -910,12 +924,16 @@ function wizardDownloadModel(id) {
     const bar = document.querySelector(`[data-bar="${id}"]`);
     const pct = document.querySelector(`[data-pct="${id}"]`);
     if (dot) dot.classList.add("run");
+    let shown = 0;
 
     api(`/api/models/${id}/download`, { method: "POST" }).then((job) => {
       const source = new EventSource(`/api/jobs/${job.id}/events`);
+      // Tampilkan nilai TERTINGGI yang pernah terlihat (monoton) supaya
+      // bar wizard tidak ikut "mundur" saat backend ganti tahap.
       source.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        const progress = Math.round(data.progress || 0);
+        const progress = Math.max(shown, Math.round(data.progress || 0));
+        shown = progress;
         if (bar) bar.style.width = `${progress}%`;
         if (pct) pct.textContent = `${progress}%`;
         if (data.type === "end") {
@@ -955,8 +973,11 @@ async function checkWizard() {
   try {
     const settings = await api("/api/settings");
     const models = await api("/api/models");
-    const hasAnyModel = models.models.some((m) => m.installed);
-    if (!settings.setup_done && !hasAnyModel) {
+    // Wizard SETUP muncul kalau: belum pernah selesai ATAU model inti belum lengkap.
+    // "Lengkap" = minimal 1 ASR + 1 TTS terpasang (syarat klip + subtitle + suara jalan).
+    const installed = (models.models || []).filter((m) => m.installed).map((m) => m.kind);
+    const coreReady = installed.includes("asr") && installed.includes("tts");
+    if (!settings.setup_done || !coreReady) {
       wizardShow(0);
     }
   } catch { /* abaikan saat pertama kali */ }

@@ -87,6 +87,16 @@ def health() -> dict[str, Any]:
     return {"ok": True, "version": __version__, "app": "Studio ZAI"}
 
 
+@app.on_event("startup")
+def _startup_cleanup() -> None:
+    try:
+        removed = config.cleanup_stale_transcript_chunks()
+        if removed:
+            print(f"[studiozai] membersihkan {removed} file chunk yatim")
+    except Exception:
+        pass
+
+
 @app.get("/api/doctor")
 def doctor() -> dict[str, Any]:
     return service.doctor()
