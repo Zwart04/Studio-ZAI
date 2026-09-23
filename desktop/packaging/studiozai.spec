@@ -29,6 +29,9 @@ datas = [
     (str(UI), "ui"),
     (str(ROOT / "assets" / "logo.png"), "assets"),
 ]
+sd_cpu_bundle = ROOT / "vendor" / "sd-cpp-win-cpu-28b454b.zip"
+if sd_cpu_bundle.is_file() and os.name == "nt":
+    datas.append((str(sd_cpu_bundle), "vendor"))
 binaries = [
     (str(ROOT / "desktop" / "packaging" / "icons" / "studiozai.ico"), "."),
 ]

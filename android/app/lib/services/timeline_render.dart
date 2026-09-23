@@ -27,7 +27,8 @@ class TimelineRender {
     double originalVolume = 1.0,
     double voiceVolume = 1.0,
   }) async {
-    final videoItems = timeline.trackOf('video')?.items ?? const <TimelineItem>[];
+    final videoItems =
+        timeline.trackOf('video')?.items ?? const <TimelineItem>[];
     final base = videoItems.isEmpty ? null : videoItems.first;
     final offset = base?.srcStart ?? 0;
     var duration = (base?.end ?? 0) - (base?.start ?? 0);
@@ -38,15 +39,18 @@ class TimelineRender {
     final crop = base?.crop ?? 'center';
     final canvas = base?.canvas ?? 'portrait';
     final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
-    final filter = MediaTools.cropFilter(crop, sourceWidth, sourceHeight, canvas: canvas);
+    final filter =
+        MediaTools.cropFilter(crop, sourceWidth, sourceHeight, canvas: canvas);
     final complex = filter.contains(';');
 
     final buffer = StringBuffer()
-      ..write('-y -ss ${offset.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(source)}');
+      ..write(
+          '-y -ss ${offset.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(source)}');
 
     final filters = <String>[];
     if (complex) {
-      filters.add('[0:v]${filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2', '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vbase]')}');
+      filters.add(
+          '[0:v]${filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2', '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vbase]')}');
     } else {
       filters.add('[0:v]$filter[vbase]');
     }
@@ -54,13 +58,19 @@ class TimelineRender {
     var index = 1;
 
     // -------------------------------------------------------- media overlays
-    for (final item in timeline.trackOf('media')?.items ?? const <TimelineItem>[]) {
-      if (item.src.isEmpty || item.end <= item.start || !File(item.src).existsSync()) continue;
+    for (final item
+        in timeline.trackOf('media')?.items ?? const <TimelineItem>[]) {
+      if (item.src.isEmpty ||
+          item.end <= item.start ||
+          !File(item.src).existsSync()) {
+        continue;
+      }
       if (item.type == 'video') {
         buffer.write(' -ss ${item.srcStart.toStringAsFixed(3)} '
             '-t ${(item.end - item.start).toStringAsFixed(3)} -i ${_quote(item.src)}');
       } else {
-        buffer.write(' -loop 1 -t ${duration.toStringAsFixed(3)} -i ${_quote(item.src)}');
+        buffer.write(
+            ' -loop 1 -t ${duration.toStringAsFixed(3)} -i ${_quote(item.src)}');
       }
       final width = (size[0] * item.scale.clamp(0.05, 1.0)).round();
       filters.add('[$index:v]scale=${width < 2 ? 2 : width}:-2[s$index]');
@@ -76,15 +86,18 @@ class TimelineRender {
     // ---------------------------------------------------------------- audio
     final audioLabels = <String>[];
     if (await MediaTools.hasAudio(source)) {
-      filters.add('[0:a]volume=${originalVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[abase]');
+      filters.add(
+          '[0:a]volume=${originalVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[abase]');
       audioLabels.add('[abase]');
     }
-    for (final item in timeline.trackOf('audio')?.items ?? const <TimelineItem>[]) {
+    for (final item
+        in timeline.trackOf('audio')?.items ?? const <TimelineItem>[]) {
       if (item.src.isEmpty || !File(item.src).existsSync()) continue;
       final start = item.start < 0 ? 0.0 : item.start;
       final length = item.end > item.start ? item.end - item.start : duration;
       buffer.write(' -i ${_quote(item.src)}');
-      filters.add('[$index:a]atrim=0:${length.toStringAsFixed(3)},asetpts=PTS-STARTPTS,'
+      filters.add(
+          '[$index:a]atrim=0:${length.toStringAsFixed(3)},asetpts=PTS-STARTPTS,'
           'volume=${item.gain.clamp(0.0, 4.0).toStringAsFixed(3)},'
           'adelay=${(start * 1000).round()}:all=1[a$index]');
       audioLabels.add('[a$index]');
@@ -92,7 +105,8 @@ class TimelineRender {
     }
     if (voicePath != null && File(voicePath).existsSync()) {
       buffer.write(' -i ${_quote(voicePath)}');
-      filters.add('[$index:a]volume=${voiceVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[a$index]');
+      filters.add(
+          '[$index:a]volume=${voiceVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[a$index]');
       audioLabels.add('[a$index]');
       index++;
     }
@@ -103,20 +117,25 @@ class TimelineRender {
     } else if (audioLabels.length == 1) {
       audioMap = audioLabels.first;
     } else {
-      filters.add('${audioLabels.join()}amix=inputs=${audioLabels.length}:duration=first:normalize=0[aaudio]');
+      filters.add(
+          '${audioLabels.join()}amix=inputs=${audioLabels.length}:duration=first:normalize=0[aaudio]');
       audioMap = '[aaudio]';
     }
 
     // ----------------------------------------------------------------- teks
     if (subtitlesPath != null) {
-      filters.add('$label' '${MediaTools.subtitleFilter(subtitlesPath)}[vfinal]');
+      filters
+          .add('$label' '${MediaTools.subtitleFilter(subtitlesPath)}[vfinal]');
       label = '[vfinal]';
     }
 
     buffer
-      ..write(' -filter_complex "${filters.join(';')}" -map "$label" -map "$audioMap"')
-      ..write(' -c:a aac -b:a 192k -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p')
-      ..write(' -t ${duration.toStringAsFixed(3)} -movflags +faststart ${_quote(output)}');
+      ..write(
+          ' -filter_complex "${filters.join(';')}" -map "$label" -map "$audioMap"')
+      ..write(
+          ' -c:a aac -b:a 256k -ar 48000 -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p')
+      ..write(
+          ' -t ${duration.toStringAsFixed(3)} -movflags +faststart ${_quote(output)}');
     return buffer.toString();
   }
 
@@ -146,7 +165,8 @@ class TimelineRender {
     final code = await session.getReturnCode();
     if (!ReturnCode.isSuccess(code)) {
       final logs = await session.getOutput();
-      throw Exception('Render timeline gagal. ${logs == null ? '' : logs.substring(logs.length > 300 ? logs.length - 300 : 0)}');
+      throw Exception(
+          'Render timeline gagal. ${logs == null ? '' : logs.substring(logs.length > 300 ? logs.length - 300 : 0)}');
     }
     return output;
   }
@@ -178,7 +198,8 @@ class TimelineRender {
     // `-s` adalah opsi keluaran dan tetap berlaku bersama -filter_complex,
     // jadi cukup memperkecil hasil akhir tanpa menyentuh graf filternya.
     final base = timeline.trackOf('video')?.items;
-    final canvas = base == null || base.isEmpty ? 'portrait' : base.first.canvas;
+    final canvas =
+        base == null || base.isEmpty ? 'portrait' : base.first.canvas;
     final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
     final longest = size[0] > size[1] ? size[0] : size[1];
     final ratio = longest > 960 ? 960 / longest : 1.0;

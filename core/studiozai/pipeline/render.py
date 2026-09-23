@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -10,6 +11,17 @@ from . import crop, probe
 
 ProgressCb = Callable[[float, str], None]
 _ENCODER_CACHE: str | None = None
+AUDIO_ENCODE_ARGS = ["-c:a", "aac", "-b:a", "256k", "-ar", "48000"]
+
+
+def can_copy_audio(path: str | Path) -> bool:
+    """AAC inside MP4 can be preserved exactly when no audio effect is active."""
+    try:
+        streams = ffmpeg.ffprobe_json(path).get("streams", [])
+    except (OSError, RuntimeError, ValueError):
+        return False
+    audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+    return bool(audio_streams) and all(s.get("codec_name") == "aac" for s in audio_streams)
 
 
 def selected_encoder(explicit: str | None = None) -> str:
@@ -99,12 +111,10 @@ def render_clip(
             filters.append("[0:a]volume=1.0[a]")
             audio_label = "[a]"
     else:
-        if abs(voice_volume - 1.0) < 1e-6:
-            map_audio = True
-            audio_label = None
-        else:
-            filters.append(f"[0:a]volume={voice_volume:.3f}[a]")
-            audio_label = "[a]"
+        # The narration volume control has no effect when keeping original
+        # source audio. Mapping it directly also avoids another AAC encode.
+        map_audio = True
+        audio_label = None
 
     args: list[str] = list(inputs)
     if filters:
@@ -117,7 +127,11 @@ def render_clip(
     elif map_audio:
         args += ["-map", "0:a?"]
 
-    args += ["-c:a", "aac", "-b:a", "192k", *encoder_args(encoder), "-movflags", "+faststart", str(out)]
+    copy_audio = audio_mode == "original" and audio_label is None and map_audio and can_copy_audio(src)
+    args += [
+        *(["-c:a", "copy"] if copy_audio else AUDIO_ENCODE_ARGS),
+        *encoder_args(encoder), "-movflags", "+faststart", str(out),
+    ]
 
     def report(fraction: float) -> None:
         if progress_cb:
@@ -139,7 +153,9 @@ def concat(paths: Sequence[str | Path], out: str | Path, encoder: str | None = N
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if len(items) == 1:
-        items[0].replace(out)
+        # A combined export must not remove the original project clip.
+        if items[0].resolve() != out.resolve():
+            shutil.copy2(items[0], out)
         return out
 
     args: list[str] = []
@@ -153,10 +169,7 @@ def concat(paths: Sequence[str | Path], out: str | Path, encoder: str | None = N
         "[v]",
         "-map",
         "[a]",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
+        *AUDIO_ENCODE_ARGS,
         *encoder_args(encoder),
         "-movflags",
         "+faststart",

@@ -8,7 +8,7 @@ const I18N = {
     "home.title": "Apa yang ingin kamu buat?",
     "home.lead": "Satu ruang untuk video, subtitle, suara, dan gambar. Mulai dengan video atau pilih alat studio.",
     "home.source": "Link atau lokasi berkas", "home.pick": "Pilih berkas", "home.count": "Jumlah klip",
-    "home.lang": "Bahasa konten", "home.min": "Durasi minimum (detik)", "home.max": "Durasi maksimum (detik)",
+    "home.lang": "Bahasa konten",
     "home.transcript": "Buat subtitle dari ucapan", "home.llm": "Pilih momen dengan AI dari Pengaturan",
     "home.start": "Mulai buat klip", "home.doctor": "Cek perangkat", "home.recent": "Proyek terakhir",
     "home.quality": "Kualitas video", "home.advanced": "Pengaturan lanjutan",
@@ -19,7 +19,7 @@ const I18N = {
     "clips.deleteConfirm": "Hapus klip ini? Berkas hasil rendernya ikut dihapus.",
     "clips.deleted": "Klip dihapus.",
     "editor.timeline": "Timeline", "editor.addText": "Tambah teks", "editor.addMedia": "Tambah media", "editor.addMusic": "Tambah musik",
-    "editor.template": "Template teks", "editor.previewDraft": "Pratinjau cepat", "editor.deleteItem": "Hapus item",
+    "editor.template": "Template teks", "editor.deleteItem": "Hapus item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Teks", "timeline.audio": "Audio",
     "voice.title": "Suara otomatis",
     "voice.lead": "Buat narasi Indonesia atau Inggris. Pilih suara lokal, gunakan layanan online, atau rekam contoh untuk kloning ZipVoice.",
@@ -53,7 +53,7 @@ const I18N = {
     "home.title": "What will you create?",
     "home.lead": "Paste a YouTube / TikTok / Instagram link or pick a local video file. 9:16 clips, automatic subtitles and voiceover — all local.",
     "home.source": "Link or file path", "home.pick": "Pick file", "home.count": "Number of clips",
-    "home.lang": "Content language", "home.min": "Minimum length (seconds)", "home.max": "Maximum length (seconds)",
+    "home.lang": "Content language",
     "home.transcript": "Automatic transcript (subtitles)", "home.llm": "Use local LLM to pick moments",
     "home.start": "Start clipping", "home.doctor": "Check device", "home.recent": "Recent projects",
     "home.quality": "Video quality", "home.advanced": "Advanced settings",
@@ -64,7 +64,7 @@ const I18N = {
     "clips.deleteConfirm": "Delete this clip? Its rendered file is removed too.",
     "clips.deleted": "Clip deleted.",
     "editor.timeline": "Timeline", "editor.addText": "Add text", "editor.addMedia": "Add media", "editor.addMusic": "Add music",
-    "editor.template": "Text template", "editor.previewDraft": "Quick preview", "editor.deleteItem": "Delete item",
+    "editor.template": "Text template", "editor.deleteItem": "Delete item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Text", "timeline.audio": "Audio",
     "voice.title": "Voice",
     "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with ZipVoice.",
@@ -291,7 +291,7 @@ function setPage(name) {
   if (name === "models") renderModels();
   if (name === "settings") { renderSettings(); if (window.renderAiSettings) renderAiSettings(); }
   if (name === "images" && window.renderImages) renderImages();
-  if (name === "voice") renderVoice();
+  if (name === "voice") loadVoices().then(renderVoice).catch((error) => toast(error.message, "error"));
 }
 
 /* ------------------------------------------------------------------ home */
@@ -328,7 +328,7 @@ function showLinkPreview(info) {
   if (trackWrap && trackSelect) {
     if (tracks.length > 1) {
       trackSelect.innerHTML = tracks
-        .map((t) => `<option value="${t.lang || t.format_id}">${t.label || t.lang}</option>`)
+        .map((track) => `<option value="${escapeHtml(track.lang || track.format_id)}">${escapeHtml(track.label || track.lang)}</option>`)
         .join("");
       trackWrap.style.display = "block";
       const hintEl = $("#audioTrackHint");
@@ -354,7 +354,7 @@ function showLinkPreview(info) {
     <div class="row settings">
       <div style="display:grid;gap:2px;min-width:0">
         <span style="font-weight:600"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> ${t("home.linkReady")}</span>
-        <span class="muted">${info.title} · ${fmtDuration(info.duration)}${info.uploader ? " · " + info.uploader : ""}</span>
+        <span class="muted">${escapeHtml(info.title)} · ${fmtDuration(info.duration)}${info.uploader ? " · " + escapeHtml(info.uploader) : ""}</span>
       </div>
     </div>`;
 }
@@ -364,6 +364,7 @@ function showLinkError(message) {
   const box = $("#linkPreview");
   wrap.style.display = "flex";
   $("#qualityWrap").style.display = "none";
+  $("#audioTrackWrap").style.display = "none";
   linkInfoCache = null;
   box.innerHTML = `<span class="muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:14px;height:14px;vertical-align:-2px"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg> ${t("home.linkFail")}: ${message}</span>`;
 }
@@ -371,6 +372,7 @@ function showLinkError(message) {
 function hideLinkPreview() {
   $("#linkPreviewWrap").style.display = "none";
   $("#qualityWrap").style.display = "none";
+  $("#audioTrackWrap").style.display = "none";
   linkInfoCache = null;
 }
 
@@ -385,6 +387,7 @@ function onSourceChanged() {
     const box = $("#linkPreview");
     wrap.style.display = "flex";
     $("#qualityWrap").style.display = "none";
+    $("#audioTrackWrap").style.display = "none";
     linkInfoCache = null;
     box.innerHTML = `<span class="muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> ${t("home.localReady")}: ${fileName(value)}</span>`;
     return;
@@ -420,8 +423,8 @@ async function startClipping() {
       body: JSON.stringify({
         source,
         count: Number($("#count").value) || 5,
-        min_len: Number($("#minLen").value) || 15,
-        max_len: Number($("#maxLen").value) || 60,
+        min_len: 0,
+        max_len: 0,
         use_transcript: $("#useTranscript").checked,
         use_llm: $("#useLlm").checked,
         quality: $("#quality").value || "720p",
@@ -560,14 +563,13 @@ function renderProjectDetail() {
     const ready = Boolean(clip.files && clip.files.mp4);
     const status = ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`;
     return `<article class="clip">
-      ${thumb}
+      <button type="button" class="clip-open" data-edit="${clip.index}" aria-label="Buka ${escapeHtml(clip.title || 'klip')} di editor">${thumb}<span class="clip-open-hint">Putar &amp; edit</span></button>
       <div class="meta">
         <strong>${escapeHtml(clip.title || "Klip " + (clip.index + 1))}</strong>
         <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · skor ${(clip.score || 0).toFixed(2)}</span>
         <span>${status} <span class="badge">${clip.crop}</span></span>
       </div>
       <div class="actions">
-        <button class="icon-btn" data-preview="${clip.index}" ${ready ? "" : "disabled style='opacity:.4'"}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${t("common.preview")}</button>
         <button class="icon-btn" data-edit="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>${t("common.edit")}</button>
         <button class="icon-btn" data-render="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7M21 3v6h-6"/></svg>${t("common.render")}</button>
         <button class="icon-btn" data-remove="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"/></svg>${t("common.delete")}</button>
@@ -594,16 +596,6 @@ function renderProjectDetail() {
       } catch (error) {
         toast(error.message, "error");
       }
-    })
-  );
-  grid.querySelectorAll("[data-preview]").forEach((node) =>
-    node.addEventListener("click", () => {
-      const clip = state.project.clips.find((c) => c.index === Number(node.dataset.preview));
-      if (!clip || !clip.files || !clip.files.mp4) return toast(t("common.render"), "error");
-      openPanel(`
-        <div class="spread"><h3>${escapeHtml(clip.title || "Klip")}</h3><button class="mini" data-close>${t("common.close")}</button></div>
-        <video controls autoplay src="${mediaUrl(clip.files.mp4)}"></video>
-        <p class="muted">${mediaUrl(clip.files.mp4)}</p>`);
     })
   );
 }
@@ -647,6 +639,7 @@ function closePanel() {
 /* ------------------------------------------------------------------ voice */
 
 function voiceLabel(id) {
+  if (id === "supertonic-3-int8") return "Supertonic 3 · 10 suara";
   const fake = { id, size_mb: null, note: "", langs: [] };
   if (id.includes("id_ID")) fake.langs = ["id"];
   else if (id.includes("en_")) fake.langs = ["en"];
@@ -656,8 +649,12 @@ function voiceLabel(id) {
 function renderVoice() {
   const select = $("#ttsVoice");
   const language = $("#ttsLang").value;
-  const available = (state.voices.piper || []).filter(id => id.includes(language === "id" ? "id_ID" : "en_"));
-  select.innerHTML = available.map((id) => `<option value="${id}">${voiceLabel(id)}</option>`).join("");
+  const installed = state.voices.piper || [];
+  const available = installed.filter(id => id.includes(language === "id" ? "id_ID" : "en_"));
+  if (installed.includes("supertonic-3-int8")) {
+    for (let sid = 0; sid < 10; sid++) available.push(`supertonic-3-int8:${sid}`);
+  }
+  select.innerHTML = available.map((id) => `<option value="${escapeHtml(id)}">${id.startsWith("supertonic-3-int8:") ? `Supertonic 3 · Suara ${Number(id.split(":")[1]) + 1}` : voiceLabel(id)}</option>`).join("");
   select.disabled = available.length === 0;
   const ttsBtn = $("#ttsBtn");
   if (ttsBtn) {
@@ -720,6 +717,7 @@ function modelName(model) {
     const voice = Object.entries(voices).find(([key]) => id.includes(key))?.[1] || "";
     return `Suara ${lang}${voice ? ` ${voice}` : ""} — ${model.size_mb ?? "?"} MB`;
   }
+  if (id === "supertonic-3-int8") return `Supertonic 3 · 10 suara ID/EN — ${model.size_mb ?? "?"} MB`;
   if (id === "chatterbox-base") return `Kloning Suara EN — ${model.size_mb ?? "?"} MB`;
   if (id === "chatterbox-id-finetune") return `Kloning Suara Indonesia — ${model.size_mb ?? "?"} MB`;
   if (id === "zipvoice-zh-en") return `Kloning Ringan EN — ${model.size_mb ?? "?"} MB`;
@@ -729,7 +727,10 @@ function modelName(model) {
 }
 
 function kindName(kind) {
-  return kind === "asr" ? t("models.kindAsr") : kind === "tts" ? t("models.kindTts") : t("models.kindClone");
+  return kind === "asr" ? t("models.kindAsr")
+    : kind === "tts" ? t("models.kindTts")
+    : kind === "image" ? "Gambar"
+    : t("models.kindClone");
 }
 
 async function renderModels() {
@@ -794,7 +795,7 @@ async function renderSettings() {
   const asrIds = ["whisper-tiny-int8", "whisper-base-int8", "whisper-small-int8", "whisper-medium-int8"];
   $("#setAsr").innerHTML = asrIds
     .map((id) => `<option value="${id}" ${settings.asr_model === id ? "selected" : ""}>${voiceLabel(id)}</option>`).join("");
-  const ttsIds = state.voices.piper.filter((id) => id.includes("id_ID"));
+  const ttsIds = state.voices.piper.filter((id) => id.includes("id_ID") || id === "supertonic-3-int8");
   $("#setTts").innerHTML = (ttsIds.length ? ttsIds : [""]).map((id) => id
     ? `<option value="${id}" ${settings.tts_voice_id === id ? "selected" : ""}>${voiceLabel(id)}</option>`
     : `<option value="">— belum ada —</option>`).join("");
@@ -915,7 +916,7 @@ function wizardShowRecommend() {
   const recTts = wizard.models.find((m) => m.id === tier.tts);
   $("#wizardBody").innerHTML = `
     <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${recAsr ? modelName(recAsr) : tier.asr}</strong> + <strong>${recTts ? modelName(recTts) : tier.tts}</strong></p>
-    <p class="muted">FFmpeg, transkripsi, Piper, dan runtime ZipVoice termasuk paket Windows. Unduh model sesuai fitur yang dibutuhkan. AI teks lokal dan gambar lokal memerlukan server terpisah; lihat Pengaturan.</p>
+    <p class="muted">FFmpeg, transkripsi, Piper, dan runtime ZipVoice termasuk paket Windows. Unduh model sesuai fitur yang dibutuhkan. Model gambar lokal SDXS-512 dapat dipasang kapan saja dari Studio gambar.</p>
     ${rows}`;
   $("#wizardActions").innerHTML = `
     <button class="primary" id="wzInstall">Unduh & pasang</button>

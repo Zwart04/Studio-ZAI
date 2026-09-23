@@ -236,8 +236,8 @@ def captions_for_range(
 def generate_clips(
     project: projects.Project,
     count: int = 5,
-    min_len: float = highlight.DEFAULT_MIN_LEN,
-    max_len: float = highlight.DEFAULT_MAX_LEN,
+    min_len: float = 0.0,
+    max_len: float = 0.0,
     use_llm: bool = False,
     use_transcript: bool = True,
     job: Job | None = None,
@@ -247,12 +247,14 @@ def generate_clips(
         raise FileNotFoundError("media sumber tidak ditemukan")
     _floor, _ceiling = highlight.clip_count_targets(project.duration or 0, count)
 
-    transcript = None
-    if use_transcript and transcribe.asr_available():
+    transcript = project.transcript if use_transcript and project.transcript.get("segments") else None
+    if use_transcript and transcript is None and transcribe.asr_available():
         try:
             transcript = ensure_transcript(project, job=job)
-        except RuntimeError:
-            transcript = None
+        except RuntimeError as exc:
+            _report(job, 75, "transkripsi gagal", f"memakai analisis audio saja: {exc}")
+    if use_transcript and transcript is None and not transcribe.asr_available():
+        _report(job, 75, "model transkrip belum siap", "memakai analisis audio saja")
 
     _report(job, 78, "menganalisis", "mencari momen terbaik")
     candidates = highlight.analyze_media(
@@ -287,7 +289,7 @@ def generate_clips(
             end=min(candidate.end, project.duration or candidate.end),
             title=f"{project.title} · {candidate.title or f'Klip {position + 1}'}",
             score=candidate.score,
-            reason=candidate.reason,
+            reason=("tanpa transkrip; " if use_transcript and transcript is None else "") + candidate.reason,
             crop=settings.get("crop", projects.DEFAULT_CROP),
         )
         if transcript:

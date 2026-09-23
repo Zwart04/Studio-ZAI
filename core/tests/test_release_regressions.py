@@ -7,7 +7,7 @@ import pytest
 import yt_dlp
 
 from studiozai import config, projects, server, service
-from studiozai.pipeline import crop, download, timeline
+from studiozai.pipeline import crop, download, highlight, timeline
 from studiozai.utils import ffmpeg
 
 
@@ -20,7 +20,8 @@ def test_requested_audio_survives_quality_selection(monkeypatch, tmp_path, quali
             formats = [
                 {"format_id": "v480", "height": 480, "width": 854, "vcodec": "avc1", "acodec": "none", "ext": "mp4", "url": "https://example.com/v480"},
                 {"format_id": "v1080", "height": 1080, "width": 1920, "vcodec": "avc1", "acodec": "none", "ext": "mp4", "url": "https://example.com/v1080"},
-                {"format_id": "id", "vcodec": "none", "acodec": "mp4a", "language": "id-ID", "ext": "m4a", "url": "https://example.com/id"},
+                {"format_id": "id-low", "vcodec": "none", "acodec": "mp4a", "language": "id-ID", "ext": "m4a", "abr": 48, "url": "https://example.com/id-low"},
+                {"format_id": "id-high", "vcodec": "none", "acodec": "mp4a", "language": "id-ID", "ext": "m4a", "abr": 160, "url": "https://example.com/id-high"},
                 {"format_id": "en", "vcodec": "none", "acodec": "mp4a", "language": "en", "ext": "m4a", "url": "https://example.com/en"},
             ]
             result = list(self.format_selector({"formats": formats, "has_merged_format": False, "incomplete_formats": False}))
@@ -36,7 +37,7 @@ def test_requested_audio_survives_quality_selection(monkeypatch, tmp_path, quali
     download.download("https://example.com/video", tmp_path, format_id=download.pick_format_id([], quality), audio_lang="id")
     assert selections
     streams = selections[0].get("requested_formats", selections)
-    assert [f["format_id"] for f in streams if f["acodec"] != "none"] == ["id"]
+    assert [f["format_id"] for f in streams if f["acodec"] != "none"] == ["id-high"]
     if quality == "480p":
         assert next(f for f in streams if f["vcodec"] != "none")["height"] == 480
     with pytest.raises(RuntimeError, match="tidak tersedia"):
@@ -58,6 +59,27 @@ def test_caption_action_updates_saved_clip(monkeypatch, tmp_path):
     result = server.generate_clip_captions(project.id, 0)
     assert result["captions"][0]["start"] == 0.5
     assert projects.load_project(project.id).clip(0).captions[0]["text"] == "Halo Indonesia"
+
+
+def test_cached_transcript_guides_clips_when_asr_model_is_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "_base_dir", lambda: tmp_path)
+    source = tmp_path / "source.mp4"
+    source.touch()
+    project = projects.Project.create("Speaker", source=str(source), language="id")
+    project.duration = 120
+    project.transcript = {"segments": [{"start": 10, "end": 30, "text": "Speaker pertama ini bagus"}]}
+    project.save()
+    monkeypatch.setattr(service.transcribe, "asr_available", lambda: False)
+    seen = []
+
+    def analyze(*args, **kwargs):
+        seen.append(kwargs.get("transcript"))
+        return [highlight.ClipCandidate(10, 30, 1.0, "awal topik")]
+
+    monkeypatch.setattr(highlight, "analyze_media", analyze)
+    clips = service.generate_clips(project, count=1)
+    assert seen == [project.transcript]
+    assert clips[0].captions[0]["text"] == "Speaker pertama ini bagus"
 
 
 @pytest.mark.skipif(not ffmpeg.ffmpeg_available(), reason="FFmpeg required")

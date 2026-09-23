@@ -20,7 +20,7 @@ from typing import Any
 
 from ..utils import ffmpeg
 from . import crop as crop_mod
-from .render import encoder_args, escape_filter_path
+from .render import AUDIO_ENCODE_ARGS, can_copy_audio, encoder_args, escape_filter_path
 
 ProgressCb = Callable[[float, str], None]
 
@@ -161,7 +161,13 @@ def render_timeline(
 
     # ------------------------------------------------------------------ audio
     audio_labels: list[str] = []
-    if _has_audio(source):
+    copy_source_audio = (
+        abs(original_volume - 1.0) < 1e-6
+        and not track(timeline, "audio")
+        and not (voice_path and Path(voice_path).exists())
+        and can_copy_audio(source)
+    )
+    if _has_audio(source) and not copy_source_audio:
         filters.append(f"[0:a]volume={max(0.0, original_volume):.3f}[abase]")
         audio_labels.append("[abase]")
 
@@ -212,10 +218,7 @@ def render_timeline(
         # pratinjau cukup diperkecil tanpa mengubah graf filternya.
         args += ["-s", f"{scale_to[0]}x{scale_to[1]}"]
     args += [
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
+        *(["-c:a", "copy"] if copy_source_audio else AUDIO_ENCODE_ARGS),
         *encoder_args(encoder),
         "-t",
         f"{duration:.3f}",

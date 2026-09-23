@@ -1,3 +1,17 @@
+# v1.7.0 — 23 September 2026
+
+- Perbaiki jalur model Android yang mengirim objek Flutter ke isolate, validasi arsip/checksum, serta fallback pembuatan klip ketika hasil transkripsi tidak menghasilkan rekomendasi.
+- Mode klip adaptif mengutamakan awal topik/ulasan produk dan memilih akhir pada batas ucapan; opsi durasi minimum/maksimum yang membingungkan dihapus dari alur utama.
+- Pertahankan kualitas audio sumber saat tidak ada efek tambahan dan naikkan kualitas AAC ketika audio harus dicampur.
+- Tata ulang beranda, formulir sumber/bahasa/track/audio, editor dengan pemutar langsung, dan jarak antarkontrol dalam palet gelap netral.
+- Tambahkan gambar lokal SDXS-512 pada Windows dan Android ARM64, model terpisah dengan SHA-256; mode cloud tetap opsional.
+- Tambahkan Supertonic 3 int8 dengan sepuluh karakter suara ID/EN di desktop dan Android, tanpa mengubah cakupan kloning ZipVoice.
+- Perbarui logo README, tangkapan layar, GIF UI, dan dokumentasi batas fitur per platform.
+
+[Validasi dan batasan](RELEASE-1.7.0.md).
+
+---
+
 # v1.6.0 — 23 September 2026
 
 - Unduhan Android dengan profil stream baru, retry terbatas, progres byte, dan track bahasa tetap.

@@ -7,7 +7,6 @@ import '../models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
-import '../widgets/preview_player.dart';
 import 'editor_screen.dart';
 import '../widgets/source_editor.dart';
 
@@ -48,9 +47,12 @@ class ClipsScreen extends StatelessWidget {
                   Text(project.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-                  Text('${project.clips.length} klip · ${formatClock(project.duration)}',
-                      style: const TextStyle(color: Tokens.textDim, fontSize: 13)),
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w600)),
+                  Text(
+                      '${project.clips.length} klip · ${formatClock(project.duration)}',
+                      style:
+                          const TextStyle(color: Tokens.textDim, fontSize: 13)),
                 ],
               ),
             ),
@@ -61,22 +63,56 @@ class ClipsScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height:12),
-        OutlinedButton.icon(onPressed: state.jobState == JobState.running ? null : ()=>openSourceEditor(context,state), icon:const Icon(Icons.content_cut),label:const Text('Ambil bagian video sumber')),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+            onPressed: state.jobState == JobState.running
+                ? null
+                : () => openSourceEditor(context, state),
+            icon: const Icon(Icons.content_cut),
+            label: const Text('Ambil bagian video sumber')),
+        if (project.processingWarning.isNotEmpty) ...[
+          const SizedBox(height: Tokens.space4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(Tokens.space4),
+            decoration: BoxDecoration(
+              color: Tokens.surface2,
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 19, color: Tokens.textDim),
+              const SizedBox(width: Tokens.space3),
+              Expanded(
+                  child: Text(project.processingWarning,
+                      style: const TextStyle(fontSize: 13, height: 1.45))),
+            ]),
+          ),
+        ],
         if (state.jobState == JobState.running) ...[
           const SizedBox(height: Tokens.space3),
-          ProgressStrip(progress: state.jobProgress, label: '${state.jobStage} ${state.jobMessage}'),
+          ProgressStrip(
+              progress: state.jobProgress,
+              label: '${state.jobStage} ${state.jobMessage}'),
         ],
         const SizedBox(height: Tokens.space4),
         if (project.clips.isEmpty)
-          EmptyState(state.translate('clips.empty'))
+          SectionCard(
+            title: state.jobState == JobState.running
+                ? 'Sedang membuat klip'
+                : 'Belum ada klip',
+            child: Text(
+                state.jobState == JobState.running
+                    ? 'Video sumber tersimpan. Klip akan muncul setelah pemrosesan selesai.'
+                    : 'Video sumber tetap tersimpan. Ambil bagian video secara manual tanpa mengunduhnya lagi.',
+                style: const TextStyle(color: Tokens.textDim, height: 1.5)),
+          )
         else
           ...project.clips.map((clip) => Padding(
                 padding: const EdgeInsets.only(bottom: Tokens.space4),
                 child: ClipTile(
                   clip: clip,
                   labels: labels,
-                  onPreview: () => _preview(context, clip),
                   onEdit: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => EditorScreen(state: state, clip: clip),
                   )),
@@ -85,7 +121,8 @@ class ClipsScreen extends StatelessWidget {
                       await state.renderClip(clip);
                     } catch (error) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text('$error')));
                       }
                     }
                   },
@@ -94,50 +131,6 @@ class ClipsScreen extends StatelessWidget {
                 ),
               )),
       ],
-    );
-  }
-
-  Future<void> _preview(BuildContext context, Clip clip) async {
-    final path = clip.files['mp4'];
-    if (path == null || !File(path).existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.translate('clips.renderFirst'))),
-      );
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Tokens.bgElevated,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(Tokens.space4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(clip.title.isEmpty ? 'Klip ${clip.index + 1}' : clip.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: Tokens.space3),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(Tokens.radius),
-                child: VideoPreview(path: path, onShare: () => _share(clip)),
-              ),
-              const SizedBox(height: Tokens.space3),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(state.translate('common.close')),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -173,18 +166,21 @@ class ClipsScreen extends StatelessWidget {
   Future<void> _share(Clip clip) async {
     final path = clip.files['mp4'];
     if (path == null || !File(path).existsSync()) return;
-    await SharePlus.instance.share(ShareParams(files: [XFile(path)], text: clip.title));
+    await SharePlus.instance
+        .share(ShareParams(files: [XFile(path)], text: clip.title));
   }
 
   Future<void> _export(BuildContext context, Project project) async {
     try {
       await state.exportProject();
       if (context.mounted && state.lastOutput != null) {
-        await SharePlus.instance.share(ShareParams(files: [XFile(state.lastOutput!)]));
+        await SharePlus.instance
+            .share(ShareParams(files: [XFile(state.lastOutput!)]));
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }

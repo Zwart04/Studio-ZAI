@@ -373,6 +373,44 @@
       }
     },
     {
+      "id": "supertonic-3-int8",
+      "kind": "tts",
+      "langs": ["id", "en"],
+      "platforms": ["desktop", "android"],
+      "tier": 1,
+      "size_mb": 123,
+      "license": "OpenRAIL-M",
+      "note": "Sepuluh karakter suara lokal untuk Indonesia dan Inggris. CPU, opsional setelah setup dasar.",
+      "homepage": "https://huggingface.co/Supertone/supertonic-3",
+      "download": {
+        "type": "archive",
+        "provider": "sherpa-onnx",
+        "name": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+        "sha256": "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427"
+      }
+    },
+    {
+      "id": "sdxs-512",
+      "kind": "image",
+      "langs": ["multi"],
+      "platforms": ["desktop", "android"],
+      "tier": 1,
+      "size_mb": 651,
+      "license": "OpenRAIL++",
+      "note": "Gambar lokal 512 × 512, satu langkah. Bobot 683 MB diunduh saat diperlukan; butuh RAM dan waktu proses sesuai perangkat.",
+      "homepage": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF",
+      "download": {
+        "type": "files",
+        "provider": "huggingface",
+        "files": [{
+          "name": "sdxs-512-tinySDdistilled_Q8_0.gguf",
+          "url": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF/resolve/3144d898d61492f8382ffcabec055733fc5b2a0e/sdxs-512-tinySDdistilled_Q8_0.gguf",
+          "sha256": "409ab23582ee074c6b9d5395784fc0741b0599fb9d138686c69087c71678eb6a"
+        }]
+      }
+    },
+    {
       "id": "piper-en_US-ljspeech-medium",
       "kind": "tts",
       "langs": [

@@ -1,56 +1,69 @@
-<p align="center"><img src="assets/brand-banner.svg" width="800" alt="Studio ZAI — Video. Voice. Images." /></p>
-<p align="center">A simple creative studio for Windows and Android.<br />Edit video, style captions, create voiceovers, and generate images.</p>
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.6.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/BUILD.md">Build guide</a></p>
+<p align="center"><img src="assets/brand-banner.svg" width="840" alt="Studio ZAI — Video, Voice, Images" /></p>
 
-![Studio ZAI editor](docs/screenshots/04-editor.jpg)
+<p align="center">A simple video studio for Windows and Android. Find moments in long videos, edit them directly, and make captions, voiceovers, and images with local models.</p>
+
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.7.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/FEATURES.md">Platform features</a> · <a href="docs/MODELS.md">Models</a></p>
+
+![Studio ZAI editor with a playable video, captions, and timeline](docs/screenshots/04-editor.jpg)
+
+## A studio for video, voice, and images
+
+**Auto-clips and editing.** Import a local file or supported URL, select the actual source audio track, and let the adaptive clip selector find the start of a topic or product review. The source stays with the project so you can choose another range without downloading it again. The editor plays the video inline and supports trim, split, original/9:16/1:1/16:9 canvas, timed captions, text, media, and music. Pick from 24 text styles or save your own.
+
+**Local voice.** Piper voices and ten Supertonic 3 voices read Indonesian and English text. Record from a microphone or import a reference for ZipVoice cloning in English/Mandarin; Indonesian voice cloning is not part of the standard package. Online OpenAI voices are optional.
+
+**Local images.** SDXS-512 generates 512×512 images on Windows and ARM64 Android after a separate 683 MB model download. Prompts stay on device in local mode. Cloud image generation remains optional.
+
+The installed models work without an API key. Downloading a model or a video URL needs internet, while editing imported files and running local models can be offline. Optional OpenAI, Anthropic, DeepSeek, and compatible endpoints support AI tasks where configured.
 
 ## Download
 
-- [Windows x64 ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/StudioZAI-1.6.0-windows-x64.zip): extract the entire folder, then run StudioZAI.exe. FFmpeg, speech recognition, Piper, and ZipVoice runtimes are bundled; download models separately.
-- [Android universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/StudioZAI-1.6.0-android.apk): one package for ARM64, ARMv7, and x86_64, Android 8+.
-- [Checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/SHA256SUMS.txt) · [Release validation](docs/RELEASE-1.6.0.md)
+| Platform | Package | Notes |
+| :-- | :-- | :-- |
+| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-windows-x64.zip) | Extract the whole folder and run **StudioZAI.exe**. FFmpeg and AI runtimes are bundled; model weights download separately. |
+| Android 8+ | [One universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-android.apk) | Local image inference requires ARM64. |
 
-## Create in one place
+[Release validation](docs/RELEASE-1.7.0.md) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/SHA256SUMS.txt) · [Build guide](docs/BUILD.md)
 
-**Video.** Import a file or supported URL. Select a source audio track, generate clips, trim and split, keep the original aspect ratio, edit captions, and add text, media, or music. Downloaded source video stays in the project for later selections without another download. Save your own typography templates alongside 24 built-in styles.
+## Get started
 
-**Voice.** Choose Indonesian or English Piper voices, use 13 optional OpenAI voices, or record/upload a reference for ZipVoice cloning. ZipVoice supports English/Mandarin and needs the matching reference transcript; Indonesian cloning is not available in the standard package.
+1. Complete the initial setup and install a speech recognition model. Whisper Base is a good starting point; Small may improve Indonesian accuracy if the device has enough RAM. Add voice and image models only when needed.
+2. Paste a link or choose a local video. Put **content language** beside **source audio track**; the transcript language does not translate the audio. Android accepts public YouTube links and direct video URLs. Import a downloaded file for TikTok/Instagram on Android; desktop uses sites supported by yt-dlp.
+3. Choose a clip count, generate, and open the project. Play the video immediately in the editor, refine its range and captions, then export. Use **Take a range from source** to create another clip without downloading again.
 
-**Images.** Enter a prompt and use OpenAI or connect your own stable-diffusion.cpp server. Local image generation requires a separately installed server/model; it is not a native Android image engine. Mobile can use an online provider or your HTTPS server.
+A **transcript** is speech text used to find moments; **captions** are timed text shown on the video. If the source already contains burned-in text, disable or reposition the extra captions. Supertonic offers ten voice characters for Indonesian/English synthesis; it does not clone a speaker.
 
-**Optional AI.** Configure OpenAI, Anthropic, DeepSeek, or a compatible/Ollama text endpoint to select moments from transcripts. API keys are protected with Windows account encryption / Android secure storage. A ChatGPT app subscription does not provide API credit.
+## See the app
 
-![A short tour of the actual desktop UI](docs/screenshots/studio-zai-demo.gif)
+![A short tour of the Studio ZAI interface](docs/screenshots/studio-zai-demo.gif)
 
-## Getting started
+| Home | Voice | Images |
+| :--: | :--: | :--: |
+| ![Home and clip options](docs/screenshots/01-home.jpg) | ![Voice selection and recording](docs/screenshots/03-voice.jpg) | ![Local image generation](docs/screenshots/07-images.jpg) |
 
-1. Complete setup and download the models you need. Whisper Small is recommended for Indonesian accuracy when hardware permits; Tiny prioritizes speed.
-2. Import video. Transcription language does not translate audio: choose an available Indonesian dub track when needed.
-3. Edit a clip, choose a caption style, play immediately, and export. Edits refresh the preview automatically. Use **Take a range from source video** to create another clip from the stored source.
+These screenshots show the desktop web UI with documentation media. The [narrow home](docs/screenshots/05-mobile-home.jpg) and [narrow editor](docs/screenshots/09-mobile-editor.jpg) test responsive web layout, not the APK. The GIF is a UI tour; release downloads contain no demo MP4.
 
-Transcripts are speech text; captions place that text in time. Rendered captions are no longer duplicated by an extra player track. Text already burned into the source cannot be removed: disable additional captions or move them.
-
-## Scope and verification
-
-This release includes bounded Android stream retries, long-video progress fixes, independent duplicated projects, safer cache cleanup, reusable source video, custom typography, and optional image/text/speech API integrations. The full 78-minute Indonesian audio source was downloaded using the Android Dart downloader on Windows; multi-chunk transcription was tested beyond minute 60. Python/Flutter tests and package checks are documented in the [release report](docs/RELEASE-1.6.0.md).
-
-Physical Android devices, microphone hardware, and paid cloud providers were not tested live for this release. YouTube restrictions and server changes may still affect downloads. Keep Android open during long jobs. Model speed, memory use, and transcription quality vary by device; no claim is made that image diffusion runs well on every phone.
-
-Screenshots show the desktop web UI with synthetic demo media. The responsive mobile screenshot is not an APK screenshot. No demo MP4 is included in release downloads.
+The release was tested with a real 80.5-minute speaker review for topic boundaries and audio-preserving export. [The validation report](docs/RELEASE-1.7.0.md) gives the exact coverage and limits. A physical Android device was not available for end-to-end testing in this session. Image generation speed and memory use depend on the device; ARM32 does not have a native local image engine. Private, region-blocked, or login-only video URLs may fail.
 
 ## Development
 
-```bash
-pip install -e "core[media,asr,tts,desktop,dev]"
-studiozai serve
-python -m pytest core/tests
-# Android, from android/app:
+```powershell
+git clone https://github.com/Zwart04/Studio-ZAI.git
+cd Studio-ZAI
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,desktop,dev]"
+.venv/Scripts/python.exe -m studiozai serve
+.venv/Scripts/python.exe -m pytest core/tests
+```
+
+```powershell
+cd android/app
 flutter pub get
 flutter analyze
 flutter test
 flutter build apk --release
 ```
 
-[Models and licensing](docs/MODELS.md) · [AI setup](docs/AI.md) · [Feature matrix](docs/FEATURES.md) · [Architecture](docs/ARCHITECTURE.md)
+[Models and licenses](docs/MODELS.md) · [AI setup](docs/AI.md) · [Features by platform](docs/FEATURES.md) · [Architecture](docs/ARCHITECTURE.md)
 
-Application code: [MIT](LICENSE). Dependencies, voice weights, and fonts retain their own licenses. Workflow references: [openshorts](https://github.com/mutonby/openshorts), [OpenCreator](https://github.com/krillinai/OpenCreator).
+Application code: [MIT](LICENSE). Dependencies, fonts, and model weights retain their respective licenses. Workflow references: [openshorts](https://github.com/mutonby/openshorts) and [OpenCreator](https://github.com/krillinai/OpenCreator).

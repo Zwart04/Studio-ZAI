@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:async';
 
 import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +11,22 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models.dart';
 import 'model_registry.dart';
+
+// Only plain paths and a SendPort cross the isolate boundary. An Isolate.run
+// closure created inside download() could retain its progress callback and the
+// Flutter widget tree that owns it, which is not sendable on Android.
+Future<void> _extractArchiveEntry(List<Object> request) async {
+  final source = request[0] as String;
+  final destination = request[1] as String;
+  final reply = request[2] as SendPort;
+  try {
+    await ModelManager._(Directory(destination))
+        ._extractWorker(File(source), Directory(destination));
+    reply.send(<String>['ok']);
+  } catch (error) {
+    reply.send(<String>['error', error.toString()]);
+  }
+}
 
 /// Detects the device and manages on-demand model downloads (resume + verify).
 class ModelManager {
@@ -34,8 +52,24 @@ class ModelManager {
     return dir;
   }
 
-  bool isInstalled(ModelInfo model) => File('${dirFor(model.id).path}/.installed').existsSync() &&
-      (model.id != 'zipvoice-zh-en' || File('${dirFor(model.id).path}/vocos_24khz.onnx').existsSync());
+  bool isInstalled(ModelInfo model) {
+    final directory = dirFor(model.id);
+    if (!File('${directory.path}/.installed').existsSync()) return false;
+    if (model.id == 'zipvoice-zh-en') {
+      return File('${directory.path}/vocos_24khz.onnx').existsSync();
+    }
+    if (model.id == 'supertonic-3-int8') {
+      return ModelRegistry.supertonicFiles.every((name) {
+        final file = fileWith(model, [name]);
+        return file != null && file.lengthSync() > 0;
+      });
+    }
+    if (model.id == 'sdxs-512') {
+      final file = fileWith(model, ['.gguf']);
+      return file != null && file.lengthSync() > 0;
+    }
+    return true;
+  }
 
   double installedSizeMb(String modelId) {
     final dir = Directory('${modelsDir.path}/$modelId');
@@ -56,14 +90,16 @@ class ModelManager {
     return models;
   }
 
-  List<ModelInfo> byKind(String kind) => catalog().where((m) => m.kind == kind).toList();
+  List<ModelInfo> byKind(String kind) =>
+      catalog().where((m) => m.kind == kind).toList();
 
   Future<DeviceReport> deviceReport() async {
     final android = await DeviceInfoPlugin().androidInfo;
     var ramGb = 0.0;
     var diskFreeGb = 0.0;
     try {
-      final info = await _channel.invokeMapMethod<String, dynamic>('memoryInfo');
+      final info =
+          await _channel.invokeMapMethod<String, dynamic>('memoryInfo');
       ramGb = (info?['totalRam'] as num?)?.toDouble() ?? 0;
       diskFreeGb = (info?['availDisk'] as num?)?.toDouble() ?? 0;
     } on PlatformException {
@@ -71,7 +107,8 @@ class ModelManager {
     }
     return DeviceReport(
       model: '${android.manufacturer} ${android.model}',
-      androidVersion: 'Android ${android.version.release} (SDK ${android.version.sdkInt})',
+      androidVersion:
+          'Android ${android.version.release} (SDK ${android.version.sdkInt})',
       ramGb: ramGb,
       diskFreeGb: diskFreeGb,
       abis: android.supportedAbis,
@@ -81,12 +118,15 @@ class ModelManager {
   /// Download a model with HTTP range resume, then extract archives.
   /// Returns normally only when the model is fully verified + marked installed.
   /// Any failure removes partial files so a retry starts clean.
-  Future<void> download(ModelInfo model, void Function(double, String) onProgress) async {
+  Future<void> download(
+      ModelInfo model, void Function(double, String) onProgress) async {
     final dir = dirFor(model.id);
     final rawName = model.url.split('/').last;
     final target = File('${dir.path}/$rawName');
 
-    if (model.id == 'zipvoice-zh-en' && File('${dir.path}/.installed').existsSync() && fileWith(model, ['encoder.int8.onnx']) != null) {
+    if (model.id == 'zipvoice-zh-en' &&
+        File('${dir.path}/.installed').existsSync() &&
+        fileWith(model, ['encoder.int8.onnx']) != null) {
       await _zipVocoder(dir, onProgress);
       onProgress(100, 'terpasang');
       return;
@@ -94,6 +134,7 @@ class ModelManager {
 
     try {
       await _fetch(model, target, onProgress);
+      await _verifyChecksum(model, target);
 
       if (model.archive) {
         onProgress(96, 'mengekstrak ${model.id}');
@@ -123,7 +164,8 @@ class ModelManager {
         _verifySingleFile(model, target);
       }
       if (model.id == 'zipvoice-zh-en') await _zipVocoder(dir, onProgress);
-      File('${dir.path}/.installed').writeAsStringSync(model.toJson().toString());
+      File('${dir.path}/.installed')
+          .writeAsStringSync(model.toJson().toString());
       onProgress(100, 'terpasang');
     } catch (e) {
       // Jangan pernah menandai terpasang bila gagal. Berkas setengah unduh
@@ -136,12 +178,22 @@ class ModelManager {
     }
   }
 
-  Future<void> _zipVocoder(Directory dir, void Function(double, String) onProgress) async {
-    final vocoder = ModelInfo(id: 'zipvoice-vocoder', kind: 'clone', langs: ['en'], sizeMb: 54, license: 'MIT', note: 'Vocoder ZipVoice', archive: false,
-      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx');
+  Future<void> _zipVocoder(
+      Directory dir, void Function(double, String) onProgress) async {
+    final vocoder = ModelInfo(
+        id: 'zipvoice-vocoder',
+        kind: 'clone',
+        langs: ['en'],
+        sizeMb: 54,
+        license: 'MIT',
+        note: 'Vocoder ZipVoice',
+        archive: false,
+        url:
+            'https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx');
     final target = File('${dir.path}/vocos_24khz.onnx');
     if (await target.exists() && await target.length() > 1024 * 1024) return;
-    await _fetch(vocoder, target, (p, m) => onProgress(97 + p * .02, 'Vocoder · $m'));
+    await _fetch(
+        vocoder, target, (p, m) => onProgress(97 + p * .02, 'Vocoder · $m'));
     _verifySingleFile(vocoder, target);
   }
 
@@ -152,21 +204,25 @@ class ModelManager {
   /// "unduhan selesai tapi gagal diekstrak, lalu diklik Unduh lagi"). Dulu itu
   /// dilempar sebagai error "HTTP 416" dan pengguna terjebak mengulang selamanya;
   /// sekarang berkas dianggap lengkap dan proses lanjut ke ekstrak.
-  Future<void> _fetch(ModelInfo model, File target, void Function(double, String) onProgress) async {
+  Future<void> _fetch(ModelInfo model, File target,
+      void Function(double, String) onProgress) async {
     for (var attempt = 0; attempt < 2; attempt++) {
       final existing = target.existsSync() ? target.lengthSync() : 0;
       final request = http.Request('GET', Uri.parse(model.url));
       if (existing > 0) request.headers['Range'] = 'bytes=$existing-';
 
-      final response = await request.send().timeout(const Duration(seconds: 30));
+      final response =
+          await request.send().timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 416) {
         await response.stream.drain<void>();
-        final remoteSize = int.tryParse((response.headers['content-range'] ?? '').split('/').last);
+        final remoteSize = int.tryParse(
+            (response.headers['content-range'] ?? '').split('/').last);
         if (remoteSize == null || remoteSize != existing) {
           if (target.existsSync()) target.deleteSync();
           if (attempt == 0) continue;
-          throw Exception('Ukuran unduhan tidak cocok dengan server. Coba lagi.');
+          throw Exception(
+              'Ukuran unduhan tidak cocok dengan server. Coba lagi.');
         }
         if (existing == 0) {
           throw Exception('Unduhan ditolak server (HTTP 416). Coba lagi.');
@@ -192,18 +248,21 @@ class ModelManager {
           } catch (_) {}
           continue;
         }
-        throw Exception('Unduhan gagal (HTTP ${response.statusCode}). Cek koneksi lalu coba lagi.');
+        throw Exception(
+            'Unduhan gagal (HTTP ${response.statusCode}). Cek koneksi lalu coba lagi.');
       }
 
       // Server menolak resume (200 padahal kita minta lanjut) -> mulai dari nol.
       final resumed = response.statusCode == 206 && existing > 0;
       final total = (response.contentLength ?? 0) + (resumed ? existing : 0);
-      final sink = target.openWrite(mode: resumed ? FileMode.append : FileMode.write);
+      final sink =
+          target.openWrite(mode: resumed ? FileMode.append : FileMode.write);
       var received = resumed ? existing : 0;
       var buffered = 0;
       final progressClock = Stopwatch()..start();
       try {
-        await for (final chunk in response.stream.timeout(const Duration(seconds: 60))) {
+        await for (final chunk
+            in response.stream.timeout(const Duration(seconds: 60))) {
           sink.add(chunk);
           received += chunk.length;
           buffered += chunk.length;
@@ -220,7 +279,9 @@ class ModelManager {
       } finally {
         await sink.close();
       }
-      if (total > 0 && received != total) throw Exception('Unduhan belum lengkap. Coba lagi untuk melanjutkan.');
+      if (total > 0 && received != total) {
+        throw Exception('Unduhan belum lengkap. Coba lagi untuk melanjutkan.');
+      }
       return;
     }
   }
@@ -229,21 +290,36 @@ class ModelManager {
   void _verifyExtracted(ModelInfo model, Directory tmpDir) {
     final files = tmpDir.listSync(recursive: true).whereType<File>().toList();
     if (files.isEmpty) {
-      throw Exception('Hasil ekstrak kosong — kemungkinan unduhan belum lengkap. Coba lagi.');
+      throw Exception(
+          'Hasil ekstrak kosong — kemungkinan unduhan belum lengkap. Coba lagi.');
     }
     final names = files.map((f) => f.path.toLowerCase()).join('\n');
-    final looksModel = names.contains('.onnx') || names.contains('.bin') || names.contains('tokens.txt') || names.contains('.gguf') || names.contains('.json');
+    final looksModel = names.contains('.onnx') ||
+        names.contains('.bin') ||
+        names.contains('tokens.txt') ||
+        names.contains('.gguf') ||
+        names.contains('.json');
     if (!looksModel) {
-      throw Exception('Isi arsip tidak dikenali sebagai model (${files.length} file). Coba lagi.');
+      throw Exception(
+          'Isi arsip tidak dikenali sebagai model (${files.length} file). Coba lagi.');
     }
-    bool has(String suffix) => files.any((f) => f.path.endsWith(suffix) && f.lengthSync() > 0);
+    bool has(String suffix) =>
+        files.any((f) => f.path.endsWith(suffix) && f.lengthSync() > 0);
     if (model.id.startsWith('whisper-') || model.kind == 'clone') {
       if (!(has('encoder.onnx') || has('encoder.int8.onnx')) ||
-          !(has('decoder.onnx') || has('decoder.int8.onnx')) || !has('tokens.txt')) {
-        throw Exception('Model tidak lengkap: encoder, decoder, atau tokens tidak ditemukan.');
+          !(has('decoder.onnx') || has('decoder.int8.onnx')) ||
+          !has('tokens.txt')) {
+        throw Exception(
+            'Model tidak lengkap: encoder, decoder, atau tokens tidak ditemukan.');
       }
-    } else if (model.kind == 'tts' && (!has('.onnx') || !has('tokens.txt'))) {
-      throw Exception('Model suara tidak lengkap: ONNX atau tokens tidak ditemukan.');
+    } else if (model.id == 'supertonic-3-int8' &&
+        ModelRegistry.supertonicFiles.any((name) => !has(name))) {
+      throw Exception('Model Supertonic tidak lengkap. Unduh ulang.');
+    } else if (model.kind == 'tts' &&
+        model.id != 'supertonic-3-int8' &&
+        (!has('.onnx') || !has('tokens.txt'))) {
+      throw Exception(
+          'Model suara tidak lengkap: ONNX atau tokens tidak ditemukan.');
     }
   }
 
@@ -298,7 +374,10 @@ class ModelManager {
     for (final entity in dir.listSync()) {
       if (entity is! File) continue;
       final name = entity.path.toLowerCase();
-      final isArchive = name.endsWith('.zip') || name.endsWith('.tar.bz2') || name.endsWith('.tar.gz') || name.endsWith('.tgz');
+      final isArchive = name.endsWith('.zip') ||
+          name.endsWith('.tar.bz2') ||
+          name.endsWith('.tar.gz') ||
+          name.endsWith('.tgz');
       if (isArchive && (keep == null || !entity.path.endsWith(keep))) {
         try {
           entity.deleteSync();
@@ -313,7 +392,8 @@ class ModelManager {
       throw Exception('Berkas hasil unduhan kosong. Coba lagi.');
     }
     final minBytes = model.id == 'silero-vad' ? 500 * 1024 : 1024 * 1024;
-    if (target.lengthSync() < minBytes && model.sizeMb * 1024 * 1024 > minBytes) {
+    if (target.lengthSync() < minBytes &&
+        model.sizeMb * 1024 * 1024 > minBytes) {
       final actualKb = (target.lengthSync() / 1024).round();
       try {
         target.deleteSync();
@@ -322,15 +402,50 @@ class ModelManager {
     }
   }
 
+  Future<void> _verifyChecksum(ModelInfo model, File target) async {
+    final expected = model.sha256?.toLowerCase();
+    if (expected == null || expected.isEmpty) return;
+    final actual = (await sha256.bind(target.openRead()).first).toString();
+    if (actual == expected) return;
+    // A complete but corrupted file must not be resumed on the next attempt.
+    if (target.existsSync()) target.deleteSync();
+    throw Exception(
+        'Checksum model tidak cocok. Unduh ulang untuk mencoba lagi.');
+  }
+
   Future<void> _extract(File archive, Directory dir) async {
     final free = await freeSpaceMb();
     final needed = archive.lengthSync() * 6 / 1048576 + 128;
     if (free > 0 && free < needed) {
-      throw Exception('Ruang ekstraksi kurang: perlu sekitar ${needed.round()} MB, tersedia ${free.round()} MB.');
+      throw Exception(
+          'Ruang ekstraksi kurang: perlu sekitar ${needed.round()} MB, tersedia ${free.round()} MB.');
     }
     final archivePath = archive.path;
     final outputPath = dir.path;
-    await Isolate.run(() => ModelManager._(Directory(outputPath))._extractWorker(File(archivePath), Directory(outputPath)));
+    final reply = ReceivePort();
+    final errors = ReceivePort();
+    Isolate? worker;
+    try {
+      worker = await Isolate.spawn<List<Object>>(
+        _extractArchiveEntry,
+        <Object>[archivePath, outputPath, reply.sendPort],
+        onError: errors.sendPort,
+        errorsAreFatal: true,
+      );
+      final outcome = await Future.any<Object?>([
+        reply.first,
+        errors.first.then((error) => <String>['error', error.toString()]),
+      ]).timeout(const Duration(minutes: 30));
+      if (outcome is! List || outcome.isEmpty || outcome.first != 'ok') {
+        throw Exception(outcome is List && outcome.length > 1
+            ? outcome[1].toString()
+            : 'Ekstraksi model berhenti sebelum selesai. Coba lagi.');
+      }
+    } finally {
+      worker?.kill(priority: Isolate.immediate);
+      reply.close();
+      errors.close();
+    }
   }
 
   Future<void> _extractWorker(File archive, Directory dir) async {
@@ -339,7 +454,9 @@ class ModelManager {
       await _extractZip(archive, dir);
       return;
     }
-    if (lower.endsWith('.tar.bz2') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
+    if (lower.endsWith('.tar.bz2') ||
+        lower.endsWith('.tar.gz') ||
+        lower.endsWith('.tgz')) {
       await _extractTarStreaming(archive, dir);
       return;
     }
@@ -354,12 +471,15 @@ class ModelManager {
   /// bz2 didekompresi streaming ke file .tar sementara, lalu .tar dibaca
   /// per blok 64 KB dan ditulis ke disk.
   Future<void> _extractTarStreaming(File archive, Directory dir) async {
-    final tempTar = File('${archive.parent.path}/.tmp-${archive.uri.pathSegments.last}.tar');
-    const free = 0.0; // Disk space was checked on the UI isolate before dispatch.
+    final tempTar = File(
+        '${archive.parent.path}/.tmp-${archive.uri.pathSegments.last}.tar');
+    const free =
+        0.0; // Disk space was checked on the UI isolate before dispatch.
     // Puncak pemakaian: arsip + .tar hasil dekompresi (≈3x) + hasil ekstrak (≈3x).
     final neededMb = (archive.lengthSync() * 3 / 1048576).round() + 128;
     if (free > 0 && free < neededMb) {
-      throw Exception('Ruang penyimpanan kurang untuk mengekstrak. Butuh sekitar $neededMb MB, tersedia ${free.round()} MB.');
+      throw Exception(
+          'Ruang penyimpanan kurang untuk mengekstrak. Butuh sekitar $neededMb MB, tersedia ${free.round()} MB.');
     }
     try {
       await _decompressTo(archive, tempTar);
@@ -369,39 +489,40 @@ class ModelManager {
       final total = tempTar.lengthSync();
       final buffer = Uint8List(65536);
       try {
-      while (offset + 512 <= total) {
-        raf.setPositionSync(offset);
-        final header = raf.readSync(512);
-        if (header.length < 512 || header.every((byte) => byte == 0)) break;
-        final entryName = _tarText(header, 0, 100);
-        final prefix = _tarText(header, 345, 155);
-        final fullName = prefix.isEmpty ? entryName : '$prefix/$entryName';
-        final size = _tarOctal(header, 124, 12);
-        final type = header[156];
-        offset += 512;
-        if (size < 0 || offset + size > total) {
-          throw Exception('Arsip terpotong. Unduh ulang model.');
-        }
-
-        if ((type == 0x30 || type == 0x00) && size > 0) {
-          final target = _safeTarget(dir, fullName);
-          target.parent.createSync(recursive: true);
-          final sink = target.openSync(mode: FileMode.write);
-          var remaining = size;
-          try {
-            while (remaining > 0) {
-              final want = remaining < buffer.length ? remaining : buffer.length;
-              final chunk = raf.readSync(want);
-              if (chunk.isEmpty) throw Exception('Isi arsip tidak lengkap.');
-              sink.writeFromSync(chunk);
-              remaining -= chunk.length;
-            }
-          } finally {
-            sink.closeSync();
+        while (offset + 512 <= total) {
+          raf.setPositionSync(offset);
+          final header = raf.readSync(512);
+          if (header.length < 512 || header.every((byte) => byte == 0)) break;
+          final entryName = _tarText(header, 0, 100);
+          final prefix = _tarText(header, 345, 155);
+          final fullName = prefix.isEmpty ? entryName : '$prefix/$entryName';
+          final size = _tarOctal(header, 124, 12);
+          final type = header[156];
+          offset += 512;
+          if (size < 0 || offset + size > total) {
+            throw Exception('Arsip terpotong. Unduh ulang model.');
           }
+
+          if ((type == 0x30 || type == 0x00) && size > 0) {
+            final target = _safeTarget(dir, fullName);
+            target.parent.createSync(recursive: true);
+            final sink = target.openSync(mode: FileMode.write);
+            var remaining = size;
+            try {
+              while (remaining > 0) {
+                final want =
+                    remaining < buffer.length ? remaining : buffer.length;
+                final chunk = raf.readSync(want);
+                if (chunk.isEmpty) throw Exception('Isi arsip tidak lengkap.');
+                sink.writeFromSync(chunk);
+                remaining -= chunk.length;
+              }
+            } finally {
+              sink.closeSync();
+            }
+          }
+          offset += ((size + 511) ~/ 512) * 512; // data dipad ke kelipatan 512
         }
-        offset += ((size + 511) ~/ 512) * 512; // data dipad ke kelipatan 512
-      }
       } finally {
         raf.closeSync();
       }
@@ -447,8 +568,11 @@ class ModelManager {
 
   File _safeTarget(Directory dir, String name) {
     final normalized = name.replaceAll('\\', '/');
-    if (normalized.isEmpty || normalized.startsWith('/') || normalized.split('/').contains('..')) {
-      throw Exception('Arsip berisi path tidak aman ($name). Unduhan dibatalkan.');
+    if (normalized.isEmpty ||
+        normalized.startsWith('/') ||
+        normalized.split('/').contains('..')) {
+      throw Exception(
+          'Arsip berisi path tidak aman ($name). Unduhan dibatalkan.');
     }
     return File('${dir.path}/$normalized');
   }
@@ -528,7 +652,9 @@ class ModelManager {
     final dir = Directory('${modelsDir.path}/${model.id}');
     if (!dir.existsSync()) return null;
     for (final entity in dir.listSync(recursive: true)) {
-      if (entity is Directory && entity.path.split('/').last == name) return entity;
+      if (entity is Directory && entity.path.split('/').last == name) {
+        return entity;
+      }
     }
     return null;
   }

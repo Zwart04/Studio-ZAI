@@ -11,7 +11,7 @@ def test_registry_integrity():
     assert len(ids) == len(set(ids))
     for model in registry:
         assert {"id", "kind", "size_mb", "license", "download"} <= set(model)
-        assert model["kind"] in {"asr", "tts", "clone"}
+        assert model["kind"] in {"asr", "tts", "clone", "image"}
 
 
 def test_get_model_unknown():
@@ -47,6 +47,25 @@ def test_status_and_kinds():
     assert {r['id'] for r in rows} == {m['id'] for m in expected}
     assert models.manager.models_by_kind("tts")
     assert models.manager.models_by_kind("clone")
+
+
+def test_archive_checksum_blocks_corrupt_model(monkeypatch, tmp_path):
+    model = {
+        "id": "sample",
+        "download": {"type": "archive", "name": "sample.tar.bz2",
+                     "url": "https://example.invalid/sample.tar.bz2", "sha256": "0" * 64},
+    }
+    monkeypatch.setattr(models.manager, "get_model", lambda _model_id: model)
+    monkeypatch.setattr(models.manager, "model_dir", lambda _model_id: tmp_path)
+
+    def fake_download(_url, target, _progress, _base, _span):
+        target.write_bytes(b"corrupt archive")
+
+    monkeypatch.setattr(models.manager, "_download_file", fake_download)
+    with pytest.raises(RuntimeError, match="checksum tidak cocok"):
+        models.manager.download("sample")
+    assert not (tmp_path / "sample.tar.bz2").exists()
+    assert not (tmp_path / ".installed").exists()
 
 
 def test_crop_target_size_is_even_and_vertical():

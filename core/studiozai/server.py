@@ -29,8 +29,8 @@ class NewProject(BaseModel):
 class ProcessRequest(BaseModel):
     source: str
     count: int = 5
-    min_len: float = 15.0
-    max_len: float = 60.0
+    min_len: float = 0.0
+    max_len: float = 0.0
     use_transcript: bool = True
     use_llm: bool = False
     model: str | None = None
@@ -94,6 +94,7 @@ class SettingsUpdate(BaseModel):
 
 class PromptRequest(BaseModel):
     prompt: str
+    provider: str | None = None
 
 
 class CloudSpeechRequest(BaseModel):
@@ -159,7 +160,7 @@ def generate_text(payload: PromptRequest) -> dict[str, Any]:
 
 @app.post("/api/images")
 def generate_image(payload: PromptRequest) -> dict[str, Any]:
-    return jobs.MANAGER.submit("image", "Membuat gambar", lambda _: {"image": str(ai.image(payload.prompt))}).as_dict()
+    return jobs.MANAGER.submit("image", "Membuat gambar", lambda _: {"image": str(ai.image(payload.prompt, payload.provider))}).as_dict()
 
 
 @app.get("/api/images")

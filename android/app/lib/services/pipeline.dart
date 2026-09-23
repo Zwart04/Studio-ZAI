@@ -36,6 +36,83 @@ class Pipeline {
   static const weightLoudness = 0.55;
   static const weightDensity = 0.35;
   static const weightSilence = 0.10;
+  static const _ordinal =
+      r'(?:pertama|kedua|ketiga|keempat|kelima|keenam|ketujuh|kedelapan|kesembilan|kesepuluh|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|berikutnya|selanjutnya|terakhir|ke[\s-]?\d+|[1-9]\d?)';
+
+  /// Cues at the start of an utterance indicate a new product or review topic.
+  /// Keeping the whole topic avoids starting a clip halfway through a demo.
+  static bool _topicStarts(String text) {
+    final opening =
+        text.trim().toLowerCase().split(RegExp(r'\s+')).take(12).join(' ');
+    return RegExp(
+      r'^(?:(?:nah|oke|jadi|lalu|dan)\s+){0,2}(?:'
+      r'(?:yang|speaker|produk|barang|nomor|number|urutan)\s+'
+      '$_ordinal'
+      r'|(?:sekarang|selanjutnya|berikutnya)\s+(?:(?:yang\s+)?'
+      '$_ordinal'
+      r'|kita\s+(?:bahas|review|ke))'
+      r'|(?:first|second|third|next)\s+(?:speaker|product|one))',
+    ).hasMatch(opening);
+  }
+
+  static List<List<double>> _speechWindows(
+      List<TranscriptSegment> segments, double duration, double maxLength) {
+    final ordered = [...segments]..sort((a, b) => a.start.compareTo(b.start));
+    final windows = <List<double>>[];
+    if (ordered.isEmpty) return windows;
+    final hasTopics = ordered.any((segment) => _topicStarts(segment.text));
+    var first = 0;
+    for (var i = 1; i < ordered.length; i++) {
+      final length = ordered[i].end - ordered[first].start;
+      final gap = ordered[i].start - ordered[i - 1].end;
+      final newTopic = _topicStarts(ordered[i].text);
+      final naturalPause = !hasTopics &&
+          gap >= 4.0 &&
+          ordered[i - 1].end - ordered[first].start >= 45;
+      if (newTopic || naturalPause || length > maxLength) {
+        final start = ordered[first].start.clamp(0.0, duration);
+        final end = ordered[i - 1].end.clamp(0.0, duration);
+        final isIntro =
+            newTopic && first == 0 && !_topicStarts(ordered[first].text);
+        if (!isIntro && end - start >= 3) windows.add([start, end]);
+        first = i;
+      }
+    }
+    final start = ordered[first].start.clamp(0.0, duration);
+    final end = ordered.last.end.clamp(0.0, duration);
+    if (end - start >= 3) windows.add([start, end]);
+    return windows;
+  }
+
+  static List<List<double>> _acousticWindows(
+      double duration, List<List<double>> silences, double maxLength) {
+    if (duration <= 0) return const [];
+    final breaks = <double>[0];
+    for (final silence in silences) {
+      if (silence[1] - silence[0] >= 0.5 && silence[1] < duration - 3) {
+        breaks.add(silence[1]);
+      }
+    }
+    breaks.add(duration);
+    final windows = <List<double>>[];
+    var start = 0.0;
+    for (final point in breaks.skip(1)) {
+      if (point - start < 50 && point < duration) continue;
+      if (point - start > maxLength) {
+        while (point - start > maxLength) {
+          final end = start + maxLength;
+          windows.add([start, end]);
+          start = end;
+        }
+      }
+      if (point - start >= 3) {
+        windows.add([start, point]);
+        start = point;
+      }
+    }
+    if (windows.isEmpty) windows.add([0, duration]);
+    return windows;
+  }
 
   Directory get workDir {
     final dir = Directory('${projectDir.path}/work');
@@ -118,45 +195,21 @@ class Pipeline {
     List<double>? envelope,
     List<TranscriptSegment> segments = const [],
     int count = 5,
-    double minLength = 15,
-    double maxLength = 60,
+    double minLength = 8,
+    double maxLength = 330,
   }) {
-    final windows = <List<double>>[];
-    if (segments.isNotEmpty) {
-      var currentStart = segments.first.start;
-      var currentEnd = segments.first.end;
-      for (final segment in segments.skip(1)) {
-        if (segment.end - currentStart > maxLength) {
-          windows.add([currentStart, currentEnd]);
-          currentStart = segment.start;
-          currentEnd = segment.end;
-        } else {
-          currentEnd = segment.end;
-          if (currentEnd - currentStart >= minLength) {
-            windows.add([currentStart, currentEnd]);
-            currentStart = segment.end;
-            currentEnd = segment.end;
-          }
-        }
-      }
-      if (currentEnd - currentStart > 1) {
-        windows.add([currentStart, currentEnd]);
-      }
-    }
-    if (windows.isEmpty) {
-      final length = math.min(maxLength, math.max(minLength, duration));
-      final step = math.max(minLength, length / 2);
-      var start = 0.0;
-      while (start + length <= duration + 1e-6) {
-        windows.add([start, start + length]);
-        start += step;
-      }
-      if (windows.isEmpty) windows.add([0, duration]);
-    }
-
     final rms = envelope ?? rmsEnvelope(samples, sampleRate);
-    final peak = rms.isEmpty ? 1.0 : rms.reduce(math.max);
     final silences = silenceIntervals(samples, sampleRate, envelope: rms);
+    final windows = _speechWindows(segments, duration, maxLength);
+    if (windows.isEmpty) {
+      windows.addAll(
+          _acousticWindows(duration, silences, math.min(maxLength, 120)));
+    }
+    windows.removeWhere((w) => w[1] - w[0] < math.min(minLength, duration));
+    if (windows.isEmpty && duration >= 1) {
+      windows.add([0, math.min(duration, maxLength)]);
+    }
+    final peak = rms.isEmpty ? 1.0 : rms.reduce(math.max);
     final densities = windows.map((w) {
       final words = segments
           .where((s) => s.end > w[0] && s.start < w[1])
@@ -238,6 +291,16 @@ class Pipeline {
             envelope: envelope);
       });
 
+  /// Last-resort selection when FFmpeg cannot extract audio from a source.
+  /// This still creates editable clips from the video already on the device.
+  static List<ClipCandidate> pickClipsWithoutAudio(
+          double duration, int count) =>
+      pickClips(
+          samples: Float32List(0),
+          sampleRate: 16000,
+          duration: duration,
+          count: count);
+
   /// Captions for a clip window, with clip-relative timings.
   static List<Caption> captionsForRange(
       List<TranscriptSegment> segments, double start, double end) {
@@ -307,6 +370,12 @@ class Pipeline {
 
   Future<Clip> renderClip(Project project, Clip clip,
       void Function(double, String) onProgress) async {
+    if (clip.audioMode != 'original' &&
+        (clip.files['voice'] == null ||
+            !File(clip.files['voice']!).existsSync())) {
+      throw Exception(
+          'Buat narasi TTS terlebih dahulu sebelum memilih audio TTS.');
+    }
     final directory = clipDir(clip.index);
     final resolution = await MediaTools.resolution(project.source);
     final sourceWidth = resolution['width'] ?? 0;

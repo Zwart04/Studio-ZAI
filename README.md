@@ -1,90 +1,71 @@
-<p align="center"><img src="assets/brand-banner.svg" width="800" alt="Studio ZAI — Video. Suara. Gambar." /></p>
-<p align="center">Studio kreatif sederhana untuk Windows dan Android.<br />Edit video, susun subtitle, buat suara, dan ubah ide menjadi gambar.</p>
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.6.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/MODELS.md">Model & AI</a> · <a href="docs/BUILD.md">Build</a> · <a href="README.en.md">English</a></p>
+<p align="center"><img src="assets/brand-banner.svg" width="840" alt="Studio ZAI — Video, Suara, Gambar" /></p>
 
-![Editor Studio ZAI dengan video asli, subtitle, dan timeline](docs/screenshots/04-editor.jpg)
+<p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-## Satu studio, tiga cara berkarya
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.7.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model</a> · <a href="README.en.md">English</a></p>
 
-- **Video:** ambil bagian mana pun dari video yang tersimpan, trim, split, pilih kanvas, edit subtitle, tambahkan teks, media, dan musik.
-- **Suara:** narasi Indonesia atau Inggris, pilihan karakter suara lokal/online, rekaman mikrofon, dan kloning ZipVoice untuk English/Mandarin.
-- **Gambar:** tulis prompt, buat gambar melalui OpenAI atau hubungkan server Stable Diffusion lokal, lalu simpan hasilnya.
+![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/04-editor.jpg)
 
-Model lokal diunduh sesuai kebutuhan. Editor, subtitle, dan suara lokal tidak memerlukan akun cloud setelah model terpasang. Fitur online bersifat opsional dan menggunakan API key milikmu.
+## Buat video dari ide sampai siap ekspor
+
+| Video | Suara | Gambar |
+| :-- | :-- | :-- |
+| Temukan klip dari transkrip, simpan sumber, potong lagi tanpa mengunduh ulang. | Narasi Indonesia/Inggris, sepuluh karakter Supertonic lokal, Piper, rekaman mikrofon, dan kloning English/Mandarin. | SDXS-512 membuat gambar 512×512 di perangkat setelah model diunduh. Penyedia cloud tetap pilihan. |
+
+**Klip otomatis yang mengikuti isi video.** Mode durasi adaptif mencari awal topik atau ulasan produk dan titik akhir kalimat yang masuk akal. Pilih track audio sumber sebelum memproses; bahasa transkripsi tidak mengubah atau menerjemahkan suara. Pengguna tetap bisa mengambil rentang waktu lain dari video sumber yang tersimpan.
+
+**Editor yang langsung dapat diputar.** Trim, split, ukuran asli/9:16/1:1/16:9, teks, media, musik, dan subtitle berada dalam satu layar. Terapkan salah satu dari 24 gaya teks atau buat lalu simpan gaya sendiri. Perubahan diperbarui menjadi pratinjau yang bisa dimainkan sebelum ekspor.
+
+**Lokal lebih dulu.** File lokal, editor, transkripsi, subtitle, suara, dan gambar lokal berjalan tanpa API key setelah model dipasang. Model tidak dibundel dalam APK/EXE agar paket awal tetap lebih kecil. Unduhan model dan video dari tautan tentu membutuhkan internet. OpenAI, Anthropic, DeepSeek, dan endpoint kompatibel tersedia sebagai pilihan untuk tugas AI yang mendukungnya.
 
 ## Unduh
 
-| Perangkat | Paket | Cara pakai |
+| Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 · x64 | [Unduh ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/StudioZAI-1.6.0-windows-x64.zip) | Ekstrak seluruh folder, lalu buka **StudioZAI.exe**. FFmpeg dan runtime AI sudah ikut. |
-| Android 8+ | [Unduh APK Android](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/StudioZAI-1.6.0-android.apk) | Satu APK universal untuk ARM64, ARMv7, dan x86_64. Model diunduh dari dalam aplikasi. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan rilis & hasil pengujian](docs/RELEASE-1.6.0.md) · [SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.6.0/SHA256SUMS.txt)
-
-Satu APK memudahkan pemasangan, tetapi ukurannya lebih besar karena memuat beberapa arsitektur. Kebutuhan RAM dan waktu proses bergantung pada model serta panjang video. Linux tersedia melalui source; iOS belum tersedia.
+[Catatan pengujian v1.7.0](docs/RELEASE-1.7.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 
-1. **Siapkan model.** Ikuti setup awal. Whisper Base cocok untuk mencoba; Small lebih disarankan untuk subtitle Indonesia jika perangkat memadai. Pilih suara Piper sesuai bahasa.
-2. **Masukkan video.** Tempel link atau pilih berkas. Untuk dub Indonesia, pilih **track audio Indonesia** yang tersedia. Buka **Opsi klip** jika ingin mengubah ukuran, durasi, dan subtitle.
-3. **Buat dan edit.** Buka proyek → **Edit**. Potong durasi, pisahkan klip, pilih tipografi, atau simpan gaya buatanmu. Video langsung bisa diputar dan diperbarui otomatis; pilih **Ekspor video** untuk hasil akhir.
-4. **Gunakan lagi sumbernya.** Tombol **Ambil bagian dari video sumber** membuka video tersimpan; tentukan detik mulai/selesai tanpa mengunduh ulang.
+1. Jalankan setup awal dan unduh model transkripsi sesuai perangkat. **Whisper Base** cukup untuk mulai; **Small** umumnya lebih baik untuk Indonesia jika RAM memadai. Model suara dan gambar dapat dipasang kemudian dari halaman **Model**.
+2. Tempel tautan atau pilih video lokal. Letakkan **bahasa konten** dan **track audio sumber** yang benar sebelum memilih suara klip asli atau narasi. Pada Android, tautan YouTube publik dan URL berkas langsung didukung; untuk TikTok/Instagram, impor berkas video yang telah disimpan. Desktop memakai situs yang didukung yt-dlp.
+3. Pilih jumlah klip dan tekan **Buat klip**. Aplikasi menyimpan sumber bersama proyek. Buka klip untuk langsung memutar, memotong, mengubah kanvas, dan menata subtitle.
+4. Ekspor hasil saat selesai. Untuk mengambil momen lain, buka **Ambil bagian dari video sumber**; tidak perlu mengunduh video itu lagi.
 
-> **Audio, transkrip, dan subtitle:** bahasa konten membantu model mengenali ucapan; tidak menerjemahkan audio. Transkrip adalah teks ucapan. Subtitle adalah teks bertiming yang tampil di video. Pemutar tidak lagi menampilkan caption kedua di atas subtitle yang sudah dirender. Jika sumbernya sudah memiliki teks yang menyatu dengan gambar, pilih **Tanpa subtitle tambahan** atau pindahkan posisinya.
+> **Transkrip** adalah teks ucapan yang dipakai untuk memilih momen. **Subtitle** adalah bagian teks tersebut yang diberi waktu dan ditampilkan pada video. Jika sumber sudah memiliki tulisan yang menyatu dengan gambar, nonaktifkan subtitle tambahan atau ubah posisinya agar tidak bertumpuk. Kloning suara ZipVoice saat ini mendukung English/Mandarin; sepuluh suara Supertonic mendukung teks Indonesia/Inggris tetapi bukan kloning.
 
-## Lihat alurnya
+## Lihat aplikasinya
 
 ![Tur singkat antarmuka Studio ZAI](docs/screenshots/studio-zai-demo.gif)
 
-*Pratinjau berurutan dari UI desktop v1.6.0 dengan media demo buatan sendiri. Tidak ada berkas demo MP4 yang perlu diunduh.*
+| Beranda | Suara | Gambar |
+| :--: | :--: | :--: |
+| ![Beranda dan pengaturan klip](docs/screenshots/01-home.jpg) | ![Pilihan suara dan rekaman](docs/screenshots/03-voice.jpg) | ![Gambar lokal dan pilihan cloud](docs/screenshots/07-images.jpg) |
 
-| Beranda | Studio suara |
-| :--: | :--: |
-| ![Beranda ringkas](docs/screenshots/01-home.jpg) | ![Suara dan rekaman](docs/screenshots/03-voice.jpg) |
+Gambar di atas diambil dari UI desktop dengan media demo yang dibuat untuk dokumentasi. [Beranda sempit](docs/screenshots/05-mobile-home.jpg) dan [editor sempit](docs/screenshots/09-mobile-editor.jpg) menguji web pada lebar ponsel dan bukan screenshot APK. GIF adalah tur UI; tidak ada berkas demo MP4 di rilis.
 
-| Studio gambar | Pengaturan AI |
-| :--: | :--: |
-| ![Prompt gambar](docs/screenshots/07-images.jpg) | ![Penyedia AI](docs/screenshots/08-settings.jpg) |
+## Model, privasi, dan batasan
 
-Screenshot berasal dari aplikasi web desktop. [Tampilan layar kecil](docs/screenshots/05-mobile-home.jpg) merupakan uji responsif web, bukan screenshot APK.
+Bobot [SDXS-512](docs/LOCAL_IMAGE.md) sekitar 683 MB dan butuh RAM tambahan saat menghasilkan gambar. Performa bergantung pada perangkat; ponsel ARM32 belum memiliki mesin gambar offline native. Supertonic 3 dan Piper bersifat opsional per suara; Whisper dipilih sesuai kemampuan perangkat. [Daftar model dan lisensinya](docs/MODELS.md) menjelaskan pilihan yang direkomendasikan.
 
-## Model dan layanan
+Kunci API disimpan pada penyimpanan terlindungi sistem. Mode lokal tidak mengirim prompt atau media ke penyedia cloud. Mode online mengirim permintaan ke penyedia yang dipilih. Video privat, dihapus, dibatasi wilayah, atau meminta login bisa gagal diunduh; pilih berkas lokal sebagai alternatif.
 
-| Kebutuhan | Pilihan |
-| :-- | :-- |
-| Subtitle ID/EN | Whisper Tiny, Base, Small, Medium; tersedia sesuai perangkat. Small disarankan untuk Indonesia; Tiny lebih cepat tetapi perlu lebih banyak koreksi. |
-| Suara lokal | Piper: News (ID), Lessac, Alba, Amy, Ryan, Joe, LJ (EN). Pilih bahasa untuk melihat suara yang cocok. |
-| Kloning lokal | ZipVoice int8, English/Mandarin; perlu audio contoh **beserta teks ucapan yang sesuai**. Runtime termasuk Windows dan Android. |
-| Pemilihan momen AI | OpenAI, Anthropic, DeepSeek, atau API kompatibel/Ollama. Atur provider, nama model, alamat, dan API key. |
-| Suara online | OpenAI, 13 karakter suara; mendukung teks Indonesia/Inggris. |
-| Gambar | OpenAI atau server **stable-diffusion.cpp** dengan model pilihan sendiri. Lokal memerlukan pemasangan server terpisah. |
+Perubahan ini diuji dengan video review speaker nyata 80,5 menit untuk menemukan awal ulasan produk serta mengekspor klip dengan audio; rincian dan batasan pengujian tercatat pada [laporan rilis](docs/RELEASE-1.7.0.md). Perangkat Android fisik belum tersedia untuk uji end-to-end dalam sesi ini.
 
-**Gambar lokal belum berjalan sebagai mesin native di APK.** Android dapat memakai layanan online atau server milikmu melalui HTTPS. Tidak ada model gambar berkualitas yang dijamin ringan dan lancar pada semua perangkat; karena itu bobot gambar tidak dibundel dan tidak diunduh otomatis. [Panduan AI dan batasannya](docs/AI.md).
+## Kembangkan
 
-Kunci disimpan dengan proteksi akun Windows pada paket Windows dan secure storage Android. Berkas lokal tetap diproses di perangkat; ketika fitur online dipilih, teks/prompt dikirim ke provider. Langganan aplikasi ChatGPT berbeda dari akses API.
-
-## Keandalan dan batasan
-
-- Unduhan Android memiliki batas waktu, percobaan ulang terbatas, serta pembaruan URL stream tanpa mengganti track bahasa. Pesan kegagalan ditampilkan jika sumber memang tidak tersedia.
-- Progres transkripsi video panjang menampilkan bagian yang sedang diproses. Perbaikan SSE mengatasi progres yang berhenti diperbarui setelah banyak segmen.
-- Video sumber tersimpan bersama proyek. Hapus proyek untuk membuang sumber dan hasil miliknya; **Bersihkan cache** hanya membuang data sementara. Berkas asli di luar proyek tidak dihapus.
-- YouTube dapat mengubah akses stream. Video privat, dibatasi, dihapus, atau membutuhkan login tetap dapat gagal; file lokal menjadi alternatif.
-- Versi ini diuji dengan unduhan lengkap video **78 menit** ber-track Indonesia dan transkripsi beberapa chunk setelah menit 60. Rincian, termasuk batas uji perangkat, ada di [laporan validasi](docs/RELEASE-1.6.0.md).
-- HP fisik dan API cloud berbayar belum diuji langsung pada rilis ini. Fitur mikrofon Android memerlukan izin perangkat. Tetap buka aplikasi selama pemrosesan panjang.
-
-## Pengembangan
-
-```bash
+```powershell
 git clone https://github.com/Zwart04/Studio-ZAI.git
 cd Studio-ZAI
 python -m venv .venv
-# Aktifkan virtualenv, lalu:
-pip install -e "core[media,asr,tts,desktop,dev]"
-studiozai serve
+.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,desktop,dev]"
+.venv/Scripts/python.exe -m studiozai serve
 ```
 
-```bash
-python -m pytest core/tests
+```powershell
+.venv/Scripts/python.exe -m pytest core/tests
 cd android/app
 flutter pub get
 flutter analyze
@@ -92,8 +73,6 @@ flutter test
 flutter build apk --release
 ```
 
-[Arsitektur](docs/ARCHITECTURE.md) · [Fitur per platform](docs/FEATURES.md) · [Model & lisensi](docs/MODELS.md) · [Build & signing](docs/BUILD.md) · [Changelog](docs/CHANGELOG.md)
+[Arsitektur](docs/ARCHITECTURE.md) · [Fitur per platform](docs/FEATURES.md) · [Build dan signing](docs/BUILD.md) · [Changelog](docs/CHANGELOG.md)
 
-## Kredit
-
-UI mengikuti [design system](docs/DESIGN.md) yang netral dengan aksen biru. Warna kreatif berada di dalam template video. Kode aplikasi berlisensi [MIT](LICENSE); library, font, dan bobot model mengikuti lisensi masing-masing. Dibangun dengan FFmpeg, yt-dlp, faster-whisper, Piper, Flutter, dan sherpa-onnx. Referensi alur kreator: [openshorts](https://github.com/mutonby/openshorts) dan [OpenCreator](https://github.com/krillinai/OpenCreator).
+Kode aplikasi berlisensi [MIT](LICENSE). Model, font, dan library native memakai lisensi masing-masing. Referensi alur kreator: [openshorts](https://github.com/mutonby/openshorts) dan [OpenCreator](https://github.com/krillinai/OpenCreator).

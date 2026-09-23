@@ -5,6 +5,15 @@ import '../models.dart';
 /// All entries are downloaded on demand from official release assets
 /// (k2-fsa/sherpa-onnx for speech models, HuggingFace for Piper voices).
 class ModelRegistry {
+  static const supertonicFiles = <String>[
+    'duration_predictor.int8.onnx',
+    'text_encoder.int8.onnx',
+    'vector_estimator.int8.onnx',
+    'vocoder.int8.onnx',
+    'tts.json',
+    'unicode_indexer.bin',
+    'voice.bin',
+  ];
   static final whisperTiny = ModelInfo(
     id: 'whisper-tiny',
     kind: 'asr',
@@ -12,7 +21,8 @@ class ModelRegistry {
     sizeMb: 110,
     license: 'MIT',
     note: 'Paling cepat, akurasi dasar',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
     tier: 0,
   );
 
@@ -23,7 +33,8 @@ class ModelRegistry {
     sizeMb: 190,
     license: 'MIT',
     note: 'Seimbang untuk subtitle ID/EN',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2',
     tier: 1,
   );
 
@@ -34,7 +45,8 @@ class ModelRegistry {
     sizeMb: 63,
     license: 'MIT',
     note: 'Suara Indonesia (Piper) — realtime di HP',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-id_ID-news_tts-medium.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-id_ID-news_tts-medium.tar.bz2',
     tier: 0,
   );
 
@@ -45,7 +57,8 @@ class ModelRegistry {
     sizeMb: 63,
     license: 'MIT',
     note: 'Suara Inggris (Piper)',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2',
     tier: 0,
   );
 
@@ -56,7 +69,8 @@ class ModelRegistry {
     sizeMb: 350,
     license: 'Apache-2.0',
     note: 'Kloning EN ringan (butuh rekaman contoh)',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2',
     tier: 1,
   );
 
@@ -67,7 +81,8 @@ class ModelRegistry {
     sizeMb: 480,
     license: 'MIT',
     note: 'Akurasi lebih baik untuk Bahasa Indonesia (butuh RAM lega).',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2',
     tier: 2,
   );
 
@@ -78,7 +93,8 @@ class ModelRegistry {
     sizeMb: 1500,
     license: 'MIT',
     note: 'Paling akurat, paling berat. Untuk HP dengan RAM besar saja.',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium.tar.bz2',
     tier: 3,
   );
 
@@ -89,7 +105,8 @@ class ModelRegistry {
     sizeMb: 63,
     license: 'MIT',
     note: 'Suara Inggris (British) alternatif',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2',
     tier: 0,
   );
 
@@ -100,9 +117,37 @@ class ModelRegistry {
     sizeMb: 2,
     license: 'MIT',
     note: 'Deteksi suara/bicara (dipakai untuk membagi segmen)',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx',
     archive: false,
     tier: 0,
+  );
+
+  static final sdxs = ModelInfo(
+    id: 'sdxs-512',
+    kind: 'image',
+    langs: ['multi'],
+    sizeMb: 651,
+    license: 'OpenRAIL++',
+    note: 'Gambar lokal 512 px · SDXS satu langkah · opsional',
+    url:
+        'https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF/resolve/3144d898d61492f8382ffcabec055733fc5b2a0e/sdxs-512-tinySDdistilled_Q8_0.gguf',
+    archive: false,
+    tier: 1,
+    sha256: '409ab23582ee074c6b9d5395784fc0741b0599fb9d138686c69087c71678eb6a',
+  );
+
+  static final supertonic3 = ModelInfo(
+    id: 'supertonic-3-int8',
+    kind: 'tts',
+    langs: ['id', 'en'],
+    sizeMb: 123,
+    license: 'OpenRAIL-M',
+    note: '10 karakter suara Indonesia/English · opsional',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2',
+    tier: 1,
+    sha256: '82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427',
   );
 
   static final all = <ModelInfo>[
@@ -114,11 +159,18 @@ class ModelRegistry {
     piperEn,
     piperEnGb,
     ...['amy', 'ryan', 'joe', 'ljspeech'].map((name) => ModelInfo(
-      id: 'piper-en_US-$name-medium', kind: 'tts', langs: ['en'], sizeMb: 63,
-      license: 'Lihat model card', note: 'English US · $name · opsional',
-      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-$name-medium.tar.bz2',
-    )),
+          id: 'piper-en_US-$name-medium',
+          kind: 'tts',
+          langs: ['en'],
+          sizeMb: 63,
+          license: 'Lihat model card',
+          note: 'English US · $name · opsional',
+          url:
+              'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-$name-medium.tar.bz2',
+        )),
     zipVoice,
     vad,
+    supertonic3,
+    sdxs,
   ];
 }

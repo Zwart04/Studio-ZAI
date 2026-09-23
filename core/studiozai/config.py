@@ -17,6 +17,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "tts_voice_en": "piper-en_US-lessac-medium",
     "clone_model": "zipvoice-zh-en",
     "clone_consent": False,
+    "image_provider": "sdxs_local",
     "llm_base_url": "",
     "llm_model": "",
     "llm_api_key": "",

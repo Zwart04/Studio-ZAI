@@ -165,6 +165,21 @@ def marker_path(model_id: str) -> Path:
 
 
 def is_installed(model_id: str) -> bool:
+    if model_id == "supertonic-3-int8":
+        directory = model_dir(model_id)
+        required = (
+            "duration_predictor.int8.onnx", "text_encoder.int8.onnx",
+            "vector_estimator.int8.onnx", "vocoder.int8.onnx",
+            "tts.json", "unicode_indexer.bin", "voice.bin",
+        )
+        return marker_path(model_id).exists() and any(
+            all((candidate / name).is_file() for name in required)
+            for candidate in (directory, *directory.iterdir()) if candidate.is_dir()
+        )
+    if model_id == "sdxs-512":
+        checkpoint = model_dir(model_id) / "sdxs-512-tinySDdistilled_Q8_0.gguf"
+        return (marker_path(model_id).exists() and checkpoint.is_file()
+                and checkpoint.stat().st_size == 682847200)
     if model_id == "zipvoice-zh-en":
         directory = model_dir(model_id)
         return marker_path(model_id).exists() and (directory / "vocos_24khz.onnx").is_file() and any(directory.rglob("encoder.int8.onnx"))
@@ -342,6 +357,9 @@ def download(model_id: str, progress_cb: ProgressCb | None = None) -> Path:
     elif kind == "archive":
         archive = target_dir / spec["name"]
         _download_file(spec["url"], archive, progress_cb, 0, 95)
+        if spec.get("sha256") and _sha256(archive) != spec["sha256"]:
+            archive.unlink(missing_ok=True)
+            raise RuntimeError(f"checksum tidak cocok untuk {spec['name']}")
         if progress_cb:
             progress_cb(96, "mengekstrak arsip")
         try:

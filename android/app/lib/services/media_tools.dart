@@ -13,15 +13,23 @@ class MediaTools {
   static Future<void> prepareFonts() async {
     if (_fontDirectory != null) return;
     final root = await getApplicationSupportDirectory();
-    final dir = Directory('${root.path}/creator-fonts')..createSync(recursive: true);
-    for (final name in ['Anton-Regular.ttf', 'BarlowCondensed-Bold.ttf', 'DMSerifDisplay-Italic.ttf', 'Kalam-Bold.ttf']) {
+    final dir = Directory('${root.path}/creator-fonts')
+      ..createSync(recursive: true);
+    for (final name in [
+      'Anton-Regular.ttf',
+      'BarlowCondensed-Bold.ttf',
+      'DMSerifDisplay-Italic.ttf',
+      'Kalam-Bold.ttf'
+    ]) {
       final data = await rootBundle.load('assets/fonts/$name');
-      await File('${dir.path}/$name').writeAsBytes(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+      await File('${dir.path}/$name').writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     }
     _fontDirectory = dir.path;
   }
 
-  static String subtitleFilter(String path) => 'subtitles=${_quote(path)}${_fontDirectory == null ? '' : ':fontsdir=${_quote(_fontDirectory!)}'}';
+  static String subtitleFilter(String path) =>
+      'subtitles=${_quote(path)}${_fontDirectory == null ? '' : ':fontsdir=${_quote(_fontDirectory!)}'}';
   static Future<bool> _run(String command) async {
     final session = await FFmpegKit.execute(command);
     final code = await session.getReturnCode();
@@ -73,8 +81,10 @@ class MediaTools {
   }
 
   /// Ukuran kanvas keluaran (mirror `core/pipeline/crop.py:canvas_size`).
-  static Future<File> extractAudioRange(String input, String output, double start, double end) async {
-    final ok = await _run('-y -ss $start -t ${end - start} -i ${_quote(input)} -vn -ac 1 -ar 16000 -acodec pcm_s16le ${_quote(output)}');
+  static Future<File> extractAudioRange(
+      String input, String output, double start, double end) async {
+    final ok = await _run(
+        '-y -ss $start -t ${end - start} -i ${_quote(input)} -vn -ac 1 -ar 16000 -acodec pcm_s16le ${_quote(output)}');
     if (!ok) throw Exception('Gagal membaca audio klip.');
     return File(output);
   }
@@ -110,7 +120,8 @@ class MediaTools {
     }
   }
 
-  static String cropFilter(String mode, int width, int height, {String canvas = 'portrait'}) {
+  static String cropFilter(String mode, int width, int height,
+      {String canvas = 'portrait'}) {
     final size = canvasSize(canvas, width, height);
     final outW = size[0];
     final outH = size[1];
@@ -137,7 +148,9 @@ class MediaTools {
       cropHeight = (cropWidth / target).round();
       cropHeight -= cropHeight % 2;
     }
-    if (cropWidth <= 0 || cropHeight <= 0 || (cropWidth >= width && cropHeight >= height)) {
+    if (cropWidth <= 0 ||
+        cropHeight <= 0 ||
+        (cropWidth >= width && cropHeight >= height)) {
       // Sumber sudah sama atau lebih kecil dari kanvas -> jangan potong apa pun.
       return fit;
     }
@@ -165,14 +178,16 @@ class MediaTools {
     final complex = filter.contains(';');
     final duration = (end - start).clamp(0.5, 3600.0);
 
-    final buffer = StringBuffer('-y -ss ${start.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(input)}');
+    final buffer = StringBuffer(
+        '-y -ss ${start.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(input)}');
     if (voicePath != null && audioMode != 'original') {
       buffer.write(' -i ${_quote(voicePath)}');
     }
 
     final videoChain = StringBuffer();
     if (complex) {
-      videoChain.write(filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2', '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vsrc]'));
+      videoChain.write(filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2',
+          '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vsrc]'));
       videoChain.write(subtitlesPath != null
           ? ';[vsrc]${subtitleFilter(subtitlesPath)}[v]'
           : '');
@@ -189,14 +204,18 @@ class MediaTools {
         ';[0:a]volume=${originalVolume.toStringAsFixed(3)}[oa];[1:a]volume=1.0[va];'
         '[oa][va]amix=inputs=2:duration=first:normalize=0[a]',
       );
-      buffer.write(' -filter_complex "${videoChain.toString()}" -map "[v]" -map "[a]"');
+      buffer.write(
+          ' -filter_complex "${videoChain.toString()}" -map "[v]" -map "[a]"');
     } else if (voicePath != null) {
-      buffer.write(' -filter_complex "${videoChain.toString()}" -map "[v]" -map "1:a"');
+      buffer.write(
+          ' -filter_complex "${videoChain.toString()}" -map "[v]" -map "1:a"');
     } else {
-      buffer.write(' -filter_complex "${videoChain.toString()}" -map "[v]" -map "0:a?"');
+      buffer.write(
+          ' -filter_complex "${videoChain.toString()}" -map "[v]" -map "0:a?"');
     }
 
-    buffer.write(' -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ${_quote(output)}');
+    buffer.write(
+        ' -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p -c:a aac -b:a 256k -ar 48000 -movflags +faststart ${_quote(output)}');
     final ok = await _run(buffer.toString());
     if (!ok) throw Exception('Render klip gagal.');
     return output;
@@ -208,20 +227,48 @@ class MediaTools {
       File(inputs.first).copySync(output);
       return output;
     }
+    final sizes = await Future.wait(inputs.map(resolution));
+    final sameCanvas = sizes.every((size) =>
+        size['width'] == sizes.first['width'] &&
+        size['height'] == sizes.first['height']);
+    if (sameCanvas) {
+      final listing = File('$output.concat.txt');
+      try {
+        listing.writeAsStringSync(inputs
+            .map((input) => "file '${input.replaceAll("'", r"'\''")}'")
+            .join('\n'));
+        // Rendered clips share the H.264/AAC format: stream copy preserves
+        // their audio and avoids another lossy pass during project export.
+        final copied =
+            await _run('-y -f concat -safe 0 -i ${_quote(listing.path)} '
+                '-c copy -movflags +faststart ${_quote(output)}');
+        if (copied &&
+            File(output).existsSync() &&
+            File(output).lengthSync() > 0) {
+          return output;
+        }
+        if (File(output).existsSync()) File(output).deleteSync();
+      } finally {
+        if (listing.existsSync()) listing.deleteSync();
+      }
+    }
     final buffer = StringBuffer();
     for (final input in inputs) {
       buffer.write('-i ${_quote(input)} ');
     }
     final streams = List.generate(inputs.length, (i) => '[$i:v][$i:a]').join();
-    buffer.write('-filter_complex "${streams}concat=n=${inputs.length}:v=1:a=1[v][a]" '
-        '-map "[v]" -map "[a]" -c:v libx264 -preset veryfast -crf 21 -c:a aac ${_quote(output)}');
+    buffer.write(
+        '-filter_complex "${streams}concat=n=${inputs.length}:v=1:a=1[v][a]" '
+        '-map "[v]" -map "[a]" -c:v libx264 -preset veryfast -crf 21 -c:a aac -b:a 256k -ar 48000 ${_quote(output)}');
     final ok = await _run(buffer.toString());
     if (!ok) throw Exception('Gagal menggabungkan klip.');
     return output;
   }
 
-  static Future<String> thumbnail(String input, String output, double at) async {
-    await _run('-y -ss ${at.toStringAsFixed(3)} -i ${_quote(input)} -frames:v 1 -q:v 3 ${_quote(output)}');
+  static Future<String> thumbnail(
+      String input, String output, double at) async {
+    await _run(
+        '-y -ss ${at.toStringAsFixed(3)} -i ${_quote(input)} -frames:v 1 -q:v 3 ${_quote(output)}');
     return output;
   }
 
@@ -232,7 +279,8 @@ class MediaTools {
     var offset = 12;
     while (offset + 8 < bytes.length) {
       final chunkId = String.fromCharCodes(bytes.sublist(offset, offset + 4));
-      final chunkSize = ByteData.sublistView(bytes, offset + 4, offset + 8).getUint32(0, Endian.little);
+      final chunkSize = ByteData.sublistView(bytes, offset + 4, offset + 8)
+          .getUint32(0, Endian.little);
       if (chunkId == 'data') {
         final start = offset + 8;
         final end = (start + chunkSize).clamp(0, bytes.length);
@@ -249,7 +297,8 @@ class MediaTools {
     return Float32List(0);
   }
 
-  static Future<void> writeWav(String path, Float32List samples, int sampleRate) async {
+  static Future<void> writeWav(
+      String path, Float32List samples, int sampleRate) async {
     final data = ByteData(samples.length * 2);
     for (var i = 0; i < samples.length; i++) {
       final value = (samples[i].clamp(-1.0, 1.0) * 32767).round();

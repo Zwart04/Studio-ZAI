@@ -1,5 +1,5 @@
 """Build a reproducible demo workspace from generated media and local speech models.
-Run with the build venv; --serve exposes the seeded workspace on localhost:8751.
+Run with the build venv; --serve exposes the seeded workspace on localhost:8752.
 No personal projects are used in README screenshots.
 """
 import argparse
@@ -10,7 +10,7 @@ from studiozai import config, projects, service
 from studiozai.pipeline import voice, timeline
 
 ROOT = Path(__file__).resolve().parents[1]
-DEMO = ROOT / "build" / "readme-demo-v16"
+DEMO = ROOT / "build" / "readme-demo-v17"
 real_models = config.models_dir()
 config._base_dir = lambda: DEMO
 config.models_dir = lambda: real_models
@@ -55,8 +55,9 @@ def prepare():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true")
+    parser.add_argument("--port", type=int, default=8752)
     args = parser.parse_args()
     prepare()
     if args.serve:
         import uvicorn
-        uvicorn.run("studiozai.server:app", host="127.0.0.1", port=8751)
+        uvicorn.run("studiozai.server:app", host="127.0.0.1", port=args.port)

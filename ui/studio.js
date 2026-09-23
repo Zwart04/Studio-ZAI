@@ -6,21 +6,53 @@
   $('#nav').insertBefore(nav,$('#nav [data-page="models"]'));
   const shortcuts=document.createElement('div');shortcuts.className='studio-shortcuts';
   shortcuts.innerHTML='<button data-tool="video"><strong>Video</strong><span>Potong, susun, beri subtitle</span></button><button data-tool="voice"><strong>Suara</strong><span>Narasi dan rekamanmu</span></button><button data-tool="images"><strong>Gambar</strong><span>Dari ide menjadi visual</span></button>';
-  $('#page-home .lead').after(shortcuts);
+  $('#page-home #processingCard').after(shortcuts);
   shortcuts.querySelectorAll('button').forEach(button=>button.onclick=()=>button.dataset.tool==='video' ? $('#source').focus() : setPage(button.dataset.tool));
   const page=document.createElement('section');page.className='page';page.id='page-images';
-  page.innerHTML=`<h1>Studio gambar</h1><p class="lead">Jelaskan idemu. Pilih mesin lokal atau layanan online di Pengaturan.</p>
-    <div class="card"><label for="imagePrompt">Gambar seperti apa yang ingin dibuat?</label><textarea id="imagePrompt" rows="4" placeholder="Contoh: meja kerja minimalis dengan cahaya pagi, fotografi produk"></textarea>
-    <p class="field-help">Online mengirim deskripsi ke penyedia dan dapat memakai kuota API. Lokal memakai server Stable Diffusion milikmu; mulai dari 512 × 512 agar ringan.</p>
-    <div class="row"><button class="primary" id="imageGenerate">Buat gambar</button><button id="imageSettings">Atur penyedia</button></div></div>
-    <h2>Hasil gambar</h2><div id="imageGallery" class="image-gallery"></div>`;
+  page.innerHTML=`<h1>Studio gambar</h1><p class="lead">Buat visual dari deskripsi. Model lokal bekerja di komputer tanpa mengirim teks ke internet.</p>
+    <div class="source-modes image-modes" role="group" aria-label="Mesin gambar"><button type="button" class="active" data-image-mode="local">Lokal · offline</button><button type="button" data-image-mode="cloud">Online · opsional</button></div>
+    <div class="card image-model-card" id="imageModelCard" aria-live="polite"></div>
+    <div class="card image-prompt-card"><label for="imagePrompt">Gambar seperti apa yang ingin dibuat?</label><textarea id="imagePrompt" rows="4" maxlength="2000" placeholder="Contoh: meja kerja minimalis dengan cahaya pagi, fotografi produk"></textarea>
+    <div class="row image-actions"><button class="primary" id="imageGenerate">Buat gambar</button><button class="ghost" id="imageSettings">Atur penyedia online</button></div></div>
+    <h2>Hasil tersimpan</h2><div id="imageGallery" class="image-gallery"></div>`;
   $('main').append(page);
+  let imageMode='local', imageModel=null;
+  function updateImageMode(){
+    page.querySelectorAll('[data-image-mode]').forEach(button=>button.classList.toggle('active',button.dataset.imageMode===imageMode));
+    $('#imageGenerate').disabled=imageMode==='local'&&!imageModel?.installed;
+    $('#imageSettings').hidden=imageMode==='local';
+    $('#imageModelCard').innerHTML=imageMode==='local'
+      ? `<div class="spread"><div><h3>SDXS-512 <span class="muted">· 512 × 512</span></h3><p class="field-help">${imageModel?.installed ? 'Model lokal siap. Deskripsi dan hasil tetap di perangkatmu.' : 'Unduh sekali sekitar 683 MB. Setelah terpasang, gambar dapat dibuat offline tanpa server.'}</p></div>${imageModel?.installed ? '<span class="badge ok">Siap</span>' : '<button class="primary" id="imageModelDownload"'+(imageModel?'':' disabled')+'>Unduh model lokal · 683 MB</button>'}</div>`
+      : `<div class="spread"><div><h3>Layanan online</h3><p class="field-help">Deskripsi dikirim ke penyedia pilihanmu. Siapkan API key di Pengaturan.</p></div><button class="ghost" id="imageCloudSettings">Atur API key</button></div>`;
+    $('#imageModelDownload')?.addEventListener('click',async()=>{
+      try{
+        const button=$('#imageModelDownload');button.disabled=true;button.textContent='Mengunduh…';
+        const job=await api('/api/models/sdxs-512/download',{method:'POST'});
+        trackJob(job);
+        const events=new EventSource(`/api/jobs/${job.id}/events`);
+        events.onmessage=async event=>{const data=JSON.parse(event.data);if(data.type==='end'){events.close();await refreshImageModel();}};
+        events.onerror=()=>events.close();
+      }catch(error){toast(error.message,'error');await refreshImageModel();}
+    });
+    $('#imageCloudSettings')?.addEventListener('click',()=>setPage('settings'));
+  }
+  async function refreshImageModel(){
+    try{const data=await api('/api/models');imageModel=(data.models||[]).find(model=>model.id==='sdxs-512')||null;updateImageMode();}
+    catch(error){$('#imageModelCard').textContent='Status model belum tersedia: '+error.message;}
+  }
+  page.querySelectorAll('[data-image-mode]').forEach(button=>button.onclick=()=>{imageMode=button.dataset.imageMode;updateImageMode();});
   $('#imageSettings').onclick=()=>setPage('settings');
-  $('#imageGenerate').onclick=async()=>{try{const prompt=$('#imagePrompt').value.trim();if(!prompt)return toast('Isi deskripsi gambar.');const job=await api('/api/images',{method:'POST',body:JSON.stringify({prompt})});trackJob(job);}catch(e){toast(e.message,'error');}};
+  $('#imageGenerate').onclick=async()=>{
+    try{
+      const prompt=$('#imagePrompt').value.trim();if(!prompt)return toast('Isi deskripsi gambar.');
+      const job=await api('/api/images',{method:'POST',body:JSON.stringify({prompt,provider:imageMode==='local'?'sdxs_local':'cloud'})});
+      trackJob(job);
+    }catch(error){toast(error.message,'error');}
+  };
   window.renderImages=async()=>{
-    const images=await api('/api/images');
-    $('#imageGallery').innerHTML=images.length ? images.map(p=>`<article class="card"><img src="${mediaUrl(p.path)}" alt="Hasil gambar" loading="lazy"><div class="row"><a class="mini" download href="${mediaUrl(p.path)}">Simpan gambar</a><button data-delete-image="${p.name}">Hapus</button></div></article>`).join('') : '<div class="empty">Hasil gambar akan tersimpan di sini.</div>';
-    $('#imageGallery').querySelectorAll('[data-delete-image]').forEach(b=>b.onclick=async()=>{await api('/api/images/'+b.dataset.deleteImage,{method:'DELETE'});await renderImages();});
+    const [images]=await Promise.all([api('/api/images'),refreshImageModel()]);
+    $('#imageGallery').innerHTML=images.length ? images.map(p=>`<article class="card"><img src="${mediaUrl(p.path)}" alt="Hasil gambar" loading="lazy"><div class="row"><a class="mini" download href="${mediaUrl(p.path)}">Simpan gambar</a><button data-delete-image="${escapeHtml(p.name)}">Hapus</button></div></article>`).join('') : '<div class="empty">Belum ada gambar. Hasilmu akan tampil di sini.</div>';
+    $('#imageGallery').querySelectorAll('[data-delete-image]').forEach(b=>b.onclick=async()=>{await api('/api/images/'+encodeURIComponent(b.dataset.deleteImage),{method:'DELETE'});await renderImages();});
   };
 
   const settings=document.createElement('div');settings.id='aiSettings';
@@ -29,7 +61,7 @@
     const [{providers},saved]=await Promise.all([api('/api/ai/providers'),api('/api/settings')]);
     settings.innerHTML='<h2>AI opsional</h2><p class="field-help">Editor dan model suara lokal tetap bisa dipakai tanpa akun. Isi API key layananmu untuk fitur online. Langganan ChatGPT bukan API key. Di Windows, kunci disimpan dengan proteksi akun Windows.</p>'+[
       ['ai','Teks & pemilihan momen','text','Contoh: model teks yang tersedia di akunmu'],
-      ['image','Pembuatan gambar','image','gpt-image-1-mini / sd-cpp-local'],
+      ['image','Pembuatan gambar online','image','Contoh: gpt-image-1-mini'],
       ['speech','Suara online','speech','gpt-4o-mini-tts']
     ].map(([kind,label,capability,hint])=>`<details class="card ai-profile"><summary>${label}</summary><div class="grid-2"><label>Penyedia<select data-ai="${kind}_provider"><option value="">Belum diatur</option>${Object.entries(providers).filter(([,p])=>p[capability]).map(([id,p])=>`<option value="${id}">${p.label}</option>`).join('')}</select></label><label>Model<input data-ai="${kind}_model" placeholder="${hint}"></label><label>Alamat API<input data-ai="${kind}_base_url" placeholder="Diisi sesuai penyedia"></label><label>API key<input data-ai="${kind}_api_key" type="password" autocomplete="off" placeholder="${saved[kind+'_api_key'] ? 'Tersimpan · kosongkan untuk mempertahankan' : 'API key milikmu'}"></label></div><button class="mini" data-clear-key="${kind}">Hapus kunci tersimpan</button></details>`).join('')+'<button id="saveAiSettings" class="primary">Simpan pengaturan AI</button>';
     settings.querySelectorAll('[data-ai]').forEach(input=>{

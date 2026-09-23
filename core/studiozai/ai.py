@@ -12,6 +12,7 @@ from typing import Any
 from . import config, credentials
 
 PROVIDERS = {
+    "sdxs_local": {"label": "Di perangkat · SDXS-512", "url": "", "image": True},
     "openai": {"label": "OpenAI", "url": "https://api.openai.com/v1", "text": True, "image": True, "speech": True},
     "anthropic": {"label": "Anthropic", "url": "https://api.anthropic.com/v1", "text": True},
     "deepseek": {"label": "DeepSeek", "url": "https://api.deepseek.com", "text": True},
@@ -60,7 +61,7 @@ def connection(kind: str) -> tuple[str, str, str, str]:
     base = str(settings.get(f"{kind}_base_url") or PROVIDERS[provider]["url"])
     model = str(settings.get(f"{kind}_model", "")).strip()
     key = credentials.read().get(f"{kind}_api_key", "")
-    if provider not in {"compatible", "sd_local"} and not key:
+    if provider not in {"compatible", "sd_local", "sdxs_local"} and not key:
         raise ValueError("Isi API key di Pengaturan")
     return provider, base, model, key
 
@@ -79,10 +80,24 @@ def text(prompt: str) -> str:
     return str(response["choices"][0]["message"]["content"])
 
 
-def image(prompt: str) -> Path:
-    provider, base, model, key = connection("image")
+def image(prompt: str, provider: str | None = None) -> Path:
     if not prompt.strip():
         raise ValueError("Deskripsi gambar kosong")
+    saved = config.load_settings().get("image_provider") or "sdxs_local"
+    if provider in {"configured", "cloud"} and saved == "sdxs_local":
+        raise ValueError("Atur penyedia gambar online di Pengaturan terlebih dahulu.")
+    selected = saved if provider in {None, "configured", "cloud"} else provider
+    if selected == "sdxs_local":
+        from . import local_image
+        target = local_image.generate(prompt)
+        target.with_suffix(".json").write_text(
+            json.dumps({"prompt": prompt, "provider": "sdxs_local", "model": "sdxs-512"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return target
+    if selected != saved:
+        raise ValueError("Atur penyedia gambar online di Pengaturan terlebih dahulu.")
+    provider, base, model, key = connection("image")
     payload: dict[str, Any] = {"model": model or ("gpt-image-1-mini" if provider == "openai" else "sd-cpp-local"),
         "prompt": prompt, "n": 1, "size": "1024x1024" if provider == "openai" else "512x512"}
     if provider == "openai":

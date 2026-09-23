@@ -1,9 +1,10 @@
-"""Voice: Piper TTS (ID/EN, ultra light) and Chatterbox zero-shot cloning."""
+"""Local voice synthesis: Piper, Supertonic 3, and zero-shot cloning."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from .. import models
@@ -17,6 +18,14 @@ LANG_DEFAULT_VOICE = {
 }
 
 _CHATTERBOX_CACHE: dict[str, Any] = {}
+_SUPERTONIC_ENGINE: Any = None
+_SUPERTONIC_LOCK = RLock()
+SUPERTONIC_ID = "supertonic-3-int8"
+SUPERTONIC_FILES = (
+    "duration_predictor.int8.onnx", "text_encoder.int8.onnx",
+    "vector_estimator.int8.onnx", "vocoder.int8.onnx",
+    "tts.json", "unicode_indexer.bin", "voice.bin",
+)
 
 
 def tts_models() -> list[dict[str, Any]]:
@@ -112,6 +121,97 @@ def voice_files(voice_id: str) -> tuple[Path, Path | None]:
     return onnx, (config if config.exists() else None)
 
 
+def _supertonic_sid(voice_id: str) -> int:
+    if voice_id == SUPERTONIC_ID:
+        return 0
+    try:
+        sid = int(voice_id.removeprefix(SUPERTONIC_ID + ":"))
+    except ValueError as exc:
+        raise ValueError("Pilihan suara Supertonic tidak dikenal.") from exc
+    if not 0 <= sid <= 9:
+        raise ValueError("Suara Supertonic harus bernomor 0–9.")
+    return sid
+
+
+def _supertonic_directory() -> Path:
+    if not models.manager.is_installed(SUPERTONIC_ID):
+        raise FileNotFoundError("Unduh Supertonic 3 di halaman Model sebelum membuat suara.")
+    root = models.manager.model_dir(SUPERTONIC_ID)
+    for directory in (root, *root.iterdir()):
+        if directory.is_dir() and all((directory / name).is_file() for name in SUPERTONIC_FILES):
+            return directory
+    raise FileNotFoundError("Berkas Supertonic 3 belum lengkap. Unduh ulang di halaman Model.")
+
+
+def _load_supertonic() -> Any:
+    global _SUPERTONIC_ENGINE
+    if _SUPERTONIC_ENGINE is not None:
+        return _SUPERTONIC_ENGINE
+    try:
+        import sherpa_onnx
+    except ImportError as exc:
+        raise RuntimeError("sherpa-onnx diperlukan untuk Supertonic 3.") from exc
+    directory = _supertonic_directory()
+    config = sherpa_onnx.OfflineTtsConfig(
+        model=sherpa_onnx.OfflineTtsModelConfig(
+            supertonic=sherpa_onnx.OfflineTtsSupertonicModelConfig(
+                duration_predictor=str(directory / "duration_predictor.int8.onnx"),
+                text_encoder=str(directory / "text_encoder.int8.onnx"),
+                vector_estimator=str(directory / "vector_estimator.int8.onnx"),
+                vocoder=str(directory / "vocoder.int8.onnx"),
+                tts_json=str(directory / "tts.json"),
+                unicode_indexer=str(directory / "unicode_indexer.bin"),
+                voice_style=str(directory / "voice.bin"),
+            ),
+            num_threads=2,
+            provider="cpu",
+        )
+    )
+    if not config.validate():
+        raise RuntimeError("Konfigurasi Supertonic 3 tidak valid. Coba unduh ulang model.")
+    _SUPERTONIC_ENGINE = sherpa_onnx.OfflineTts(config)
+    return _SUPERTONIC_ENGINE
+
+
+def _synthesize_supertonic(
+    text: str, out_path: Path, voice_id: str, lang: str,
+    progress_cb: ProgressCb | None,
+) -> Path:
+    import wave
+
+    import numpy as np
+    import sherpa_onnx
+
+    sid = _supertonic_sid(voice_id)
+    language = lang.lower().split("-", 1)[0].split("_", 1)[0]
+    if language not in {"id", "en"}:
+        raise ValueError("Supertonic 3 di Studio ZAI tersedia untuk Indonesia dan English.")
+    if progress_cb:
+        progress_cb(10.0, "memuat Supertonic 3 lokal")
+    with _SUPERTONIC_LOCK:
+        engine = _load_supertonic()
+        settings = sherpa_onnx.GenerationConfig()
+        settings.sid = sid
+        settings.num_steps = 8
+        settings.speed = 1.0
+        settings.extra["lang"] = language
+        if progress_cb:
+            progress_cb(45.0, "membuat suara lokal")
+        audio = engine.generate(text, settings)
+    samples = np.asarray(audio.samples, dtype=np.float32)
+    if samples.size == 0 or audio.sample_rate <= 0:
+        raise RuntimeError("Supertonic 3 tidak menghasilkan audio.")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(out_path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(int(audio.sample_rate))
+        wav.writeframes((np.clip(samples, -1, 1) * 32767).astype(np.int16).tobytes())
+    if progress_cb:
+        progress_cb(100.0, "suara selesai")
+    return out_path
+
+
 def synthesize(
     text: str,
     out_path: str | Path,
@@ -119,10 +219,12 @@ def synthesize(
     lang: str = "id",
     progress_cb: ProgressCb | None = None,
 ) -> Path:
-    """Piper text-to-speech. Fast on CPU, no cloning."""
+    """Synthesize locally with the selected lightweight Piper/Supertonic voice."""
     if not text.strip():
         raise ValueError("teks kosong")
     voice_id = voice_id or default_voice(lang)
+    if voice_id == SUPERTONIC_ID or voice_id.startswith(SUPERTONIC_ID + ":"):
+        return _synthesize_supertonic(text, Path(out_path), voice_id, lang, progress_cb)
     if not piper_available():
         raise RuntimeError("piper-tts belum terpasang. Jalankan: pip install -e \"core[tts]\"")
     from piper.voice import PiperVoice  # type: ignore

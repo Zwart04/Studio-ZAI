@@ -15,6 +15,7 @@ class ModelInfo {
     this.experimental = false,
     this.installed = false,
     this.installedMb = 0,
+    this.sha256,
   });
 
   final String id;
@@ -29,6 +30,7 @@ class ModelInfo {
   final bool experimental;
   bool installed;
   double installedMb;
+  final String? sha256;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -41,6 +43,7 @@ class ModelInfo {
         'archive': archive,
         'tier': tier,
         'experimental': experimental,
+        if (sha256 != null) 'sha256': sha256,
       };
 
   static ModelInfo fromJson(Map<String, dynamic> json) => ModelInfo(
@@ -54,6 +57,7 @@ class ModelInfo {
         archive: json['archive'] as bool? ?? true,
         tier: json['tier'] as int? ?? 0,
         experimental: json['experimental'] as bool? ?? false,
+        sha256: json['sha256'] as String?,
       );
 }
 
@@ -139,11 +143,14 @@ class Clip {
         originalVolume: (json['originalVolume'] as num?)?.toDouble() ?? 0.25,
         voiceVolume: (json['voiceVolume'] as num?)?.toDouble() ?? 1.0,
         captions: List<Map<String, dynamic>>.from(
-            (json['captions'] as List? ?? const []).map((e) => Map<String, dynamic>.from(e as Map))),
+            (json['captions'] as List? ?? const [])
+                .map((e) => Map<String, dynamic>.from(e as Map))),
         files: Map<String, String>.from(json['files'] as Map? ?? const {}),
         status: json['status'] as String? ?? 'draft',
         narration: json['narration'] as String? ?? '',
-        timeline: json['timeline'] == null ? null : Map<String, dynamic>.from(json['timeline'] as Map),
+        timeline: json['timeline'] == null
+            ? null
+            : Map<String, dynamic>.from(json['timeline'] as Map),
       );
 }
 
@@ -158,6 +165,7 @@ class Project {
     this.clips = const [],
     this.createdAt,
     this.transcript = const [],
+    this.processingWarning = '',
   });
 
   final String id;
@@ -169,6 +177,7 @@ class Project {
   List<Clip> clips;
   DateTime? createdAt;
   List<Map<String, dynamic>> transcript;
+  String processingWarning;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -178,6 +187,7 @@ class Project {
         'duration': duration,
         'sourceIsUrl': sourceIsUrl,
         'transcript': transcript,
+        'processingWarning': processingWarning,
         'clips': clips.map((c) => c.toJson()).toList(),
         'createdAt': (createdAt ?? DateTime.now()).toIso8601String(),
       };
@@ -189,8 +199,13 @@ class Project {
         language: json['language'] as String? ?? 'id',
         duration: (json['duration'] as num?)?.toDouble() ?? 0,
         sourceIsUrl: json['sourceIsUrl'] as bool? ?? false,
-        transcript: List<Map<String, dynamic>>.from((json['transcript'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map))),
-        clips: (json['clips'] as List? ?? const []).map((e) => Clip.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+        transcript: List<Map<String, dynamic>>.from(
+            (json['transcript'] as List? ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))),
+        processingWarning: json['processingWarning'] as String? ?? '',
+        clips: (json['clips'] as List? ?? const [])
+            .map((e) => Clip.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
       );
 

@@ -11,9 +11,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from studiozai.pipeline import subtitle, timeline
+from studiozai.pipeline import render, subtitle, timeline
 from studiozai.utils import ffmpeg
 
 pytestmark = pytest.mark.skipif(
@@ -154,3 +155,40 @@ def test_default_timeline_mengikuti_potongan_klip() -> None:
     assert items[0]["end"] == 8.0  # durasi klip, bukan waktu absolut
     assert items[0]["crop"] == "blur"
     assert timeline.duration_of(tl) == 8.0
+
+
+def test_render_clip_keeps_original_audio_level(media: dict[str, Path], tmp_path: Path) -> None:
+    """A source-voice clip must not be accidentally attenuated or hard-clipped."""
+    output = tmp_path / "audio-quality.mp4"
+    render.render_clip(
+        media["source"], output, 0, 3, crop_mode="fit",
+        src_size=(1280, 720), out_size=(640, 360), encoder="libx264",
+        voice_volume=0.25,  # unrelated narration slider must not reduce source
+    )
+
+    def rms(path: Path) -> float:
+        raw = subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", "0.5", "-t", "2", "-i", str(path),
+             "-vn", "-ac", "1", "-ar", "48000", "-f", "f32le", "-"],
+            capture_output=True, check=True,
+        ).stdout
+        samples = np.frombuffer(raw, dtype=np.float32)
+        return float(np.sqrt(np.mean(samples * samples)))
+
+    assert 0.88 <= rms(output) / rms(media["source"]) <= 1.12
+    source_audio = next(s for s in ffmpeg.ffprobe_json(media["source"])["streams"] if s["codec_type"] == "audio")
+    audio = next(s for s in ffmpeg.ffprobe_json(output)["streams"] if s["codec_type"] == "audio")
+    assert audio["codec_name"] == "aac"
+    assert audio["sample_rate"] == source_audio["sample_rate"]
+    assert abs(int(audio["bit_rate"]) - int(source_audio["bit_rate"])) < 2000
+
+
+def test_timeline_keeps_aac_when_no_audio_effect_is_used(media: dict[str, Path], tmp_path: Path) -> None:
+    output = tmp_path / "timeline-original.mp4"
+    edit = timeline.default_timeline(0, 3, str(media["source"]), canvas="original")
+    timeline.render_timeline(media["source"], output, edit, src_size=(1280, 720), encoder="libx264")
+    source_audio = next(s for s in ffmpeg.ffprobe_json(media["source"])["streams"] if s["codec_type"] == "audio")
+    output_audio = next(s for s in ffmpeg.ffprobe_json(output)["streams"] if s["codec_type"] == "audio")
+    assert source_audio["codec_name"] == output_audio["codec_name"] == "aac"
+    assert source_audio["sample_rate"] == output_audio["sample_rate"]
+    assert abs(int(output_audio["bit_rate"]) - int(source_audio["bit_rate"])) < 2000

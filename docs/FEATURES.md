@@ -1,22 +1,25 @@
-# Fitur Studio ZAI 1.6
+# Fitur Studio ZAI 1.7
 
 | Fitur | Windows | Android |
 |---|---|---|
 | Video lokal | Ya | Ya |
 | Link online | Situs yang didukung yt-dlp | YouTube dan URL file langsung |
+| TikTok/Instagram | Tautan publik yang didukung yt-dlp | Impor file video yang sudah disimpan |
 | Dub audio YouTube | Track yang tersedia | Track yang tersedia, retry terbatas tetap mempertahankan bahasa |
 | Video sumber tersimpan | Ya | Ya |
 | Trim, split, kanvas asli/9:16/1:1/16:9 | Ya | Ya |
 | Timeline video, media, teks, audio | Ya | Ya |
 | Pemutar langsung + pratinjau otomatis | Ya | Ya |
 | Subtitle ID/EN | faster-whisper | sherpa-onnx Whisper |
+| Durasi klip adaptif/topik produk | Ya | Ya, dengan fallback bila transkrip kosong |
 | Template bawaan + gaya buatan sendiri | Ya | Ya |
 | Piper ID/EN + karakter suara | Ya | Ya |
+| Supertonic 3, 10 suara ID/EN | Ya | Ya; sintesis native belum diuji di HP fisik |
 | Rekaman mikrofon | Browser/WebView | Izin mikrofon Android |
 | ZipVoice English/Mandarin | Runtime dibundel | Runtime dibundel |
 | AI teks / pemilihan momen | OpenAI, Anthropic, DeepSeek, compatible | Sama |
 | Gambar / suara online | OpenAI | OpenAI |
-| Gambar lokal | Server SD.cpp terpisah | Koneksi server, bukan mesin difusi native |
+| Gambar lokal | SDXS-512, mesin SD.cpp CPU dalam paket | SDXS-512 CPU native pada ARM64; ARM32 belum didukung |
 | Duplikat proyek independen | Ya | Belum ada tombol duplikat |
 | Hapus proyek / cache terpisah | Ya | Ya |
 
@@ -26,4 +29,4 @@ Caption hasil render tidak ditimpa track pemutar kedua. Teks yang sudah menyatu 
 
 Sumber unduhan disimpan di proyek. Hapus proyek membuang sumber dan hasil miliknya; file asal eksternal dipertahankan. Cache hanya data sementara.
 
-HP fisik, mikrofon perangkat, dan layanan cloud live belum diuji. Belum ada iOS, sinkronisasi cloud proyek, publikasi langsung ke media sosial, atau difusi gambar native universal. [Validasi rilis](RELEASE-1.6.0.md).
+HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.7.0.md).

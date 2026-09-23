@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 import sys
 import urllib.error
@@ -20,6 +21,35 @@ from ..utils import ffmpeg, proc
 DEFAULT_MIN_LEN = 15.0
 DEFAULT_MAX_LEN = 60.0
 HOP_SECONDS = 0.5
+
+# These are safety limits for unusually long sections, not user-facing target
+# durations. Shorter product chapters keep their full natural length.
+ADAPTIVE_SOFT_SPLIT = 155.0
+ADAPTIVE_HARD_SPLIT = 180.0
+ADAPTIVE_UTTERANCE_SPLIT = 90.0
+_VERDICT = re.compile(
+    r"\b(?:jadi|kesimpulan|menurut saya|rekomendasi|recommended|worth|layak|bagus|buruk|"
+    r"lumayan|suka|mantap|overall|in conclusion|i recommend|i like|good value)\b",
+    re.IGNORECASE,
+)
+_TOPIC_START = re.compile(
+    r"\b(?:"
+    r"(?:produk|speaker|barang|item|model|unit|pilihan|perangkat)\s+(?:yang\s+)?"
+    r"(?:pertama|kedua|ketiga|keempat|kelima|berikutnya|selanjutnya|terakhir|termurah|termahal|ke[- ]?\d+)"
+    r"\s+(?:ini|adalah)"
+    r"|(?:produk|speaker|barang|item|model|unit)\s+ke[- ]?\d{1,2}\b"
+    r"|(?:nomor|no\.)\s*(?:ke[- ]?)?(?:\d{1,2}|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan)\b"
+    r"|(?:yang|sekarang)\s+(?:pertama|kedua|ketiga|keempat|kelima|keenam|ketujuh|kedelapan|"
+    r"kesembilan|kesepuluh|ke[- ]?\d+|terakhir)\s+(?:ini|adalah|dulu)"
+    r"|(?:first|second|third|next|last|cheapest|most expensive)\s+"
+    r"(?:product|speaker|item|model|device)"
+    r"|(?:sekarang|selanjutnya|berikutnya|pertama|kedua|ketiga|lanjut)\s+"
+    r"(?:kita\s+)?(?:bahas|lihat|review|ulas|coba|tes|uji|masuk\s+ke)"
+    r"|(?:now|next|first|second|third)\s+(?:let'?s\s+)?"
+    r"(?:review|look\s+at|test|try|talk\s+about)"
+    r")\b",
+    re.IGNORECASE,
+)
 
 WEIGHT_LOUDNESS_AVG = 0.28
 WEIGHT_LOUDNESS_PEAK = 0.22
@@ -450,6 +480,167 @@ def title_from_text(text: str, max_words: int = 7) -> str:
     return title if len(words) <= max_words else f"{title}…"
 
 
+def _valid_segments(transcript: dict[str, Any]) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    for row in transcript.get("segments") or []:
+        try:
+            start, end = float(row["start"]), float(row["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        text = str(row.get("text") or "").strip()
+        if math.isfinite(start) and math.isfinite(end) and end > start and text:
+            segments.append({**row, "start": start, "end": end, "text": text})
+    return sorted(segments, key=lambda row: row["start"])
+
+
+def _introduces_topic(segments: Sequence[dict[str, Any]], index: int) -> bool:
+    current = segments[index]["text"]
+    following = segments[index + 1]["text"] if index + 1 < len(segments) else ""
+    # Auto captions and ASR commonly split "Nomor" and "6" across events.
+    match = _TOPIC_START.search(f"{current} {following}")
+    if not match or match.start() >= len(current):
+        return False
+    preceding = current[max(0, match.start() - 24): match.start()].lower()
+    # "dari speaker pertama" is a comparison with an earlier product.
+    if re.search(r"(?:dari|daripada|dibanding(?:kan)?(?:\s+dengan)?)\s*$", preceding):
+        return False
+    if re.search(r"\b(?:lebih\s+suka|suka|prefer|lebih\s+baik|better)\s*$", preceding):
+        return False
+    if re.search(r"\bnomor\s+\d+\s+ya\s+ini\b", current.lower()):
+        return False
+    return True
+
+
+def _topic_start_time(segments: Sequence[dict[str, Any]], index: int) -> float:
+    """Move an intro inside a Whisper segment to the first matching word."""
+    row = segments[index]
+    words = row.get("words") or []
+    if not words:
+        return float(row["start"])
+    following = segments[index + 1]["text"] if index + 1 < len(segments) else ""
+    match = _TOPIC_START.search(f"{row['text']} {following}")
+    if not match:
+        return float(row["start"])
+    before = len(row["text"][:match.start()].split())
+    if before >= len(words):
+        return float(row["start"])
+    try:
+        return max(float(row["start"]), float(words[before]["start"]))
+    except (TypeError, ValueError, KeyError):
+        return float(row["start"])
+
+
+def _adaptive_transcript_windows(transcript: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep a product/topic review intact instead of carving at a word count.
+
+    Whisper segments often split in mid-sentence, so ordinary material is
+    grouped until a sentence or pause. Explicit introductions ("produk kedua",
+    "next speaker", etc.) define stronger chapter boundaries. This is a
+    deterministic local fallback; an installed LLM can rank the same material.
+    """
+    segments = _valid_segments(transcript)
+    if not segments:
+        return []
+
+    anchors = [0]
+    for index, segment in enumerate(segments):
+        if index and _introduces_topic(segments, index):
+            # A product can be introduced across two adjacent ASR segments.
+            if segment["start"] - segments[anchors[-1]]["start"] >= 8.0:
+                anchors.append(index)
+
+    windows: list[dict[str, Any]] = []
+    if len(anchors) > 1:
+        for chapter_index, begin in enumerate(anchors):
+            stop = anchors[chapter_index + 1] if chapter_index + 1 < len(anchors) else len(segments)
+            cursor = begin
+            while cursor < stop:
+                first = segments[cursor]
+                remainder = segments[stop - 1]["end"] - first["start"]
+                if remainder <= ADAPTIVE_HARD_SPLIT:
+                    cut = stop
+                else:
+                    possible = [
+                        i for i in range(cursor + 1, stop + 1)
+                        if segments[i - 1]["end"] - first["start"] <= ADAPTIVE_HARD_SPLIT
+                    ]
+                    if not possible:
+                        cut = cursor + 1
+                    else:
+                        cut = min(
+                            possible,
+                            key=lambda i: (
+                                abs(segments[i - 1]["end"] - first["start"] - ADAPTIVE_SOFT_SPLIT)
+                                - (10.0 if re.search(r"[.!?]$", segments[i - 1]["text"]) else 0.0)
+                                - (6.0 if _VERDICT.search(" ".join(s["text"] for s in segments[max(cursor, i - 3):i])) else 0.0)
+                            ),
+                        )
+                window = _window_from_segments(segments[cursor:cut])
+                if window["duration"] >= 3.0:
+                    window["topic_intro"] = (cursor == begin and begin != 0) or (
+                        cursor == 0 and _introduces_topic(segments, 0)
+                    )
+                    if window["topic_intro"]:
+                        window["start"] = _topic_start_time(segments, cursor)
+                        window["duration"] = round(window["end"] - window["start"], 3)
+                    window["chapter_start"] = cursor == begin
+                    windows.append(window)
+                cursor = cut
+    else:
+        cursor = 0
+        while cursor < len(segments):
+            cut = cursor + 1
+            while cut < len(segments):
+                span = segments[cut - 1]["end"] - segments[cursor]["start"]
+                last = segments[cut - 1]
+                gap = segments[cut]["start"] - last["end"]
+                if span >= ADAPTIVE_UTTERANCE_SPLIT or gap >= 1.0:
+                    break
+                if span >= 40.0 and re.search(r"[.!?]$", last["text"]):
+                    break
+                if span >= 15.0 and last["end"] - last["start"] >= 15.0:
+                    break
+                cut += 1
+            window = _window_from_segments(segments[cursor:cut])
+            if window["duration"] >= 3.0:
+                window["topic_intro"] = False
+                window["chapter_start"] = True
+                windows.append(window)
+            cursor = cut
+    return windows
+
+
+def _adaptive_audio_windows(
+    duration: float, silences: Sequence[tuple[float, float]]
+) -> list[dict[str, Any]]:
+    """Use audible pauses when speech recognition is unavailable."""
+    if duration <= 0:
+        return []
+    target = min(90.0, max(30.0, duration / 12.0))
+    windows: list[dict[str, Any]] = []
+    start = 0.0
+    while start < duration - 1.0:
+        desired = min(duration, start + target)
+        if duration - desired < 12.0:
+            desired = duration
+        if desired < duration:
+            pause_points = [
+                (a + b) / 2.0 for a, b in silences
+                if b - a >= 0.4 and start + 15.0 <= (a + b) / 2.0 <= start + ADAPTIVE_HARD_SPLIT
+            ]
+            if pause_points:
+                desired = min(pause_points, key=lambda point: abs(point - desired))
+        if desired <= start + 1.0:
+            desired = min(duration, start + target)
+        windows.append({
+            "start": round(start, 3), "end": round(desired, 3),
+            "duration": round(desired - start, 3), "text": "", "words": [],
+            "topic_intro": False, "chapter_start": True,
+        })
+        start = desired
+    return windows
+
+
 # --------------------------------------------------------------------------- scoring
 
 
@@ -570,6 +761,36 @@ def pick_clips(
     max_len: float = DEFAULT_MAX_LEN,
 ) -> list[ClipCandidate]:
     """Pick top-N non-overlapping clip candidates (deterministic, no AI required)."""
+    # Zero means that the editor decides the duration from topical and speech
+    # boundaries. Explicit positive limits remain supported for older API/CLI
+    # callers that intentionally requested a fixed range.
+    if min_len <= 0 or max_len <= 0:
+        windows = _adaptive_transcript_windows(transcript) if transcript else []
+        if not windows:
+            windows = _adaptive_audio_windows(duration, silences)
+        scored = score_windows(windows, envelope, silences)
+        for window in scored:
+            if window.get("topic_intro"):
+                window["score"] += 0.3
+            elif window.get("chapter_start"):
+                window["score"] += 0.04
+        chosen = select_top(scored, count, overlap_tolerance=0.5, video_duration=duration)
+        candidates: list[ClipCandidate] = []
+        for window in chosen:
+            start = round(max(0.0, min(duration, float(window["start"]))), 3)
+            end = round(max(0.0, min(duration, float(window["end"]))), 3)
+            if end - start < 1.0:
+                continue
+            candidates.append(ClipCandidate(
+                start=start,
+                end=end,
+                score=float(window["score"]),
+                reason=("awal topik; " if window.get("topic_intro") else "") + _reason(window),
+                title=title_from_text(window.get("text", "")),
+                words=list(window.get("words") or []),
+            ))
+        return candidates
+
     windows = []
     if transcript and transcript.get("segments"):
         windows = sentence_windows(transcript, min_len, max_len)
@@ -619,8 +840,8 @@ def analyze_media(
     media_path: str | Path,
     transcript: dict[str, Any] | None = None,
     count: int = 5,
-    min_len: float = DEFAULT_MIN_LEN,
-    max_len: float = DEFAULT_MAX_LEN,
+    min_len: float = 0.0,
+    max_len: float = 0.0,
     video_duration: float = 0.0,
     progress_cb: ProgressCb | None = None,
 ) -> list[ClipCandidate]:
@@ -664,7 +885,10 @@ def rank_with_llm(
         f"Kamu editor shorts. Pilih maksimal {count} momen paling menarik dari transkrip "
         "ber-nomor berikut. Balas HANYA JSON array dengan objek "
         '{"start":<detik>,"end":<detik>,"title":"<judul singkat>"}. '
-        f"Durasi tiap momen 15-60 detik.\n\n{numbered}"
+        "Tiap klip harus dimulai saat topik/produk diperkenalkan dan berakhir "
+        "setelah gagasan atau ulasan produk selesai, sebelum produk berikutnya. "
+        "Pilih durasi sesuai isi, jangan memotong kalimat atau mulai di tengah ulasan. "
+        f"Utamakan momen yang mandiri dan jelas untuk media sosial.\n\n{numbered}"
     )
     if provider:
         from .. import ai

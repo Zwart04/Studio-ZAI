@@ -159,3 +159,48 @@ def test_snap_to_words():
 def test_title_from_text():
     assert highlight.title_from_text("satu dua tiga") == "satu dua tiga"
     assert highlight.title_from_text(" ".join(str(i) for i in range(10))).endswith("…")
+
+
+def test_adaptive_product_review_starts_at_introduction_and_ends_before_next():
+    # Product sections differ in length. A fixed 15-60s cut used to start in
+    # the middle of a review and discard its verdict.
+    transcript = {"segments": [
+        {"start": 0, "end": 10, "text": "Selamat datang, ini daftar speaker murah."},
+        {"start": 10, "end": 27, "text": "Sekarang kita bahas speaker pertama."},
+        {"start": 27, "end": 84, "text": "Desain, baterai dan suaranya cukup baik."},
+        {"start": 84, "end": 102, "text": "Jadi ini pilihan yang bagus untuk harganya."},
+        {"start": 102, "end": 118, "text": "Barang kedua ini lebih besar."},
+        {"start": 118, "end": 170, "text": "Bass-nya kuat dan baterainya tahan lama."},
+        {"start": 170, "end": 190, "text": "Saya lebih suka model kedua ini."},
+        {"start": 190, "end": 208, "text": "Nomor tiga. Ini ukurannya kecil."},
+        {"start": 208, "end": 237, "text": "Suara kecil tapi nyaman dibawa."},
+    ]}
+    clips = highlight.pick_clips(237, transcript=transcript, count=3, min_len=0, max_len=0)
+    assert [(clip.start, clip.end) for clip in clips] == [(10, 102), (102, 190), (190, 237)]
+    assert clips[0].duration > 60, "review pertama perlu lebih panjang dari batas lama"
+
+
+def test_adaptive_uses_word_start_inside_asr_segment():
+    transcript = {"segments": [
+        {"start": 0, "end": 8, "text": "Pembukaan acara"},
+        {"start": 8, "end": 20, "text": "Yang tadi oke. Barang kedua ini lebih mantap.", "words": [
+            {"word": "Yang", "start": 8.0, "end": 8.5},
+            {"word": "tadi", "start": 8.6, "end": 9.0},
+            {"word": "oke.", "start": 9.1, "end": 9.8},
+            {"word": "Barang", "start": 11.0, "end": 11.6},
+            {"word": "kedua", "start": 11.7, "end": 12.3},
+            {"word": "ini", "start": 12.4, "end": 12.8},
+        ]},
+        {"start": 20, "end": 39, "text": "Baterainya sangat lama."},
+    ]}
+    windows = highlight._adaptive_transcript_windows(transcript)
+    assert windows[-1]["start"] == 11.0
+    assert windows[-1]["end"] == 39.0
+
+
+def test_adaptive_audio_fallback_returns_clips_without_transcript():
+    clips = highlight.pick_clips(240, silences=[(62, 63), (128, 129), (198, 200)],
+                                 count=3, min_len=0, max_len=0)
+    assert clips
+    assert clips[0].start == 0
+    assert all(0 <= c.start < c.end <= 240 for c in clips)

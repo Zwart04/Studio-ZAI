@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:studiozai/services/youtube_source.dart';
+import 'package:studiozai/services/downloader.dart';
 
 AudioOnlyStreamInfo audio(String track,
         {int size = 5, String url = 'https://example.test/expired'}) =>
@@ -66,5 +68,23 @@ void main() {
     final manifest = StreamManifest([audio('en.0'), audio('id-ID.3')]);
     expect(YoutubeSource.audio(manifest, 'id').audioTrack!.id, 'id-ID.3');
     expect(() => YoutubeSource.audio(manifest, 'fr'), throwsStateError);
+  });
+  test('TikTok/Instagram links explain local import before any transfer',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('studio-social-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    for (final url in [
+      'https://vm.tiktok.com/abc123',
+      'https://www.instagram.com/reel/abc123/'
+    ]) {
+      await expectLater(
+        Downloader.download(url, dir, (_, __) {}),
+        throwsA(predicate((error) =>
+            error is UnsupportedError &&
+            error.message.toString().contains('Pilih video'))),
+      );
+    }
+    expect(Downloader.isYoutube('https://youtube.com.evil.example/watch?v=x'),
+        isFalse);
   });
 }

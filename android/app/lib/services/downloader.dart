@@ -20,35 +20,59 @@ class Downloader {
   static bool isUrl(String value) =>
       value.startsWith('http://') || value.startsWith('https://');
 
-  static bool isYoutube(String url) =>
-      url.contains('youtube.com') || url.contains('youtu.be');
+  static bool isYoutube(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return host == 'youtu.be' ||
+        host == 'youtube.com' ||
+        host.endsWith('.youtube.com');
+  }
+
+  static bool _isSocialHost(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return host == 'tiktok.com' ||
+        host.endsWith('.tiktok.com') ||
+        host == 'instagram.com' ||
+        host.endsWith('.instagram.com');
+  }
 
   static bool looksLikeMediaFile(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? '';
-    for (final extension in const ['.mp4', '.mov', '.mkv', '.webm', '.m4v', '.mp3', '.m4a', '.wav']) {
+    for (final extension in const [
+      '.mp4',
+      '.mov',
+      '.mkv',
+      '.webm',
+      '.m4v',
+      '.mp3',
+      '.m4a',
+      '.wav'
+    ]) {
       if (path.endsWith(extension)) return true;
     }
     return false;
   }
 
   static Future<File> download(
-    String url,
-    Directory outDir,
-    void Function(double, String) onProgress,
-    {String? audioLanguage, void Function(String)? onTitle}
-  ) async {
+      String url, Directory outDir, void Function(double, String) onProgress,
+      {String? audioLanguage, void Function(String)? onTitle}) async {
     outDir.createSync(recursive: true);
     if (looksLikeMediaFile(url)) {
       return _downloadDirect(url, outDir, onProgress);
     }
     if (isYoutube(url)) {
-      return _downloadYoutube(url, outDir, onProgress, audioLanguage: audioLanguage, onTitle: onTitle);
+      return _downloadYoutube(url, outDir, onProgress,
+          audioLanguage: audioLanguage, onTitle: onTitle);
+    }
+    if (_isSocialHost(url)) {
+      throw UnsupportedError(
+        'Link TikTok/Instagram belum bisa diunduh langsung di APK. '
+        'Simpan videonya ke perangkat lalu pilih “Pilih video” untuk membuat '
+        'klip secara lokal. Di desktop, Studio ZAI dapat mencoba link publiknya.',
+      );
     }
     throw Exception(
-      'Link ini butuh yt-dlp, yang untuk saat ini hanya jalan di aplikasi desktop '
-      'Studio ZAI (TikTok/Instagram). Di HP kamu bisa: (1) tempel link file video '
-      'langsung (.mp4), (2) pakai link YouTube, atau (3) unduh di desktop lalu '
-      'pindahkan videonya ke HP.',
+      'Link ini bukan YouTube atau berkas video langsung. '
+      'Pilih video yang sudah tersimpan di perangkat, atau tempel link berkas .mp4.',
     );
   }
 
@@ -60,7 +84,9 @@ class Downloader {
     void Function(double, String) onProgress,
   ) async {
     final segments = Uri.parse(url).pathSegments;
-    final name = segments.isEmpty ? 'video-${DateTime.now().millisecondsSinceEpoch}.mp4' : segments.last;
+    final name = segments.isEmpty
+        ? 'video-${DateTime.now().millisecondsSinceEpoch}.mp4'
+        : segments.last;
     final target = File('${outDir.path}/$name');
 
     final response = await http.Request('GET', Uri.parse(url)).send();
@@ -77,7 +103,9 @@ class Downloader {
     }
     await sink.flush();
     await sink.close();
-    if (target.lengthSync() == 0) throw Exception('Berkas hasil unduhan kosong.');
+    if (target.lengthSync() == 0) {
+      throw Exception('Berkas hasil unduhan kosong.');
+    }
     onProgress(100, 'selesai');
     return target;
   }
@@ -86,7 +114,8 @@ class Downloader {
 
   /// YouTube track IDs may include a regional tag and a track suffix (id.4).
   static bool matchesLanguage(String trackId, String language) =>
-      trackId.toLowerCase().split(RegExp(r'[-_.]')).first == language.toLowerCase();
+      trackId.toLowerCase().split(RegExp(r'[-_.]')).first ==
+      language.toLowerCase();
 
   static Future<File> _downloadYoutube(
     String url,
@@ -96,16 +125,18 @@ class Downloader {
     void Function(String)? onTitle,
   }) async {
     final youtube = YoutubeExplode();
-    final scratch = Directory('${outDir.path}/.download-${DateTime.now().microsecondsSinceEpoch}');
+    final scratch = Directory(
+        '${outDir.path}/.download-${DateTime.now().microsecondsSinceEpoch}');
     try {
       scratch.createSync(recursive: true);
       onProgress(3, 'membaca info video');
       final manifest = await YoutubeSource.manifest(url,
-        onStatus: (message) => onProgress(3, message));
+          onStatus: (message) => onProgress(3, message));
       // Metadata is optional; stream extraction must not depend on a watch page.
       var title = VideoId.fromString(url).value;
       try {
-        final video = await youtube.videos.get(url).timeout(const Duration(seconds: 12));
+        final video =
+            await youtube.videos.get(url).timeout(const Duration(seconds: 12));
         title = video.title;
       } catch (_) {}
       onTitle?.call(title);
@@ -116,16 +147,28 @@ class Downloader {
       final v = File('${scratch.path}/video.mp4');
       final a = File('${scratch.path}/audio.m4a');
       await _saveStream(youtube, selectedVideo, v,
-        (p, detail) => onProgress(5 + p * 0.65, 'Video 720p · $detail'));
+          (p, detail) => onProgress(5 + p * 0.65, 'Video 720p · $detail'));
       // Android YouTube stream URLs may be single-use. Get fresh audio URLs
       // after downloading the video instead of reusing the original manifest.
       final fresh = await YoutubeSource.manifest(url,
-        onStatus: (message) => onProgress(70, message));
+          onStatus: (message) => onProgress(70, message));
       final selectedAudio = YoutubeSource.audio(fresh, audioLanguage);
-      await _saveStream(youtube, selectedAudio, a,
-        (p, detail) => onProgress(70 + p * 0.23, 'Audio ${audioLanguage ?? "bawaan"} · $detail'));
+      await _saveStream(
+          youtube,
+          selectedAudio,
+          a,
+          (p, detail) => onProgress(
+              70 + p * 0.23, 'Audio ${audioLanguage ?? "bawaan"} · $detail'));
       onProgress(94, 'Menggabungkan video dan audio');
-      final session = await FFmpegKit.execute('-y -i "${v.path}" -i "${a.path}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -movflags +faststart "${target.path}"');
+      // AAC audio in a YouTube M4A is already MP4-compatible. Copy it bit for
+      // bit so the 78-minute source is not needlessly compressed again before
+      // clip rendering. Opus/WebM needs a single high-quality AAC conversion.
+      final codec = selectedAudio.audioCodec.toLowerCase();
+      final audioArgs = codec.contains('mp4a') || codec.contains('aac')
+          ? '-c:a copy'
+          : '-c:a aac -b:a 256k -ar 48000';
+      final session = await FFmpegKit.execute(
+          '-y -i "${v.path}" -i "${a.path}" -map 0:v:0 -map 1:a:0 -c:v copy $audioArgs -movflags +faststart "${target.path}"');
       if (!ReturnCode.isSuccess(await session.getReturnCode())) {
         if (target.existsSync()) target.deleteSync();
         throw Exception('Gagal menggabungkan track video dan audio.');
@@ -133,43 +176,56 @@ class Downloader {
       onProgress(100, 'selesai');
       return target;
     } on YoutubeExplodeException catch (error) {
-      throw Exception('YouTube menolak permintaan (${error.message}). Coba lagi nanti.');
+      throw Exception(
+          'YouTube menolak permintaan (${error.message}). Coba lagi nanti.');
     } finally {
       youtube.close();
       if (scratch.existsSync()) scratch.deleteSync(recursive: true);
     }
   }
 
-  static Future<void> _saveStream(YoutubeExplode youtube, StreamInfo stream, File target, void Function(double, String) progress) async {
+  static Future<void> _saveStream(YoutubeExplode youtube, StreamInfo stream,
+      File target, void Function(double, String) progress) async {
     final sink = target.openWrite();
     var received = 0;
     var buffered = 0;
     final clock = Stopwatch()..start();
     var lastEmit = 0;
     try {
-      await for (final chunk in YoutubeSource.bytes(stream).timeout(const Duration(seconds: 90))) {
+      await for (final chunk
+          in YoutubeSource.bytes(stream).timeout(const Duration(seconds: 90))) {
         sink.add(chunk);
         received += chunk.length;
         buffered += chunk.length;
-        if (buffered >= 1024 * 1024) { await sink.flush(); buffered = 0; }
-        if (clock.elapsedMilliseconds - lastEmit >= 300 && stream.size.totalBytes > 0) {
+        if (buffered >= 1024 * 1024) {
+          await sink.flush();
+          buffered = 0;
+        }
+        if (clock.elapsedMilliseconds - lastEmit >= 300 &&
+            stream.size.totalBytes > 0) {
           final speed = received / (clock.elapsedMilliseconds / 1000);
-          final remaining = ((stream.size.totalBytes - received) / speed).ceil();
-          progress(received / stream.size.totalBytes * 100,
-            '${(received / 1048576).toStringAsFixed(1)}/${(stream.size.totalBytes / 1048576).toStringAsFixed(1)} MB · '
-            '${(speed / 1048576).toStringAsFixed(1)} MB/s · sisa ${remaining ~/ 60}:${(remaining % 60).toString().padLeft(2, "0")}');
+          final remaining =
+              ((stream.size.totalBytes - received) / speed).ceil();
+          progress(
+              received / stream.size.totalBytes * 100,
+              '${(received / 1048576).toStringAsFixed(1)}/${(stream.size.totalBytes / 1048576).toStringAsFixed(1)} MB · '
+              '${(speed / 1048576).toStringAsFixed(1)} MB/s · sisa ${remaining ~/ 60}:${(remaining % 60).toString().padLeft(2, "0")}');
           lastEmit = clock.elapsedMilliseconds;
         }
       }
       await sink.flush();
-    } finally { await sink.close(); }
-    if (received == 0 || (stream.size.totalBytes > 0 && received != stream.size.totalBytes)) {
+    } finally {
+      await sink.close();
+    }
+    if (received == 0 ||
+        (stream.size.totalBytes > 0 && received != stream.size.totalBytes)) {
       throw Exception('Unduhan terputus. Periksa koneksi dan coba lagi.');
     }
   }
 
   static String _safeName(String input) {
-    final cleaned = input.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), '_').trim();
+    final cleaned =
+        input.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f]'), '_').trim();
     return cleaned.length > 70 ? cleaned.substring(0, 70) : cleaned;
   }
 }

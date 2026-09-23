@@ -123,7 +123,7 @@ class YoutubeSource {
             b.videoResolution.height.compareTo(a.videoResolution.height);
         return resolution != 0
             ? resolution
-            : a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond);
+            : b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond);
       });
     if (choices.isEmpty) {
       throw StateError(

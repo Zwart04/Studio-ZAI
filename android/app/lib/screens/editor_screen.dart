@@ -416,29 +416,51 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _previewBox(AppState state) {
     final path = _previewPath ?? state.currentProject?.source;
-    return Container(
-      margin: const EdgeInsets.all(Tokens.space4),
-      height: 220,
-      decoration: BoxDecoration(
-          color: Tokens.surface,
-          borderRadius: BorderRadius.circular(Tokens.radius)),
-      clipBehavior: ui.Clip.antiAlias,
-      child: Stack(alignment: Alignment.center, children: [
-        if (path != null)
-          Center(
-              child: VideoPreview(
-                  key: ValueKey(path),
-                  path: path,
-                  startSeconds: _previewPath == null ? widget.clip.start : 0,
-                  endSeconds: _previewPath == null ? widget.clip.end : null)),
-        if (_previewMessage.isNotEmpty)
-          Positioned(
-              top: 8,
-              left: 12,
-              right: 12,
-              child: Text(_previewMessage,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, color: Tokens.textDim))),
+    final height = math.min(
+        360.0, math.max(210.0, MediaQuery.sizeOf(context).height * .35));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          Tokens.space4, Tokens.space3, Tokens.space4, Tokens.space4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: Tokens.space2),
+          child: Row(children: [
+            const Icon(Icons.play_circle_outline_rounded,
+                size: 17, color: Tokens.textDim),
+            const SizedBox(width: Tokens.space2),
+            const Text('Video',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            if (_previewMessage.isNotEmpty)
+              Flexible(
+                  child: Text(_previewMessage,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 11, color: Tokens.textDim))),
+          ]),
+        ),
+        Container(
+          width: double.infinity,
+          height: height,
+          decoration: BoxDecoration(
+            color: Tokens.surface,
+            borderRadius: BorderRadius.circular(Tokens.radius),
+          ),
+          clipBehavior: ui.Clip.antiAlias,
+          child: path == null
+              ? const Center(
+                  child: Text('Video belum tersedia',
+                      style: TextStyle(color: Tokens.textDim)))
+              : Center(
+                  child: VideoPreview(
+                      key: ValueKey(path),
+                      path: path,
+                      startSeconds:
+                          _previewPath == null ? widget.clip.start : 0,
+                      endSeconds:
+                          _previewPath == null ? widget.clip.end : null)),
+        ),
       ]),
     );
   }
@@ -451,24 +473,34 @@ class _EditorScreenState extends State<EditorScreen> {
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Tokens.space4),
-      child: Row(
-        children: [
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+            color: Tokens.surface,
+            borderRadius: BorderRadius.circular(Tokens.radiusSm)),
+        child: Row(children: [
           for (var i = 0; i < labels.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(right: Tokens.space2),
-              child: ChoiceChip(
-                label: Text(labels[i]),
-                selected: _tab == i,
-                onSelected: (_) => setState(() => _tab = i),
-                selectedColor: Tokens.accent.withValues(alpha: 0.22),
-                labelStyle: TextStyle(
-                    color: _tab == i ? Tokens.accent : Tokens.text2,
-                    fontSize: 13),
-                backgroundColor: Tokens.surface2,
-                side: BorderSide.none,
+            Expanded(
+                child: Padding(
+              padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 4),
+              child: TextButton(
+                onPressed: () => setState(() => _tab = i),
+                style: TextButton.styleFrom(
+                  foregroundColor: _tab == i ? Tokens.text : Tokens.textDim,
+                  backgroundColor:
+                      _tab == i ? Tokens.surface3 : Colors.transparent,
+                  minimumSize: const Size(0, 38),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Tokens.radiusSm - 3)),
+                ),
+                child: Text(labels[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12)),
               ),
-            ),
-        ],
+            )),
+        ]),
       ),
     );
   }
@@ -948,64 +980,114 @@ class _PositionPicker extends StatelessWidget {
   final double x, y;
   final void Function(double x, double y) onChanged;
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Posisi di dalam kanvas',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 10),
-        for (final row in [0, 1, 2])
-          Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(children: [
-                for (final col in [0, 1, 2])
-                  Expanded(
-                      child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                                backgroundColor:
-                                    (x - [.18, .5, .82][col]).abs() < .08 &&
-                                            (y - [.18, .5, .82][row]).abs() <
-                                                .08
-                                        ? Tokens.accent.withValues(alpha: .22)
-                                        : Tokens.surface2),
-                            onPressed: () => onChanged(
-                                [.18, .5, .82][col], [.18, .5, .82][row]),
-                            child: Semantics(
-                                label: '${['Atas', 'Tengah', 'Bawah'][row]} ${[
-                                  'kiri',
-                                  'tengah',
-                                  'kanan'
-                                ][col]}',
-                                child: const Icon(Icons.circle, size: 8)),
-                          ))),
-              ])),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-              child: TextFormField(
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Posisi teks',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: Tokens.space1),
+          const Text('Sentuh atau geser titik di kanvas.',
+              style: TextStyle(fontSize: 12, color: Tokens.textDim)),
+          const SizedBox(height: Tokens.space3),
+          Center(
+              child: SizedBox(
+            width: 112,
+            height: 184,
+            child: LayoutBuilder(builder: (context, constraints) {
+              void move(Offset point) => onChanged(
+                    (point.dx / constraints.maxWidth).clamp(0.06, 0.94),
+                    (point.dy / constraints.maxHeight).clamp(0.06, 0.94),
+                  );
+              return Semantics(
+                label: 'Posisi teks dalam kanvas',
+                child: GestureDetector(
+                  onTapDown: (details) => move(details.localPosition),
+                  onPanUpdate: (details) => move(details.localPosition),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Tokens.surface2,
+                      border: Border.all(color: Tokens.surface3),
+                      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                    ),
+                    child: Stack(children: [
+                      Positioned(
+                        left: x * (constraints.maxWidth - 22),
+                        top: y * (constraints.maxHeight - 22),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Tokens.accent,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: const Icon(Icons.title,
+                              size: 14, color: Tokens.text),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              );
+            }),
+          )),
+          const SizedBox(height: Tokens.space3),
+          Row(children: [
+            for (final entry in const [
+              ('Atas', .18),
+              ('Tengah', .5),
+              ('Bawah', .82),
+            ])
+              Expanded(
+                  child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: OutlinedButton(
+                  onPressed: () => onChanged(x, entry.$2),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: (y - entry.$2).abs() < .08
+                        ? Tokens.surface3
+                        : Tokens.surface2,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  child: Text(entry.$1, style: const TextStyle(fontSize: 12)),
+                ),
+              )),
+          ]),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: Tokens.space3),
+            title: const Text('Posisi presisi', style: TextStyle(fontSize: 13)),
+            children: [
+              Row(children: [
+                Expanded(
+                    child: TextFormField(
                   key: ValueKey('x$x'),
                   initialValue: (x * 100).round().toString(),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'X (%)'),
-                  onFieldSubmitted: (v) {
-                    final n = double.tryParse(v);
-                    if (n != null) onChanged((n / 100).clamp(0, 1), y);
-                  })),
-          const SizedBox(width: 12),
-          Expanded(
-              child: TextFormField(
+                  onFieldSubmitted: (value) {
+                    final parsed = double.tryParse(value);
+                    if (parsed != null) {
+                      onChanged((parsed / 100).clamp(0, 1), y);
+                    }
+                  },
+                )),
+                const SizedBox(width: Tokens.space3),
+                Expanded(
+                    child: TextFormField(
                   key: ValueKey('y$y'),
                   initialValue: (y * 100).round().toString(),
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Y (%)'),
-                  onFieldSubmitted: (v) {
-                    final n = double.tryParse(v);
-                    if (n != null) onChanged(x, (n / 100).clamp(0, 1));
-                  })),
-        ]),
-        const SizedBox(height: 8),
-        const Text('Pilih titik, atau isi persentase untuk posisi presisi.',
-            style: TextStyle(fontSize: 12, color: Tokens.textDim)),
-      ]);
+                  onFieldSubmitted: (value) {
+                    final parsed = double.tryParse(value);
+                    if (parsed != null) {
+                      onChanged(x, (parsed / 100).clamp(0, 1));
+                    }
+                  },
+                )),
+              ])
+            ],
+          ),
+        ],
+      );
 }
