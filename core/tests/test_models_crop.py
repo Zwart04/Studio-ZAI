@@ -23,20 +23,20 @@ def test_resolve_tier_android_low_ram():
     tier = models.manager.resolve_tier({"android": True, "ram_gb": 4.0}, "id")
     assert tier["asr"] == "whisper-tiny-int8"
     assert tier["clone"] is None
-    assert tier["tts"].startswith("piper-id")
+    assert tier["tts"] == "supertonic-3-int8"
 
 
 def test_resolve_tier_android_capable():
     tier = models.manager.resolve_tier({"android": True, "ram_gb": 8.0}, "en")
     assert tier["asr"] == "whisper-base-int8"
     assert tier["clone"] == "zipvoice-zh-en"
-    assert tier["tts"].startswith("piper-en")
+    assert tier["tts"] == "piper-en_US-ljspeech-medium"
 
 
 def test_resolve_tier_desktop():
     desktop = models.manager.resolve_tier({"android": False, "ram_gb": 16.0, "gpu": {"name": "RTX 4060", "vram_gb": 8}}, "id")
     assert desktop["asr"] == "whisper-small-int8"
-    assert desktop["clone"] == "zipvoice-zh-en"
+    assert desktop["clone"] is None  # ZipVoice cannot speak Indonesian.
     weak = models.manager.resolve_tier({"android": False, "ram_gb": 4.0}, "id")
     assert weak["asr"] == "whisper-base-int8"
 

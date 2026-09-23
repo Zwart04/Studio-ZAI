@@ -1,3 +1,16 @@
+# v1.8.0 — 23 September 2026
+
+- Editor desktop kini menempatkan pemutar dan panel pengaturan di atas timeline dengan penggaris/playhead, drag blok/tepi, dan impor berkas ke track. Tombol dialog mengikuti gaya aplikasi.
+- Subtitle otomatis di editor desktop tidak menutup panel saat pekerjaan berjalan; klip tanpa transkrip proyek ditranskripsi hanya pada rentang yang dipilih. Alur awal menjelaskan bahwa subtitle dibuat Whisper lokal dari audio, bukan caption tautan.
+- APK memperjelas pembuatan subtitle dan menjaga caption lama bila audio hening. Pemilih contoh kloning menerima dokumen audio dari penyimpanan Android, mengubahnya ke WAV, serta memakai teks kloning terpisah dari formulir TTS.
+- Katalog suara diaudit per lisensi suara dan data. Supertonic 3 menjadi rekomendasi Indonesia, Piper LJSpeech untuk English; suara lama yang nonkomersial atau haknya belum jelas ditandai dan tidak ditawarkan sebagai pilihan baru.
+- Model kloning Indonesia Chatterbox Apache-2.0 tersedia sebagai opsi desktop dari source yang berat, dengan kegagalan runtime/checkpoint yang jelas; APK tetap memakai ZipVoice English/Mandarin. Formulir desktop dapat memilih model, mengimpor format audio yang dibaca FFmpeg, atau merekam mikrofon.
+- Perbarui README, tangkapan layar, tur GIF, dokumen model, dan paket rilis.
+
+[Validasi dan batasan](RELEASE-1.8.0.md).
+
+---
+
 # v1.7.0 — 23 September 2026
 
 - Perbaiki jalur model Android yang mengirim objek Flutter ke isolate, validasi arsip/checksum, serta fallback pembuatan klip ketika hasil transkripsi tidak menghasilkan rekomendasi.

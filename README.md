@@ -2,7 +2,7 @@
 
 <p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.7.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model</a> · <a href="README.en.md">English</a></p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.8.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
 
 ![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/04-editor.jpg)
 
@@ -10,11 +10,11 @@
 
 | Video | Suara | Gambar |
 | :-- | :-- | :-- |
-| Temukan klip dari transkrip, simpan sumber, potong lagi tanpa mengunduh ulang. | Narasi Indonesia/Inggris, sepuluh karakter Supertonic lokal, Piper, rekaman mikrofon, dan kloning English/Mandarin. | SDXS-512 membuat gambar 512×512 di perangkat setelah model diunduh. Penyedia cloud tetap pilihan. |
+| Temukan klip dari transkrip, simpan sumber, potong lagi tanpa mengunduh ulang. | Narasi Indonesia/Inggris, sepuluh karakter Supertonic lokal, suara Piper yang terpilih, rekaman mikrofon, dan kloning suara. | SDXS-512 membuat gambar 512×512 di perangkat setelah model diunduh. Penyedia cloud tetap pilihan. |
 
 **Klip otomatis yang mengikuti isi video.** Mode durasi adaptif mencari awal topik atau ulasan produk dan titik akhir kalimat yang masuk akal. Pilih track audio sumber sebelum memproses; bahasa transkripsi tidak mengubah atau menerjemahkan suara. Pengguna tetap bisa mengambil rentang waktu lain dari video sumber yang tersimpan.
 
-**Editor yang langsung dapat diputar.** Trim, split, ukuran asli/9:16/1:1/16:9, teks, media, musik, dan subtitle berada dalam satu layar. Terapkan salah satu dari 24 gaya teks atau buat lalu simpan gaya sendiri. Perubahan diperbarui menjadi pratinjau yang bisa dimainkan sebelum ekspor.
+**Editor dengan timeline.** Video langsung dapat diputar, panel pengaturan ada di samping, dan timeline ada di bawah. Geser blok untuk memindahkan teks/media, tarik tepinya untuk mengubah durasi, atau letakkan berkas ke track. Trim, split, ukuran asli/9:16/1:1/16:9, musik, dan subtitle ada di layar yang sama. Buat subtitle AI untuk satu klip tanpa perlu menranskripsi ulang seluruh video panjang; terapkan salah satu dari 24 gaya atau simpan tipografi buatanmu.
 
 **Lokal lebih dulu.** File lokal, editor, transkripsi, subtitle, suara, dan gambar lokal berjalan tanpa API key setelah model dipasang. Model tidak dibundel dalam APK/EXE agar paket awal tetap lebih kecil. Unduhan model dan video dari tautan tentu membutuhkan internet. OpenAI, Anthropic, DeepSeek, dan endpoint kompatibel tersedia sebagai pilihan untuk tugas AI yang mendukungnya.
 
@@ -22,19 +22,19 @@
 
 | Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
-| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/StudioZAI-1.7.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan pengujian v1.7.0](docs/RELEASE-1.7.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.7.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
+[Catatan pengujian v1.8.0](docs/RELEASE-1.8.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 
-1. Jalankan setup awal dan unduh model transkripsi sesuai perangkat. **Whisper Base** cukup untuk mulai; **Small** umumnya lebih baik untuk Indonesia jika RAM memadai. Model suara dan gambar dapat dipasang kemudian dari halaman **Model**.
+1. Jalankan setup awal dan unduh model transkripsi sesuai perangkat. **Whisper Base** cukup untuk mulai; **Small** umumnya lebih baik untuk Indonesia jika RAM memadai. Pilihan suara Indonesia utama adalah **Supertonic 3** (sepuluh karakter, lisensi OpenRAIL-M); gambar dapat dipasang kemudian dari halaman **Model**.
 2. Tempel tautan atau pilih video lokal. Letakkan **bahasa konten** dan **track audio sumber** yang benar sebelum memilih suara klip asli atau narasi. Pada Android, tautan YouTube publik dan URL berkas langsung didukung; untuk TikTok/Instagram, impor berkas video yang telah disimpan. Desktop memakai situs yang didukung yt-dlp.
-3. Pilih jumlah klip dan tekan **Buat klip**. Aplikasi menyimpan sumber bersama proyek. Buka klip untuk langsung memutar, memotong, mengubah kanvas, dan menata subtitle.
+3. Pilih jumlah klip dan tekan **Buat klip**. Jika **Subtitle AI dari audio** aktif, Whisper lokal mengenali ucapan; Studio ZAI tidak mengambil caption dari tautan. Aplikasi menyimpan sumber bersama proyek. Buka klip untuk memutar, memotong, mengubah kanvas, dan menata subtitle.
 4. Ekspor hasil saat selesai. Untuk mengambil momen lain, buka **Ambil bagian dari video sumber**; tidak perlu mengunduh video itu lagi.
 
-> **Transkrip** adalah teks ucapan yang dipakai untuk memilih momen. **Subtitle** adalah bagian teks tersebut yang diberi waktu dan ditampilkan pada video. Jika sumber sudah memiliki tulisan yang menyatu dengan gambar, nonaktifkan subtitle tambahan atau ubah posisinya agar tidak bertumpuk. Kloning suara ZipVoice saat ini mendukung English/Mandarin; sepuluh suara Supertonic mendukung teks Indonesia/Inggris tetapi bukan kloning.
+> **Transkrip** adalah teks ucapan yang dipakai untuk memilih momen. **Subtitle** adalah bagian teks tersebut yang diberi waktu dan ditampilkan pada video. Jika sumber sudah memiliki tulisan yang menyatu dengan gambar, nonaktifkan subtitle tambahan atau ubah posisinya agar tidak bertumpuk. ZipVoice mendukung kloning English/Mandarin; kloning Indonesia hanya tersedia sebagai opsi desktop dari source dengan Chatterbox/PyTorch yang jauh lebih berat, belum di APK/EXE ringan. Sepuluh suara Supertonic mendukung TTS Indonesia/Inggris, bukan kloning.
 
 ## Lihat aplikasinya
 
@@ -48,11 +48,11 @@ Gambar di atas diambil dari UI desktop dengan media demo yang dibuat untuk dokum
 
 ## Model, privasi, dan batasan
 
-Bobot [SDXS-512](docs/LOCAL_IMAGE.md) sekitar 683 MB dan butuh RAM tambahan saat menghasilkan gambar. Performa bergantung pada perangkat; ponsel ARM32 belum memiliki mesin gambar offline native. Supertonic 3 dan Piper bersifat opsional per suara; Whisper dipilih sesuai kemampuan perangkat. [Daftar model dan lisensinya](docs/MODELS.md) menjelaskan pilihan yang direkomendasikan.
+Bobot [SDXS-512](docs/LOCAL_IMAGE.md) sekitar 683 MB dan butuh RAM tambahan saat menghasilkan gambar. Performa bergantung pada perangkat; ponsel ARM32 belum memiliki mesin gambar offline native. Model lama dengan batas nonkomersial atau hak data yang belum jelas tetap diberi tanda dan tidak direkomendasikan. **Supertonic 3 adalah open-weights, bukan open source OSI**, dan izin komersialnya memiliki syarat. [Daftar model dan lisensinya](docs/MODELS.md) menjelaskan sumber dan batasan setiap pilihan.
 
 Kunci API disimpan pada penyimpanan terlindungi sistem. Mode lokal tidak mengirim prompt atau media ke penyedia cloud. Mode online mengirim permintaan ke penyedia yang dipilih. Video privat, dihapus, dibatasi wilayah, atau meminta login bisa gagal diunduh; pilih berkas lokal sebagai alternatif.
 
-Perubahan ini diuji dengan video review speaker nyata 80,5 menit untuk menemukan awal ulasan produk serta mengekspor klip dengan audio; rincian dan batasan pengujian tercatat pada [laporan rilis](docs/RELEASE-1.7.0.md). Perangkat Android fisik belum tersedia untuk uji end-to-end dalam sesi ini.
+Alur pemilihan klip diuji dengan [video review speaker nyata 80,5 menit](https://youtu.be/4WvlolSYqjU). Pemeriksaan editor, subtitle satu klip, paket desktop dan APK dijelaskan pada [laporan rilis](docs/RELEASE-1.8.0.md). Perangkat Android fisik belum tersedia untuk uji end-to-end dalam sesi ini.
 
 ## Kembangkan
 

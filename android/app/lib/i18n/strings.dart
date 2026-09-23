@@ -13,7 +13,8 @@ class S {
       'nav.models': 'Model',
       'nav.settings': 'Pengaturan',
       'home.title': 'Buat klip otomatis',
-      'home.lead': 'Paste link YouTube/TikTok/Instagram atau pilih video dari galeri. Semua proses jalan di HP-mu.',
+      'home.lead':
+          'Paste link YouTube/TikTok/Instagram atau pilih video dari galeri. Semua proses jalan di HP-mu.',
       'home.source': 'Link atau berkas video',
       'home.pick': 'Pilih video',
       'home.start': 'Mulai',
@@ -30,7 +31,8 @@ class S {
       'clips.preview': 'Pratinjau',
       'clips.renderFirst': 'Render klip dulu sebelum pratinjau.',
       'clips.deleted': 'Klip dihapus.',
-      'clips.deleteConfirm': 'Hapus klip ini? Berkas hasil rendernya ikut dihapus.',
+      'clips.deleteConfirm':
+          'Hapus klip ini? Berkas hasil rendernya ikut dihapus.',
       'editor.title': 'Editor',
       'editor.trim': 'Potong',
       'editor.crop': 'Framing',
@@ -51,10 +53,12 @@ class S {
       'editor.itemText': 'Tulis teks…',
       'editor.deleteItem': 'Hapus item terpilih',
       'editor.previewDraft': 'Pratinjau cepat',
-      'editor.timelineHint': 'Geser blok untuk mengatur waktu, tarik tepinya untuk mengubah durasi.',
+      'editor.timelineHint':
+          'Geser blok untuk mengatur waktu, tarik tepinya untuk mengubah durasi.',
       'editor.noItem': 'Ketuk blok di timeline untuk mengatur.',
-      'editor.trimHint': 'Framing potong membuang sisi video (teks di tepi bisa terpotong). '
-          'Pilih "Fit (tidak memotong)" untuk menampilkan seluruh gambar.',
+      'editor.trimHint':
+          'Framing potong membuang sisi video (teks di tepi bisa terpotong). '
+              'Pilih "Fit (tidak memotong)" untuk menampilkan seluruh gambar.',
       'timeline.video': 'Video',
       'timeline.media': 'Media',
       'timeline.text': 'Teks',
@@ -63,21 +67,24 @@ class S {
       'audio.voice': 'Narasi saja',
       'audio.mix': 'Narasi + asli',
       'voice.title': 'Suara',
-      'voice.lead': 'Piper untuk narasi ID/EN (ringan), atau kloning suara sendiri.',
+      'voice.lead':
+          'Narasi offline Indonesia/English dengan banyak pilihan suara. Kloning suara English tersedia terpisah.',
       'voice.generate': 'Buat suara',
       'voice.clone': 'Kloning suara',
-      'voice.sample': 'Rekaman contoh (10-30 detik)',
-      'voice.consent': 'Saya hanya memakai suara milik saya atau yang saya punya izin.',
+      'voice.sample': 'Rekaman contoh (4–30 detik)',
+      'voice.consent':
+          'Saya hanya memakai suara milik saya atau yang saya punya izin.',
       'voice.text': 'Teks',
       'voice.lang': 'Bahasa',
       'voice.model': 'Model suara',
       'voice.result': 'Hasil',
       'voice.pickSample': 'Pilih rekaman',
       'voice.sampleText': 'Transkrip rekaman contoh',
-      'voice.experimentalNote': 'Kloning suara di HP masih eksperimental (ZipVoice, Bahasa Inggris) '
-          'dan belum aktif. Pakai aplikasi desktop untuk kloning produksi.',
+      'voice.experimentalNote':
+          'ZipVoice menjalankan kloning English/Mandarin langsung di perangkat. Siapkan rekaman contoh yang jelas dan transkripnya.',
       'models.title': 'Model',
-      'models.lead': 'Model tidak ikut dalam APK. Unduh hanya yang kamu butuhkan.',
+      'models.lead':
+          'Model tidak ikut dalam APK. Unduh hanya yang kamu butuhkan.',
       'models.download': 'Unduh',
       'models.remove': 'Hapus',
       'models.installed': 'Terpasang',
@@ -106,7 +113,8 @@ class S {
       'nav.models': 'Models',
       'nav.settings': 'Settings',
       'home.title': 'Automatic clipping',
-      'home.lead': 'Paste a YouTube/TikTok/Instagram link or pick a video from your gallery. Everything runs on-device.',
+      'home.lead':
+          'Paste a YouTube/TikTok/Instagram link or pick a video from your gallery. Everything runs on-device.',
       'home.source': 'Link or video file',
       'home.pick': 'Pick video',
       'home.start': 'Start',
@@ -123,7 +131,8 @@ class S {
       'clips.preview': 'Preview',
       'clips.renderFirst': 'Render the clip before previewing.',
       'clips.deleted': 'Clip deleted.',
-      'clips.deleteConfirm': 'Delete this clip? Its rendered file is removed too.',
+      'clips.deleteConfirm':
+          'Delete this clip? Its rendered file is removed too.',
       'editor.title': 'Editor',
       'editor.trim': 'Trim',
       'editor.crop': 'Framing',
@@ -144,10 +153,12 @@ class S {
       'editor.itemText': 'Type text…',
       'editor.deleteItem': 'Delete selected item',
       'editor.previewDraft': 'Quick preview',
-      'editor.timelineHint': 'Drag a block to move it in time, drag its edge to change duration.',
+      'editor.timelineHint':
+          'Drag a block to move it in time, drag its edge to change duration.',
       'editor.noItem': 'Tap a block on the timeline to edit it.',
-      'editor.trimHint': 'Cropping throws away the sides of the video (on-screen text at the '
-          'edges can get cut). Pick "Fit (no crop)" to keep the whole frame.',
+      'editor.trimHint':
+          'Cropping throws away the sides of the video (on-screen text at the '
+              'edges can get cut). Pick "Fit (no crop)" to keep the whole frame.',
       'timeline.video': 'Video',
       'timeline.media': 'Media',
       'timeline.text': 'Text',
@@ -156,21 +167,24 @@ class S {
       'audio.voice': 'Narration only',
       'audio.mix': 'Narration + original',
       'voice.title': 'Voice',
-      'voice.lead': 'Piper for light ID/EN narration, or clone your own voice.',
+      'voice.lead':
+          'Offline Indonesian/English narration with multiple voices. English voice cloning is separate.',
       'voice.generate': 'Generate voice',
       'voice.clone': 'Voice cloning',
-      'voice.sample': 'Reference recording (10-30 s)',
-      'voice.consent': 'I only use my own voice or voices I have permission to use.',
+      'voice.sample': 'Reference recording (4–30 s)',
+      'voice.consent':
+          'I only use my own voice or voices I have permission to use.',
       'voice.text': 'Text',
       'voice.lang': 'Language',
       'voice.model': 'Voice model',
       'voice.result': 'Result',
       'voice.pickSample': 'Pick recording',
       'voice.sampleText': 'Reference recording transcript',
-      'voice.experimentalNote': 'On-device voice cloning (ZipVoice, English) is still experimental '
-          'and not enabled. Use the desktop app for production cloning.',
+      'voice.experimentalNote':
+          'ZipVoice clones English/Mandarin voices on device. Use a clear reference recording and its transcript.',
       'models.title': 'Models',
-      'models.lead': 'Models are not bundled in the APK. Download only what you need.',
+      'models.lead':
+          'Models are not bundled in the APK. Download only what you need.',
       'models.download': 'Download',
       'models.remove': 'Remove',
       'models.installed': 'Installed',

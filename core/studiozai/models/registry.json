@@ -134,7 +134,11 @@
           }
         ]
       },
-      "sha256": null
+      "sha256": null,
+      "commercial_use": "unverified",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/id/id_ID/news_tts/medium/MODEL_CARD",
+      "license_note": "Repositori bobot bertanda MIT, tetapi model card tidak menjelaskan izin komersial data suara Indonesia. Jangan anggap aman untuk konten komersial.",
+      "recommended": false
     },
     {
       "id": "piper-en_US-lessac-medium",
@@ -167,7 +171,13 @@
           }
         ]
       },
-      "sha256": null
+      "sha256": null,
+      "commercial_use": "restricted",
+      "license_url": "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+      "license_note": "Data pelatihan Lessac dibatasi untuk riset; tidak direkomendasikan untuk konten komersial.",
+      "recommended": false,
+      "deprecated": true,
+      "experimental": true
     },
     {
       "id": "piper-en_GB-alba-medium",
@@ -200,7 +210,13 @@
           }
         ]
       },
-      "sha256": null
+      "sha256": null,
+      "commercial_use": "unverified",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/alba/medium/MODEL_CARD",
+      "license_note": "Data Alba CC BY 4.0, tetapi model ini diturunkan dari Lessac yang data latihnya riset saja.",
+      "recommended": false,
+      "deprecated": true,
+      "experimental": true
     },
     {
       "id": "chatterbox-base",
@@ -223,7 +239,12 @@
         "note": "Instal dengan: pip install -e \"core[clone]\". Bobot diunduh otomatis."
       },
       "sha256": null,
-      "experimental": true
+      "experimental": true,
+      "commercial_use": "allowed",
+      "license_url": "https://github.com/resemble-ai/chatterbox/blob/master/LICENSE",
+      "license_note": "MIT; model dasar English, berat dan memerlukan PyTorch. Disembunyikan dari pilihan baru.",
+      "recommended": false,
+      "deprecated": true
     },
     {
       "id": "chatterbox-id-finetune",
@@ -235,9 +256,9 @@
         "source-only"
       ],
       "tier": 2,
-      "size_mb": 600,
+      "size_mb": 2130,
       "license": "Apache-2.0",
-      "note": "Arsip eksperimen; runtime PyTorch manual, tidak direkomendasikan untuk paket ringan. Dukungan Indonesia belum tervalidasi.",
+      "note": "Kloning Bahasa Indonesia opsional di desktop source; butuh PyTorch, RAM besar, dan unduhan model dasar terpisah.",
       "homepage": "https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian",
       "download": {
         "type": "files",
@@ -251,13 +272,18 @@
         ]
       },
       "sha256": null,
-      "experimental": true
+      "commercial_use": "allowed",
+      "license_url": "https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian/raw/main/README.md",
+      "license_note": "Apache-2.0 memperbolehkan komersial dengan atribusi. Checkpoint tambahan 2,13 GB, model dasar dan PyTorch menambah beberapa GB; hanya desktop dari source.",
+      "recommended": false,
+      "runtime_note": "Instal core[clone] di Python; tidak tersedia dalam APK/EXE ringan."
     },
     {
       "id": "zipvoice-zh-en",
       "kind": "clone",
       "langs": [
-        "en"
+        "en",
+        "zh"
       ],
       "platforms": [
         "desktop",
@@ -280,7 +306,11 @@
           }
         ]
       },
-      "sha256": null
+      "sha256": null,
+      "commercial_use": "allowed",
+      "license_url": "https://github.com/k2-fsa/ZipVoice/blob/master/LICENSE",
+      "license_note": "Apache-2.0 memperbolehkan komersial; suara kloning hanya English/Mandarin, bukan Indonesia.",
+      "recommended": true
     },
     {
       "id": "piper-en_US-amy-medium",
@@ -310,7 +340,13 @@
             "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json"
           }
         ]
-      }
+      },
+      "commercial_use": "unverified",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/amy/medium/MODEL_CARD",
+      "license_note": "Asal data Mycroft perlu ditinjau dan model ini diturunkan dari Lessac.",
+      "recommended": false,
+      "deprecated": true,
+      "experimental": true
     },
     {
       "id": "piper-en_US-ryan-medium",
@@ -340,7 +376,13 @@
             "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json"
           }
         ]
-      }
+      },
+      "commercial_use": "restricted",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ryan/medium/MODEL_CARD",
+      "license_note": "Data Ryan berlisensi CC BY-NC-SA 4.0 (nonkomersial).",
+      "recommended": false,
+      "deprecated": true,
+      "experimental": true
     },
     {
       "id": "piper-en_US-joe-medium",
@@ -370,17 +412,29 @@
             "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx.json"
           }
         ]
-      }
+      },
+      "commercial_use": "unverified",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/joe/medium/MODEL_CARD",
+      "license_note": "Data Joe CC0, tetapi model ini diturunkan dari Lessac yang data latihnya riset saja.",
+      "recommended": false,
+      "deprecated": true,
+      "experimental": true
     },
     {
       "id": "supertonic-3-int8",
       "kind": "tts",
-      "langs": ["id", "en"],
-      "platforms": ["desktop", "android"],
+      "langs": [
+        "id",
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
       "tier": 1,
       "size_mb": 123,
       "license": "OpenRAIL-M",
-      "note": "Sepuluh karakter suara lokal untuk Indonesia dan Inggris. CPU, opsional setelah setup dasar.",
+      "note": "Sepuluh suara lokal untuk Indonesia/English; CPU. Komersial sesuai syarat OpenRAIL-M.",
       "homepage": "https://huggingface.co/Supertone/supertonic-3",
       "download": {
         "type": "archive",
@@ -388,13 +442,23 @@
         "name": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
         "sha256": "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427"
-      }
+      },
+      "commercial_use": "allowed",
+      "license_url": "https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE",
+      "license_note": "Bobot OpenRAIL-M memperbolehkan komersial dengan batasan penggunaan, atribusi, dan pemberitahuan konten AI. Ini open-weights, bukan lisensi open source OSI.",
+      "recommended": true,
+      "license_kind": "open-weights"
     },
     {
       "id": "sdxs-512",
       "kind": "image",
-      "langs": ["multi"],
-      "platforms": ["desktop", "android"],
+      "langs": [
+        "multi"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
       "tier": 1,
       "size_mb": 651,
       "license": "OpenRAIL++",
@@ -403,11 +467,13 @@
       "download": {
         "type": "files",
         "provider": "huggingface",
-        "files": [{
-          "name": "sdxs-512-tinySDdistilled_Q8_0.gguf",
-          "url": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF/resolve/3144d898d61492f8382ffcabec055733fc5b2a0e/sdxs-512-tinySDdistilled_Q8_0.gguf",
-          "sha256": "409ab23582ee074c6b9d5395784fc0741b0599fb9d138686c69087c71678eb6a"
-        }]
+        "files": [
+          {
+            "name": "sdxs-512-tinySDdistilled_Q8_0.gguf",
+            "url": "https://huggingface.co/concedo/sdxs-512-tinySDdistilled-GGUF/resolve/3144d898d61492f8382ffcabec055733fc5b2a0e/sdxs-512-tinySDdistilled_Q8_0.gguf",
+            "sha256": "409ab23582ee074c6b9d5395784fc0741b0599fb9d138686c69087c71678eb6a"
+          }
+        ]
       }
     },
     {
@@ -422,8 +488,8 @@
       ],
       "tier": 0,
       "size_mb": 63,
-      "license": "Lihat model card",
-      "note": "English US · Ljspeech · suara lokal opsional",
+      "license": "MIT",
+      "note": "English US · suara perempuan · ringan; pilihan komersial yang sumber datanya jelas.",
       "homepage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD",
       "download": {
         "type": "files",
@@ -438,7 +504,11 @@
             "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json"
           }
         ]
-      }
+      },
+      "commercial_use": "allowed",
+      "license_url": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD",
+      "license_note": "Bobot dari repositori MIT; model dilatih dari awal memakai LJSpeech berstatus public domain. Cantumkan pemberitahuan lisensi MIT saat distribusi.",
+      "recommended": true
     }
   ]
 }

@@ -27,4 +27,4 @@ Sumber unduhan dimiliki proyek, sehingga bisa dipotong kembali tanpa unduhan bar
 
 Teks cloud mengembalikan rentang momen yang divalidasi terhadap durasi sumber. Gambar dan suara dikirim sebagai prompt/teks ke provider pilihan pengguna dan hasil PNG/WAV disimpan lokal. Koneksi gambar lokal adalah integrasi HTTP ke server terpisah, bukan runtime difusi yang dibundel. API key tidak ditampilkan oleh GET settings dan tidak diteruskan melalui redirect.
 
-Lihat [fitur per platform](FEATURES.md) dan [cakupan pengujian](RELEASE-1.7.0.md).
+Lihat [fitur per platform](FEATURES.md) dan [cakupan pengujian](RELEASE-1.8.0.md).

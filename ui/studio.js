@@ -51,7 +51,7 @@
   };
   window.renderImages=async()=>{
     const [images]=await Promise.all([api('/api/images'),refreshImageModel()]);
-    $('#imageGallery').innerHTML=images.length ? images.map(p=>`<article class="card"><img src="${mediaUrl(p.path)}" alt="Hasil gambar" loading="lazy"><div class="row"><a class="mini" download href="${mediaUrl(p.path)}">Simpan gambar</a><button data-delete-image="${escapeHtml(p.name)}">Hapus</button></div></article>`).join('') : '<div class="empty">Belum ada gambar. Hasilmu akan tampil di sini.</div>';
+    $('#imageGallery').innerHTML=images.length ? images.map(p=>`<article class="card"><img src="${mediaUrl(p.path)}" alt="Hasil gambar" loading="lazy"><div class="row"><a class="mini" download href="${mediaUrl(p.path)}">Simpan gambar</a><button class="mini danger" data-delete-image="${escapeHtml(p.name)}">Hapus</button></div></article>`).join('') : '<div class="empty">Belum ada gambar. Hasilmu akan tampil di sini.</div>';
     $('#imageGallery').querySelectorAll('[data-delete-image]').forEach(b=>b.onclick=async()=>{await api('/api/images/'+encodeURIComponent(b.dataset.deleteImage),{method:'DELETE'});await renderImages();});
   };
 
@@ -76,14 +76,10 @@
   };
 
   const voiceControls=document.createElement('div');voiceControls.className='grid-2';
-  voiceControls.innerHTML='<label>Mesin suara<select id="ttsEngine"><option value="local">Lokal · Piper</option><option value="cloud">Online · OpenAI</option></select></label><label id="cloudVoiceWrap" hidden>Karakter suara<select id="cloudVoice">'+['marin','cedar','alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer','verse'].map(v=>`<option>${v}</option>`).join('')+'</select></label>';
+  voiceControls.innerHTML='<label>Mesin suara<select id="ttsEngine"><option value="local">Lokal · offline</option><option value="cloud">Online · OpenAI</option></select></label><label id="cloudVoiceWrap" hidden>Karakter suara<select id="cloudVoice">'+['marin','cedar','alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer','verse'].map(v=>`<option>${v}</option>`).join('')+'</select></label>';
   $('#ttsText').before(voiceControls);
-  $('#ttsEngine').onchange=()=>{const online=$('#ttsEngine').value==='cloud';$('#cloudVoiceWrap').hidden=!online;renderVoice();$('#ttsVoice').disabled=online || !$('#ttsVoice').value;};
+  $('#ttsEngine').onchange=()=>{const online=$('#ttsEngine').value==='cloud';$('#cloudVoiceWrap').hidden=!online;$('#ttsLocalVoiceWrap').hidden=online;renderVoice();$('#ttsVoice').disabled=online || !$('#ttsVoice').value;};
   $('#ttsLang').addEventListener('change',renderVoice);
-  const reference=document.createElement('label');reference.textContent='Teks persis dari rekaman contoh';
-  const referenceInput=document.createElement('textarea');referenceInput.id='referenceText';referenceInput.rows=2;referenceInput.placeholder='Tuliskan ucapan pada rekaman contoh';reference.append(referenceInput);$('#cloneSample').closest('.field')?.after(reference);
-  if(!$('#referenceText'))$('#pickSample').parentElement.after(reference);
-  $('#cloneLang').innerHTML='<option value="en">English · ZipVoice</option><option value="zh">Mandarin · ZipVoice</option>';
   const mic=document.createElement('button');mic.id='recordSample';mic.textContent='● Rekam mikrofon';mic.className='ghost';$('#pickSample').after(mic);
   let recorder=null,stream=null,timer=null;
   mic.onclick=async()=>{
@@ -94,7 +90,7 @@
       recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
       recorder.onstop=async()=>{
         clearTimeout(timer);stream.getTracks().forEach(t=>t.stop());mic.disabled=true;mic.textContent='Menyimpan rekaman…';
-        try{const response=await fetch('/api/voice-sample',{method:'POST',headers:{'Content-Type':recorder.mimeType},body:new Blob(parts,{type:recorder.mimeType})});const data=await response.json();if(!response.ok)throw Error(data.detail);$('#cloneSample').value=data.path;toast('Rekaman siap dipakai sebagai contoh suara.');}
+        try{const response=await fetch('/api/voice-sample',{method:'POST',headers:{'Content-Type':recorder.mimeType},body:new Blob(parts,{type:recorder.mimeType})});const data=await response.json();if(!response.ok)throw Error(data.detail);$('#cloneSample').value=data.path;$('#cloneSampleName').textContent='Rekaman mikrofon · siap';const player=$('#cloneSamplePlayer');player.src=mediaUrl(data.path);player.hidden=false;toast('Rekaman siap dipakai sebagai contoh suara.');}
         catch(e){toast(e.message,'error');}finally{mic.disabled=false;mic.textContent='● Rekam mikrofon';}
       };
       recorder.start();mic.textContent='■ Selesai merekam (maks. 30 dtk)';timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},30000);

@@ -7,10 +7,10 @@ import subprocess
 from pathlib import Path
 
 from studiozai import config, projects, service
-from studiozai.pipeline import voice, timeline
+from studiozai.pipeline import timeline, voice
 
 ROOT = Path(__file__).resolve().parents[1]
-DEMO = ROOT / "build" / "readme-demo-v17"
+DEMO = ROOT / "build" / "readme-demo-v18-release"
 real_models = config.models_dir()
 config._base_dir = lambda: DEMO
 config.models_dir = lambda: real_models

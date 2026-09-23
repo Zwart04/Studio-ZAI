@@ -16,6 +16,10 @@ class ModelInfo {
     this.installed = false,
     this.installedMb = 0,
     this.sha256,
+    this.commercialUse = 'not_assessed',
+    this.licenseUrl,
+    this.licenseNote = '',
+    this.recommended = true,
   });
 
   final String id;
@@ -32,6 +36,12 @@ class ModelInfo {
   double installedMb;
   final String? sha256;
 
+  /// allowed | unverified | restricted | not_assessed.
+  final String commercialUse;
+  final String? licenseUrl;
+  final String licenseNote;
+  final bool recommended;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'kind': kind,
@@ -44,6 +54,10 @@ class ModelInfo {
         'tier': tier,
         'experimental': experimental,
         if (sha256 != null) 'sha256': sha256,
+        'commercialUse': commercialUse,
+        if (licenseUrl != null) 'licenseUrl': licenseUrl,
+        'licenseNote': licenseNote,
+        'recommended': recommended,
       };
 
   static ModelInfo fromJson(Map<String, dynamic> json) => ModelInfo(
@@ -58,6 +72,10 @@ class ModelInfo {
         tier: json['tier'] as int? ?? 0,
         experimental: json['experimental'] as bool? ?? false,
         sha256: json['sha256'] as String?,
+        commercialUse: json['commercialUse'] as String? ?? 'not_assessed',
+        licenseUrl: json['licenseUrl'] as String?,
+        licenseNote: json['licenseNote'] as String? ?? '',
+        recommended: json['recommended'] as bool? ?? true,
       );
 }
 

@@ -1,4 +1,4 @@
-# Build Studio ZAI 1.7
+# Build Studio ZAI 1.8
 
 ## Desktop
 
@@ -34,7 +34,7 @@ flutter test
 flutter build apk --release
 ```
 
-Hasil: build/app/outputs/flutter-apk/app-release.apk. Rilis 1.7 memakai satu APK universal agar pengguna tidak perlu memilih ABI. Library gambar native CPU hanya disertakan untuk ARM64; fitur lain tetap memakai ABI yang didukung paket. Jika membangun untuk penggunaan sendiri, --split-per-abi dapat menghasilkan paket lebih kecil per arsitektur.
+Hasil: build/app/outputs/flutter-apk/app-release.apk. Rilis 1.8 memakai satu APK universal agar pengguna tidak perlu memilih ABI. Library gambar native CPU hanya disertakan untuk ARM64; fitur lain tetap memakai ABI yang didukung paket. Jika membangun untuk penggunaan sendiri, --split-per-abi dapat menghasilkan paket lebih kecil per arsitektur.
 
 Konfigurasi proyek saat ini menggunakan kunci debug untuk sideload dan kontinuitas pembaruan rilis sebelumnya. Produksi/Play Store membutuhkan keystore release milik pengembang. Jangan commit keystore, key.properties, atau rahasia API. Mengganti signing key akan memengaruhi jalur upgrade instalasi lama.
 
@@ -44,6 +44,6 @@ Periksa versi di core/studiozai/__init__.py, core/pyproject.toml, android/app/pu
 
 ## Data pengembangan
 
-`tools/demo_workspace.py --serve` membuat media demo sintetis dan membuka server 127.0.0.1:8752 dengan direktori build/readme-demo-v17. Model diambil dari direktori model lokal, sedangkan proyek pengguna tidak dipakai untuk screenshot. Script memerlukan Piper Indonesia dan Whisper Tiny terpasang. GIF README merupakan tur screenshot UI, bukan video hasil milik pihak lain.
+`tools/demo_workspace.py --serve` membuat media demo sintetis dan membuka server 127.0.0.1:8752 dengan direktori build/readme-demo-v18-release. Model diambil dari direktori model lokal, sedangkan proyek pengguna tidak dipakai untuk screenshot. Script memerlukan Supertonic 3 dan Whisper Tiny terpasang. GIF README merupakan tur screenshot UI, bukan video hasil milik pihak lain.
 
-[Validasi rilis](RELEASE-1.7.0.md) · [Integrasi AI](AI.md)
+[Validasi rilis](RELEASE-1.8.0.md) · [Integrasi AI](AI.md)

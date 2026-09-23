@@ -16,6 +16,7 @@ import '../widgets/common.dart';
 import '../widgets/preview_player.dart';
 import '../widgets/timeline_view.dart';
 import '../widgets/typography_editor.dart';
+import 'models_screen.dart';
 
 /// Editor klip: pratinjau + timeline multi-track (video/media/teks/audio).
 class EditorScreen extends StatefulWidget {
@@ -97,17 +98,7 @@ class _EditorScreenState extends State<EditorScreen> {
       .join('\n');
 
   List<Map<String, dynamic>> _textToCaptions(String value) {
-    final rows = <Map<String, dynamic>>[];
-    for (final line in value.split('\n')) {
-      final parts = line.trim().split('|');
-      if (parts.length < 3) continue;
-      final start = double.tryParse(parts[0]);
-      final end = double.tryParse(parts[1]);
-      final text = parts.sublist(2).join('|').trim();
-      if (start == null || end == null || text.isEmpty) continue;
-      rows.add({'start': start, 'end': end, 'text': text});
-    }
-    return rows;
+    return SubtitleBuilder.parseEditorDraft(value);
   }
 
   TimelineItem? get _selected {
@@ -242,22 +233,42 @@ class _EditorScreenState extends State<EditorScreen> {
       clip.canvas = videoItems.first.canvas;
       final delta = videoItems.first.srcStart - clip.start;
       final length = videoItems.first.end - videoItems.first.start;
-      clip.captions = clip.captions
-          .where((c) =>
-              (c['end'] as num) > delta && (c['start'] as num) < delta + length)
-          .map((c) => {
-                ...c,
-                'start':
-                    ((c['start'] as num).toDouble() - delta).clamp(0, length),
-                'end': ((c['end'] as num).toDouble() - delta).clamp(0, length)
-              })
-          .toList();
-      _captions.text = _captionsToText(clip);
+      final rangeChanged =
+          delta.abs() > 0.000001 || (clip.duration - length).abs() > 0.000001;
+      if (rangeChanged) {
+        clip.captions = clip.captions
+            .where((c) =>
+                (c['end'] as num) > delta &&
+                (c['start'] as num) < delta + length)
+            .map((c) => {
+                  ...c,
+                  'start':
+                      ((c['start'] as num).toDouble() - delta).clamp(0, length),
+                  'end': ((c['end'] as num).toDouble() - delta).clamp(0, length)
+                })
+            .toList();
+        _captions.text = _captionsToText(clip);
+      }
       clip.start = videoItems.first.srcStart;
       clip.end = clip.start + videoItems.first.end - videoItems.first.start;
     }
     clip.timeline = _timeline.toJson();
     await widget.state.saveClip(clip);
+  }
+
+  Future<void> _saveWithFeedback() async {
+    try {
+      await _save();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Perubahan tersimpan.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
   }
 
   Future<void> _preview() async {
@@ -312,7 +323,15 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _split() async {
-    await _save();
+    try {
+      await _save();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+      return;
+    }
     if (!mounted) return;
     final field = TextEditingController(
         text: (widget.clip.duration / 2).toStringAsFixed(1));
@@ -352,14 +371,21 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _generateCaptions() async {
     try {
+      _previewTimer?.cancel();
       await _save();
-      await widget.state.generateCaptions(widget.clip);
+      final count = await widget.state.generateCaptions(widget.clip);
       if (!mounted) return;
-      setState(() => _captions.text = _captionsToText(widget.clip));
+      setState(() {
+        _captions.text = _captionsToText(widget.clip);
+        if (count > 0 && widget.clip.subtitlePosition == 'off') {
+          widget.clip.subtitlePosition = 'bottom';
+        }
+      });
+      if (count > 0) _schedulePreview();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(widget.clip.captions.isEmpty
-              ? 'Tidak ada ucapan terdeteksi.'
-              : 'Subtitle siap. Video diperbarui otomatis.')));
+          content: Text(count == 0
+              ? 'Tidak ada ucapan terdeteksi. Subtitle yang ada tetap tersimpan.'
+              : '$count subtitle siap. Pratinjau sedang diperbarui.')));
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -382,7 +408,7 @@ class _EditorScreenState extends State<EditorScreen> {
               onPressed: state.jobState == JobState.running ? null : _split,
               icon: const Icon(Icons.content_cut)),
           TextButton.icon(
-              onPressed: _save,
+              onPressed: _saveWithFeedback,
               icon: const Icon(Icons.check, size: 18),
               label: const Text('Simpan'))
         ],
@@ -808,19 +834,53 @@ class _EditorScreenState extends State<EditorScreen> {
         const SizedBox(height: Tokens.space3),
         SectionCard(
           title: state.translate('editor.captions'),
-          child: Column(children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text(
                 'Transkrip adalah teks ucapan; subtitle menempatkan teks itu pada waktu tertentu di video. Format: mulai|selesai|teks (detik).'),
+            const SizedBox(height: Tokens.space3),
+            if (!state.catalog
+                .any((m) => m.id == state.asrModelId && m.installed)) ...[
+              Text('Model transkripsi ${state.asrModelId} belum terpasang.',
+                  style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Model')),
+                      body: ModelsScreen(state: state),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Pasang model transkripsi'),
+              ),
+            ],
             FilledButton.icon(
-              onPressed:
-                  state.jobState == JobState.running ? null : _generateCaptions,
+              onPressed: state.jobState == JobState.running ||
+                      !state.catalog
+                          .any((m) => m.id == state.asrModelId && m.installed)
+                  ? null
+                  : _generateCaptions,
               icon: const Icon(Icons.closed_caption_outlined),
               label: const Text('Buat subtitle otomatis'),
             ),
+            if (state.jobState == JobState.running &&
+                state.jobStage.contains('transkrip')) ...[
+              const SizedBox(height: Tokens.space2),
+              ProgressStrip(progress: state.jobProgress, label: state.jobStage),
+            ],
+            const SizedBox(height: Tokens.space3),
             TextField(
               controller: _captions,
               maxLines: 8,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              decoration: const InputDecoration(
+                labelText: 'Teks subtitle per baris',
+                helperText: 'Contoh: 0.00|2.50|Halo semuanya',
+                alignLabelWithHint: true,
+              ),
             ),
           ]),
         ),

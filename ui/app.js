@@ -9,7 +9,7 @@ const I18N = {
     "home.lead": "Satu ruang untuk video, subtitle, suara, dan gambar. Mulai dengan video atau pilih alat studio.",
     "home.source": "Link atau lokasi berkas", "home.pick": "Pilih berkas", "home.count": "Jumlah klip",
     "home.lang": "Bahasa konten",
-    "home.transcript": "Buat subtitle dari ucapan", "home.llm": "Pilih momen dengan AI dari Pengaturan",
+    "home.transcript": "Subtitle AI dari audio (offline)", "home.transcriptHelp": "Studio ZAI mentranskrip audio video dengan model lokal, lalu membuat subtitle bertiming. Teks subtitle bawaan dari link tidak dipakai.", "home.llm": "Pilih momen dengan AI dari Pengaturan",
     "home.start": "Mulai buat klip", "home.doctor": "Cek perangkat", "home.recent": "Proyek terakhir",
     "home.quality": "Kualitas video", "home.advanced": "Pengaturan lanjutan",
     "home.linkReading": "Membaca link…", "home.linkReady": "Link siap", "home.linkFail": "Link tidak bisa dibaca",
@@ -22,11 +22,11 @@ const I18N = {
     "editor.template": "Template teks", "editor.deleteItem": "Hapus item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Teks", "timeline.audio": "Audio",
     "voice.title": "Suara otomatis",
-    "voice.lead": "Buat narasi Indonesia atau Inggris. Pilih suara lokal, gunakan layanan online, atau rekam contoh untuk kloning ZipVoice.",
+    "voice.lead": "Buat narasi dan kloning suara dari model lokal. Layanan online tetap opsional.",
     "voice.tts": "Text to speech", "voice.text": "Teks", "voice.lang": "Bahasa", "voice.model": "Model suara",
     "voice.generate": "Buat suara", "voice.clone": "Kloning suara",
-    "voice.cloneNote": "Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. ZipVoice memerlukan rekaman dan teks persisnya; mendukung English / Mandarin.",
-    "voice.sample": "Contoh rekaman (wav/mp3, 10-30 detik)", "voice.cloneRun": "Kloning", "voice.result": "Hasil",
+    "voice.cloneNote": "Gunakan rekaman suaramu sendiri atau yang kamu punya izin. Pilih bahasa dan model sebelum membuat suara.",
+    "voice.sample": "Contoh suara (6–30 detik, semua format yang dapat dibaca FFmpeg)", "voice.cloneRun": "Kloning", "voice.result": "Hasil",
     "models.title": "Model",
     "models.lead": "Model tidak dibundel dalam aplikasi. Studio ZAI mendeteksi perangkatmu dan menyarankan model paling ringan yang cocok.",
     "models.download": "Unduh", "models.remove": "Hapus", "models.installed": "terpasang", "models.pip": "via pip",
@@ -54,7 +54,7 @@ const I18N = {
     "home.lead": "Paste a YouTube / TikTok / Instagram link or pick a local video file. 9:16 clips, automatic subtitles and voiceover — all local.",
     "home.source": "Link or file path", "home.pick": "Pick file", "home.count": "Number of clips",
     "home.lang": "Content language",
-    "home.transcript": "Automatic transcript (subtitles)", "home.llm": "Use local LLM to pick moments",
+    "home.transcript": "AI subtitles from audio (offline)", "home.transcriptHelp": "Studio ZAI transcribes the video's audio with a local model and creates timed subtitles. Captions supplied by the link are not used.", "home.llm": "Use local LLM to pick moments",
     "home.start": "Start clipping", "home.doctor": "Check device", "home.recent": "Recent projects",
     "home.quality": "Video quality", "home.advanced": "Advanced settings",
     "home.linkReading": "Reading link…", "home.linkReady": "Link ready", "home.linkFail": "Could not read link",
@@ -67,11 +67,11 @@ const I18N = {
     "editor.template": "Text template", "editor.deleteItem": "Delete item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Text", "timeline.audio": "Audio",
     "voice.title": "Voice",
-    "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with ZipVoice.",
+    "voice.lead": "Generate and clone speech with local models. Online services remain optional.",
     "voice.tts": "Text to speech", "voice.text": "Text", "voice.lang": "Language", "voice.model": "Voice model",
     "voice.generate": "Generate voice", "voice.clone": "Voice cloning",
-    "voice.cloneNote": "Only clone your own voice or voices you have permission to use. ZipVoice requires matching reference text; English / Mandarin only.",
-    "voice.sample": "Reference recording (wav/mp3, 10-30 s)", "voice.cloneRun": "Clone", "voice.result": "Result",
+    "voice.cloneNote": "Use a recording of your own voice or one you have permission to use. Choose language and model first.",
+    "voice.sample": "Voice sample (6–30 s, any FFmpeg-readable format)", "voice.cloneRun": "Clone", "voice.result": "Result",
     "models.title": "Models",
     "models.lead": "Models are not bundled. Studio ZAI detects your device and recommends the lightest matching models.",
     "models.download": "Download", "models.remove": "Remove", "models.installed": "installed", "models.pip": "via pip",
@@ -646,16 +646,36 @@ function voiceLabel(id) {
   return modelName(fake).replace(/ — \? MB$/, "");
 }
 
+function voiceModel(id) {
+  const rootId = id.split(":")[0];
+  return (state.voices.models || []).find(model => model.id === rootId) || null;
+}
+
+function voiceRights(model) {
+  if (!model) return "Lisensi belum diketahui";
+  const status = model.commercial_use;
+  const label = status === "allowed" && model.license_kind === "open-weights" ? "komersial dengan syarat lisensi"
+    : status === "allowed" ? "komersial diizinkan" : status === "conditional" ? "komersial bersyarat" : status === "restricted" ? "nonkomersial" : "hak komersial belum terverifikasi";
+  return `${model.license || "Lisensi belum tercatat"} · ${label}`;
+}
+
 function renderVoice() {
   const select = $("#ttsVoice");
+  const previousVoice = select.value;
   const language = $("#ttsLang").value;
   const installed = state.voices.piper || [];
-  const available = installed.filter(id => id.includes(language === "id" ? "id_ID" : "en_"));
+  const available = installed.filter(id => (voiceModel(id)?.langs || []).includes(language) && id !== "supertonic-3-int8");
   if (installed.includes("supertonic-3-int8")) {
-    for (let sid = 0; sid < 10; sid++) available.push(`supertonic-3-int8:${sid}`);
+    available.unshift(...Array.from({ length: 10 }, (_, sid) => `supertonic-3-int8:${sid}`));
   }
-  select.innerHTML = available.map((id) => `<option value="${escapeHtml(id)}">${id.startsWith("supertonic-3-int8:") ? `Supertonic 3 · Suara ${Number(id.split(":")[1]) + 1}` : voiceLabel(id)}</option>`).join("");
+  select.innerHTML = available.map((id) => {
+    const model = voiceModel(id);
+    const rights = model?.commercial_use === "restricted" ? " · nonkomersial"
+      : model?.commercial_use === "unverified" ? " · hak belum jelas" : "";
+    return `<option value="${escapeHtml(id)}">${id.startsWith("supertonic-3-int8:") ? `Supertonic 3 · Suara ${Number(id.split(":")[1]) + 1}` : voiceLabel(id)}${rights}</option>`;
+  }).join("");
   select.disabled = available.length === 0;
+  if (available.includes(previousVoice)) select.value = previousVoice;
   const ttsBtn = $("#ttsBtn");
   if (ttsBtn) {
     ttsBtn.disabled = available.length === 0 && $("#ttsEngine")?.value !== "cloud";
@@ -664,39 +684,87 @@ function renderVoice() {
   if (available.length === 0) {
     select.innerHTML = `<option value="">— belum ada model suara —</option>`;
   }
-  const hint = $("#cloneHint");
-  if (!state.voices.available || !state.voices.available.zipvoice) {
-    hint.textContent = "Pasang ZipVoice di halaman Model untuk kloning English / Mandarin.";
-  } else if (!state.settings.clone_consent) {
-    hint.textContent = t("settings.consent");
-  } else {
-    hint.textContent = "";
-  }
+  const selectedVoice = voiceModel(select.value);
+  $("#ttsModelHint").textContent = selectedVoice
+    ? `${voiceRights(selectedVoice)}. ${selectedVoice.license_note || selectedVoice.note || ""}`
+    : "Pasang model suara di halaman Model untuk memakai TTS offline.";
+
+  const cloneLang = $("#cloneLang").value;
+  const cloneSelect = $("#cloneModel");
+  const installedClone = (state.voices.clone || []).filter(id => (voiceModel(id)?.langs || []).includes(cloneLang));
+  const previousClone = cloneSelect.value;
+  cloneSelect.innerHTML = installedClone.length
+    ? installedClone.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(voiceLabel(id))}</option>`).join("")
+    : `<option value="">— belum ada model untuk bahasa ini —</option>`;
+  if (installedClone.includes(previousClone)) cloneSelect.value = previousClone;
+  cloneSelect.disabled = !installedClone.length;
+  $("#cloneBtn").disabled = !installedClone.length;
+  const selectedClone = voiceModel(cloneSelect.value);
+  const uninstalled = (state.voices.models || []).find(model => model.kind === "clone" && (model.langs || []).includes(cloneLang));
+  $("#cloneModelHint").textContent = selectedClone
+    ? `${voiceRights(selectedClone)}. ${selectedClone.runtime_note || selectedClone.note || ""}`
+    : uninstalled ? `${uninstalled.installed ? "Bobot sudah ada, runtime belum siap" : "Belum terpasang"}: ${voiceLabel(uninstalled.id)} (${uninstalled.size_mb || "?"} MB). ${uninstalled.runtime_note || uninstalled.note || ""}`
+      : "Belum ada model kloning lokal untuk bahasa ini.";
+  $("#cloneReferenceWrap").hidden = cloneSelect.value !== "zipvoice-zh-en";
+  $("#cloneHint").textContent = !state.settings.clone_consent ? t("settings.consent") : "";
 }
 
 async function runTts() {
   const text = $("#ttsText").value.trim();
   if (!text) return toast(t("voice.text"), "error");
-  if ($('#ttsEngine')?.value === 'cloud') {
-    const job = await api('/api/ai/speech',{method:'POST',body:JSON.stringify({text,voice:$('#cloudVoice').value,language:$('#ttsLang').value})});trackJob(job);return;
+  try {
+    if ($('#ttsEngine')?.value === 'cloud') {
+      const job = await api('/api/ai/speech', { method: 'POST', body: JSON.stringify({ text, voice: $('#cloudVoice').value, language: $('#ttsLang').value }) });
+      trackJob(job);
+      return;
+    }
+    const job = await api("/api/tts", {
+      method: "POST",
+      body: JSON.stringify({ text, lang: $("#ttsLang").value, voice_id: $("#ttsVoice").value || null }),
+    });
+    trackJob(job);
+  } catch (error) {
+    toast(error.message, "error");
   }
-  const job = await api("/api/tts", {
-    method: "POST",
-    body: JSON.stringify({ text, lang: $("#ttsLang").value, voice_id: $("#ttsVoice").value || null }),
-  });
-  trackJob(job);
 }
 
 async function runClone() {
   const text = $("#cloneText").value.trim();
   const sample = $("#cloneSample").value.trim();
-  if (!text || !sample) return toast(t("voice.sample"), "error");
+  const modelId = $("#cloneModel").value;
+  if (!text) return toast("Isi teks yang akan diucapkan.", "error");
+  if (!sample) return toast("Pilih atau rekam contoh suara dulu.", "error");
+  if (!modelId) return toast("Pasang model kloning untuk bahasa pilihanmu.", "error");
+  if (modelId === "zipvoice-zh-en" && !$("#referenceText").value.trim()) {
+    return toast("Isi ucapan persis pada rekaman contoh untuk ZipVoice.", "error");
+  }
   state.settings.clone_sample = sample;
-  const job = await api("/api/clone", {
-    method: "POST",
-    body: JSON.stringify({ text, sample, lang: $("#cloneLang").value, reference_text: $("#referenceText").value }),
-  });
-  trackJob(job);
+  try {
+    const job = await api("/api/clone", {
+      method: "POST",
+      body: JSON.stringify({ text, sample, lang: $("#cloneLang").value, model_id: modelId, reference_text: $("#referenceText").value }),
+    });
+    trackJob(job);
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function uploadCloneSample(file) {
+  if (!file) return;
+  const button = $("#pickSample");
+  button.disabled = true;
+  button.textContent = "Menyiapkan audio…";
+  try {
+    const response = await fetch("/api/voice-sample", { method: "POST", body: file });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Berkas tidak dapat dibaca");
+    $("#cloneSample").value = payload.path;
+    $("#cloneSampleName").textContent = file.name;
+    const player = $("#cloneSamplePlayer");
+    player.src = mediaUrl(payload.path);
+    player.hidden = false;
+    toast("Contoh suara siap dipakai.");
+  } catch (error) { toast(error.message, "error"); }
+  finally { button.disabled = false; button.textContent = t("home.pick"); }
 }
 
 /* ------------------------------------------------------------------ models */
@@ -733,6 +801,16 @@ function kindName(kind) {
     : t("models.kindClone");
 }
 
+function modelRightsBadge(model) {
+  const usage = model.commercial_use;
+  const label = usage === "allowed" && model.license_kind === "open-weights" ? "Komersial bersyarat"
+    : usage === "allowed" ? "Komersial ✓"
+    : usage === "conditional" ? "Komersial bersyarat"
+      : usage === "restricted" ? "Nonkomersial" : "Hak komersial belum jelas";
+  const tone = usage === "allowed" ? "ok" : usage === "restricted" ? "error" : "";
+  return `<span class="badge ${tone}" title="${escapeHtml(model.license_note || "")}">${label}</span>`;
+}
+
 async function renderModels() {
   try {
     const data = await api("/api/models");
@@ -760,9 +838,12 @@ async function renderModels() {
         <div class="row settings">
           <div style="display:grid;gap:2px;min-width:0">
             <span style="font-weight:600">${modelName(model)}</span>
-            <span class="muted">${kindName(model.kind)}${model.note ? " · " + model.note : ""}</span>
+            <span class="muted">${kindName(model.kind)}${model.note ? " · " + escapeHtml(model.note) : ""}</span>
+            <span class="muted">${escapeHtml(model.license || "Lisensi belum tercatat")}${model.license_note ? " · " + escapeHtml(model.license_note) : ""}${model.license_url ? ` · <a href="${escapeHtml(model.license_url)}" target="_blank" rel="noopener noreferrer">Lihat syarat</a>` : ""}</span>
+            ${model.runtime_note ? `<span class="muted">${escapeHtml(model.runtime_note)}</span>` : ""}
           </div>
           <div class="row" style="gap:var(--s2)">
+            ${modelRightsBadge(model)}
             ${model.installed ? `<span class="badge ok">${t("models.installed")}</span>` : (model.requires_pip ? `<span class="badge">${t("models.pip")}</span>` : "")}
             ${model.installed ? `<button class="mini" data-remove-model="${model.id}">${t("models.remove")}</button>`
     : `<button class="primary" data-download="${model.id}">${t("models.download")}</button>`}
@@ -878,7 +959,7 @@ async function wizardDetect() {
     wizard.models = wizard.data.models;
     // Pilih otomatis model yang direkomendasikan perangkat ini.
     const tier = wizard.data.tier;
-    const recommended = [tier.asr, tier.tts, "piper-en_US-lessac-medium"].filter(Boolean);
+    const recommended = [tier.asr, tier.tts, "piper-en_US-ljspeech-medium"].filter(Boolean);
     wizard.chosen = recommended.slice();
     wizardShowRecommend();
   } catch (error) {
@@ -1142,7 +1223,11 @@ async function boot() {
   if (wizardBtn) wizardBtn.addEventListener("click", () => wizardShow(0));
   $("#source").addEventListener("input", onSourceChanged);
   $("#pickFile").addEventListener("click", () => pickFile("#source"));
-  $("#pickSample").addEventListener("click", () => pickFile("#cloneSample"));
+  $("#pickSample").addEventListener("click", () => $("#cloneFileInput").click());
+  $("#cloneFileInput").addEventListener("change", (event) => uploadCloneSample(event.target.files?.[0]));
+  $("#cloneLang").addEventListener("change", renderVoice);
+  $("#cloneModel").addEventListener("change", renderVoice);
+  $("#ttsVoice").addEventListener("change", renderVoice);
   $("#refreshProjects").addEventListener("click", () => { state.project = null; renderProjects(); });
   $("#backBtn").addEventListener("click", () => { state.project = null; renderProjects(); });
   $("#exportBtn").addEventListener("click", async () => {
@@ -1183,18 +1268,18 @@ function escapeHtml(value) {
 
 async function confirmAction(message) {
   const dialog = document.createElement('dialog'); dialog.className = 'studio-dialog';
-  dialog.innerHTML = `<h3>Hapus dari perangkat?</h3><p>${escapeHtml(message)}</p><p class="field-help">Hasil yang dipilih akan dihapus dari penyimpanan Studio ZAI. Berkas asli di luar proyek tetap aman.</p><form method="dialog" class="row"><button value="cancel">Batal</button><button class="primary" value="delete">Hapus</button></form>`;
+  dialog.innerHTML = `<h3>Hapus dari perangkat?</h3><p>${escapeHtml(message)}</p><p class="field-help">Hasil yang dipilih akan dihapus dari penyimpanan Studio ZAI. Berkas asli di luar proyek tetap aman.</p><form method="dialog" class="dialog-actions"><button class="ghost" value="cancel">Batal</button><button class="danger" value="delete">Hapus</button></form>`;
   document.body.append(dialog); dialog.showModal();
   return new Promise(resolve => dialog.addEventListener('close', () => { const yes = dialog.returnValue === 'delete'; dialog.remove(); resolve(yes); }, {once:true}));
 }
 
 function openSourceEditor() {
   const project = state.project;
-  openPanel(`<div class="spread"><h3>Video sumber</h3><button data-close>Tutup</button></div>
+  openPanel(`<div class="spread"><h3>Video sumber</h3><button class="ghost" data-close>Tutup</button></div>
     <p>${escapeHtml(project.title)}</p><video id="sourcePlayer" controls preload="metadata" src="${mediaUrl(project.source)}"></video>
     <p class="field-help">Video tersimpan di proyek. Pilih bagian mana pun tanpa mengunduh lagi. Waktu dalam detik.</p>
     <div class="grid-2"><label>Mulai<input id="sourceStart" type="number" min="0" step="0.1" value="0"></label><label>Selesai<input id="sourceEnd" type="number" step="0.1" max="${project.duration}" value="${Math.min(30,project.duration)}"></label></div>
-    <div class="row"><button id="markIn">Tandai mulai</button><button id="markOut">Tandai selesai</button></div>
+    <div class="row"><button class="ghost" id="markIn">Tandai mulai</button><button class="ghost" id="markOut">Tandai selesai</button></div>
     <label>Kanvas<select id="sourceCanvas"><option value="original">Asli · rasio sumber</option><option value="portrait">Portrait 9:16</option><option value="square">Kotak 1:1</option><option value="landscape">Landscape 16:9</option></select></label>
     <button class="primary" id="createRange">Buat klip & edit</button>`);
   $('#markIn').onclick = () => { $('#sourceStart').value = $('#sourcePlayer').currentTime.toFixed(1); };
@@ -1209,12 +1294,12 @@ function openSourceEditor() {
 
 async function createTypography() {
   const dialog = document.createElement('dialog'); dialog.className = 'studio-dialog';
-  dialog.innerHTML = `<h3>Tipografi buatanmu</h3><form id="typographyForm"><label>Nama template<input name="name" required maxlength="48" value="Gaya saya"></label>
+  dialog.innerHTML = `<h3>Tipografi buatanmu</h3><p class="field-help">Buat satu gaya dan terapkan ke seluruh subtitle klip.</p><form id="typographyForm"><div class="dialog-fields"><label>Nama template<input name="name" required maxlength="48" value="Gaya saya"></label>
     <div class="grid-2"><label>Font<select name="font">${['Inter','Anton','Barlow Condensed','DM Serif Display','Kalam'].map(f=>`<option>${f}</option>`).join('')}</select></label><label>Ukuran relatif<input name="size" type="number" min="24" max="144" value="64"></label>
     <label>Warna teks<input name="color" type="color" value="#ffffff"></label><label>Highlight kata<input name="highlight" type="color" value="#ffe100"></label>
     <label>Warna tepi / kotak<input name="outline_color" type="color" value="#000000"></label><label>Ketebalan tepi<input name="outline" type="number" min="0" max="10" value="3"></label></div>
     <label><input name="bold" type="checkbox" checked> Tebal</label><label><input name="box" type="checkbox"> Latar kotak</label><label><input name="karaoke" type="checkbox"> Highlight kata bertiming</label>
-    <p class="field-help">Template tersimpan di perangkat dan dapat dipakai di proyek berikutnya.</p><div class="row"><button type="button" id="cancelTypography">Batal</button><button class="primary">Simpan template</button></div></form>`;
+    <p class="field-help">Template tersimpan di perangkat dan dapat dipakai di proyek berikutnya.</p></div><div class="dialog-actions"><button type="button" class="ghost" id="cancelTypography">Batal</button><button type="submit" class="primary">Simpan template</button></div></form>`;
   document.body.append(dialog); dialog.showModal();
   return new Promise(resolve=>{
     let result=null;

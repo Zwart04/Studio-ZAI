@@ -26,6 +26,7 @@ const StudioTimeline = (() => {
     changeTimer: null,
     generation: 0,
     previewFingerprint: "",
+    playhead: 0,
     inspectorTab: "subtitles",
     templateCategory: "Pop",
     el: null,
@@ -38,6 +39,7 @@ const StudioTimeline = (() => {
       this.close();
       this.clip = clip;
       this.previewPath = clip.files?.mp4 || null;
+      this.playhead = 0;
       this.selected = null;
       const saved = clip.timeline && Array.isArray(clip.timeline.tracks) ? clip.timeline : null;
       this.timeline = saved ? JSON.parse(JSON.stringify(saved)) : this.defaultTimeline(clip);
@@ -119,11 +121,10 @@ const StudioTimeline = (() => {
     },
 
     duration() {
-      let longest = 0;
-      for (const track of this.timeline.tracks) {
-        for (const item of track.items) longest = Math.max(longest, item.end || 0);
-      }
-      return longest > 0 ? longest : 1;
+      // The source video defines the visible/exported timeline. Overlays cannot
+      // extend the movie and should not make the ruler jump while being dragged.
+      const base = this.items("video")[0];
+      return Math.max(0.2, Number(base?.end || 0) - Number(base?.start || 0));
     },
 
     selectedItem() {
@@ -165,13 +166,18 @@ const StudioTimeline = (() => {
             <div class="editor-stage" id="tlStage"></div>
             <aside class="editor-side" id="tlInspector"></aside>
           </div>
-          <div class="editor-tools">
-            <button class="ghost" data-tl="add-text">+ ${t("editor.addText")}</button>
-            <button class="ghost" data-tl="add-media">+ ${t("editor.addMedia")}</button>
-            <button class="ghost" data-tl="add-music">+ ${t("editor.addMusic")}</button>
-            <span class="muted" id="tlHint" style="margin-left:auto"></span>
-          </div>
-          <div class="editor-tracks" id="tlTracks"></div>
+          <section class="editor-timeline" aria-label="Timeline editor">
+            <div class="editor-tools">
+              <div class="timeline-heading"><strong>${t("editor.timeline")}</strong><span id="tlTimeReadout">00:00 / 00:00</span></div>
+              <div class="timeline-add-actions">
+                <button class="ghost" data-tl="add-text" draggable="true" data-drag-kind="text" title="Klik untuk menambah di posisi pemutar, atau seret ke track Teks">＋ ${t("editor.addText")}</button>
+                <button class="ghost" data-tl="add-media" draggable="true" data-drag-kind="media" title="Klik untuk memilih berkas, atau seret ke track Media">＋ ${t("editor.addMedia")}</button>
+                <button class="ghost" data-tl="add-music" draggable="true" data-drag-kind="audio" title="Klik untuk memilih berkas, atau seret ke track Audio">＋ ${t("editor.addMusic")}</button>
+              </div>
+            </div>
+            <div class="timeline-scroll"><div class="editor-tracks" id="tlTracks"></div></div>
+            <p class="timeline-hint" id="tlHint"></p>
+          </section>
         </div>`;
       this.el.hidden = false;
 
@@ -186,10 +192,19 @@ const StudioTimeline = (() => {
       bind("add-media", () => this.addMedia());
       bind("add-music", () => this.addMusic());
 
+      this.el.querySelectorAll('[data-drag-kind]').forEach((node) => {
+        node.addEventListener('dragstart', (event) => {
+          event.dataTransfer.effectAllowed = 'copy';
+          event.dataTransfer.setData('application/x-studiozai-kind', node.dataset.dragKind);
+          event.dataTransfer.setData('text/plain', node.dataset.dragKind);
+        });
+      });
+
       const title = this.el.querySelector("#tlTitle");
       if (title) title.textContent = this.clip.title || `Klip ${(this.clip.index || 0) + 1}`;
       const hint = this.el.querySelector("#tlHint");
-      if (hint) hint.textContent = t("editor.timelineHint") || "";
+      if (hint) hint.textContent = 'Klik penggaris untuk memutar dari titik tertentu. Seret blok untuk memindahkan, tepinya untuk memangkas; seret berkas gambar/video/audio ke track yang sesuai.';
+      this.updatePlayhead();
     },
 
     renderAll() {
@@ -200,7 +215,7 @@ const StudioTimeline = (() => {
 
     /* --------------------------------------------------------------------- stage */
 
-    renderStage(position = 0, playing = false) {
+    renderStage(position = this.playhead, playing = false) {
       const stage = this.el.querySelector("#tlStage");
       if (!stage) return;
       const path = this.previewPath || state.project.source;
@@ -209,9 +224,13 @@ const StudioTimeline = (() => {
       stage.innerHTML = `<video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video><span class="preview-status" id="tlPreviewStatus" role="status"></span>`;
       const player = stage.querySelector('video');
       player.addEventListener('loadedmetadata', () => {
-        player.currentTime = Math.min(sourceStart + position, Math.max(0, player.duration - .05));
+        player.currentTime = Math.min(sourceStart + clamp(position, 0, this.duration()), Math.max(0, player.duration - .05));
         if (playing) player.play().catch(() => {});
       }, {once:true});
+      player.addEventListener('timeupdate', () => {
+        this.playhead = clamp(player.currentTime - sourceStart, 0, this.duration());
+        this.updatePlayhead();
+      });
       if (!this.previewPath) player.addEventListener('timeupdate', () => {
         if (player.currentTime < sourceStart) player.currentTime = sourceStart;
         if (player.currentTime >= this.clip.end) { player.pause(); player.currentTime = sourceStart; }
@@ -220,11 +239,36 @@ const StudioTimeline = (() => {
 
     /* -------------------------------------------------------------------- tracks */
 
+    timeLabel(seconds) {
+      const total = Math.max(0, Math.floor(seconds || 0));
+      return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    },
+
+    updatePlayhead() {
+      if (!this.el) return;
+      const duration = this.duration();
+      this.playhead = clamp(this.playhead, 0, duration);
+      const host = this.el.querySelector('#tlTracks');
+      if (host) host.style.setProperty('--playhead-pct', `${this.playhead / duration * 100}%`);
+      const readout = this.el.querySelector('#tlTimeReadout');
+      if (readout) readout.textContent = `${this.timeLabel(this.playhead)} / ${this.timeLabel(duration)}`;
+    },
+
+    seek(position) {
+      this.playhead = clamp(position, 0, this.duration());
+      const player = this.el.querySelector('#tlVideo');
+      if (player && Number.isFinite(player.duration)) {
+        player.currentTime = Number(player.dataset.sourceStart || 0) + this.playhead;
+      }
+      this.updatePlayhead();
+    },
+
     renderTracks() {
       const host = this.el.querySelector("#tlTracks");
       if (!host) return;
       const duration = this.duration();
-      host.innerHTML = KINDS.map((kind) => {
+      const ruler = `<div class="tl-row tl-ruler-row"><span class="tl-kind">Waktu</span><div class="tl-ruler" aria-label="Penggaris waktu · klik untuk mencari posisi">${[0, .25, .5, .75, 1].map(fraction => `<span class="tl-tick" style="left:${fraction * 100}%">${this.timeLabel(duration * fraction)}</span>`).join('')}<span class="tl-playhead" aria-hidden="true"></span></div></div>`;
+      host.innerHTML = ruler + KINDS.map((kind) => {
         const items = this.items(kind);
         const blocks = items.map((item) => {
           const selected = this.selected && this.selected.kind === kind && this.selected.id === item.id;
@@ -241,14 +285,53 @@ const StudioTimeline = (() => {
         }).join("");
         return `<div class="tl-row">
             <span class="tl-kind">${KIND_LABEL[kind]}</span>
-            <div class="tl-lane" data-lane="${kind}">${blocks}</div>
+            <div class="tl-lane" data-lane="${kind}" aria-label="Track ${KIND_LABEL[kind]}">${blocks}<span class="tl-playhead" aria-hidden="true"></span></div>
           </div>`;
       }).join("");
+
+      host.querySelectorAll('.tl-ruler, .tl-lane').forEach((lane) => {
+        lane.addEventListener('click', (event) => {
+          if (event.target.closest('.tl-block')) return;
+          const bounds = lane.getBoundingClientRect();
+          this.seek((event.clientX - bounds.left) / bounds.width * duration);
+        });
+      });
+      host.querySelectorAll('.tl-lane').forEach((lane) => {
+        const kind = lane.dataset.lane;
+        lane.addEventListener('dragover', (event) => {
+          const types = Array.from(event.dataTransfer.types || []);
+          const isFile = types.includes('Files');
+          const isTool = types.includes('application/x-studiozai-kind');
+          if (isTool || (isFile && ['media', 'audio'].includes(kind))) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+            lane.classList.add('drop-ready');
+          }
+        });
+        lane.addEventListener('dragleave', () => lane.classList.remove('drop-ready'));
+        lane.addEventListener('drop', async (event) => {
+          lane.classList.remove('drop-ready');
+          const dragged = event.dataTransfer.getData('application/x-studiozai-kind');
+          const file = event.dataTransfer.files?.[0];
+          if (dragged !== kind && !(file && ['media', 'audio'].includes(kind))) return;
+          event.preventDefault();
+          const bounds = lane.getBoundingClientRect();
+          const at = clamp((event.clientX - bounds.left) / bounds.width * this.duration(), 0, this.duration() - 0.2);
+          if (file) {
+            await this.addDroppedFile(kind, file, at);
+          } else if (kind === 'text') {
+            this.addText(at);
+          } else {
+            await this.addAssetItem(kind, at);
+          }
+        });
+      });
 
       host.querySelectorAll(".tl-block").forEach((node) => {
         node.addEventListener("pointerdown", (event) => this.startDrag(event, node));
         node.addEventListener("dblclick", () => this.removeItem(node.dataset.kind, node.dataset.id));
       });
+      this.updatePlayhead();
     },
 
     /** Geser (ubah waktu) atau tarik tepi (ubah durasi) sebuah blok. */
@@ -263,17 +346,20 @@ const StudioTimeline = (() => {
       const lane = node.parentElement;
       const secondsPerPx = this.duration() / lane.getBoundingClientRect().width;
       const startX = event.clientX;
+      const timelineDuration = this.duration();
       const origin = { start: item.start, end: item.end, srcStart: item.srcStart || 0, captions: JSON.parse(JSON.stringify(this.clip.captions || [])) };
+      this.seek(origin.start);
 
       const onMove = (moveEvent) => {
         const delta = (moveEvent.clientX - startX) * secondsPerPx;
         if (mode === HANDLES.start) {
           item.start = clamp(origin.start + delta, 0, origin.end - 0.3);
         } else if (mode === HANDLES.end) {
-          item.end = clamp(origin.end + delta, origin.start + 0.3, 3600);
+          const maxEnd = kind === 'video' ? Math.max(origin.start + .3, state.project.duration - origin.srcStart) : timelineDuration;
+          item.end = clamp(origin.end + delta, origin.start + 0.3, maxEnd);
         } else {
           const length = origin.end - origin.start;
-          item.start = clamp(origin.start + delta, 0, 3600);
+          item.start = clamp(origin.start + delta, 0, Math.max(0, timelineDuration - length));
           item.end = item.start + length;
         }
         if (kind === 'video') {
@@ -311,13 +397,14 @@ const StudioTimeline = (() => {
 
     /* ---------------------------------------------------------------------- add */
 
-    addText() {
+    addText(at = this.playhead) {
       const track = this.track("text");
       if (!track) return;
+      const start = clamp(at, 0, Math.max(0, this.duration() - .3));
       const item = {
         id: this.nextId("text"),
-        start: 0,
-        end: Math.min(3, this.duration()),
+        start,
+        end: Math.min(start + 3, this.duration()),
         text: "Teks baru",
         template: (this.presets[0] && this.presets[0].id) || "tiktok_pop",
         x: 0.5,
@@ -330,28 +417,64 @@ const StudioTimeline = (() => {
     },
 
     async addMedia() {
-      await this.addAssetItem("media");
+      await this.addAssetItem("media", this.playhead);
     },
 
     async addMusic() {
-      await this.addAssetItem("audio");
+      await this.addAssetItem("audio", this.playhead);
     },
 
-    async addAssetItem(kind) {
-      const picked = await pickAsset(kind === "audio" ? "audio" : "media");
-      if (!picked) return;
+    async uploadFile(file) {
+      const response = await fetch(`/api/projects/${state.project.id}/assets/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+        body: file,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Impor berkas gagal (${response.status})`);
+      }
+      const { path } = await response.json();
+      return path;
+    },
+
+    async addDroppedFile(kind, file, at) {
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const isAudio = file.type.startsWith('audio/') || ['wav','mp3','m4a','flac','aac','ogg','opus','wma','aif','aiff'].includes(extension);
+      const isMedia = file.type.startsWith('image/') || file.type.startsWith('video/') || ['mp4','mov','webm','mkv','m4v','avi','jpg','jpeg','png','webp','gif','bmp'].includes(extension);
+      if ((kind === 'audio' && !isAudio) || (kind === 'media' && !isMedia)) {
+        toast(kind === 'audio' ? 'Seret berkas audio ke track Audio.' : 'Seret gambar atau video ke track Media.', 'error');
+        return;
+      }
       try {
-        const { path: asset } = await api(`/api/projects/${state.project.id}/assets`, {
-          method: "POST",
-          body: JSON.stringify({ path: picked }),
-        });
+        const path = await this.uploadFile(file);
+        await this.addAssetItem(kind, at, path);
+      } catch (error) { toast(error.message, 'error'); }
+    },
+
+    async addAssetItem(kind, at = this.playhead, uploadedPath = null) {
+      try {
+        let asset = uploadedPath;
+        if (!asset) {
+          const picked = await pickAsset(kind === "audio" ? "audio" : "media");
+          if (!picked) return;
+          if (picked instanceof File) {
+            asset = await this.uploadFile(picked);
+          } else {
+            const result = await api(`/api/projects/${state.project.id}/assets`, {
+              method: "POST", body: JSON.stringify({ path: picked }),
+            });
+            asset = result.path;
+          }
+        }
         const track = this.track(kind);
         if (!track) return;
-        const isVideo = kind === "media" && /\.(mp4|mov|webm|mkv|m4v)$/i.test(asset);
+        const isVideo = kind === "media" && /\.(mp4|mov|webm|mkv|m4v|avi)$/i.test(asset);
+        const start = clamp(at, 0, Math.max(0, this.duration() - .3));
         const item = {
           id: this.nextId(kind),
-          start: 0,
-          end: Math.min(kind === "audio" ? 10 : 4, this.duration()),
+          start,
+          end: Math.min(start + (kind === "audio" ? 10 : 4), this.duration()),
           src: asset,
           type: kind === "audio" ? "audio" : (isVideo ? "video" : "image"),
           scale: 0.6,
@@ -361,7 +484,7 @@ const StudioTimeline = (() => {
         };
         track.items.push(item);
         this.selected = { kind, id: item.id };
-      this.inspectorTab = kind === "video" ? "clip" : "element";
+        this.inspectorTab = "element";
         this.renderAll();
       } catch (error) {
         toast(error.message, "error");
@@ -547,17 +670,31 @@ const StudioTimeline = (() => {
     async generateCaptions() {
       if (this.busy) return;
       this.busy = true;
+      const button = this.el.querySelector('[data-tl="captions"]');
+      if (button) { button.disabled = true; button.textContent = 'Mentranskrip audio klip…'; }
       try {
-        await this.save();
-        toast("Membuat subtitle dari audio sumber…");
+        await this.save(true);
+        toast("Membuat subtitle dari audio klip dengan model lokal…");
         const job = await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/captions`, { method: "POST" });
         const result = await waitJob(job.id);
-        this.clip.captions = result.captions || [];
+        const project = await api(`/api/projects/${state.project.id}`);
+        state.project = project;
+        const fresh = project.clips.find(c => c.index === this.clip.index);
+        if (fresh) this.clip = fresh;
+        this.clip.captions = result.captions || this.clip.captions || [];
         this.clip.subtitle_position = "bottom";
+        // The ASR job stores captions, but the new subtitle position must also
+        // survive an immediate editor close before preview's delayed save runs.
+        await this.save(true);
         this.renderInspector();
-        toast(this.clip.captions.length ? "Subtitle siap. Pratinjau diperbarui otomatis." : "Tidak ada ucapan terdeteksi.");
+        if (this.clip.captions.length) {
+          this.schedulePreview();
+          toast(`${this.clip.captions.length} baris subtitle siap. Pratinjau diperbarui otomatis.`);
+        } else {
+          toast("Tidak ada ucapan terdeteksi dalam klip ini.", "error");
+        }
       } catch (error) { toast(error.message, "error"); }
-      finally { this.busy = false; }
+      finally { this.busy = false; const current = this.el.querySelector('[data-tl="captions"]'); if (current) { current.disabled = false; current.textContent = 'Buat subtitle otomatis'; } }
     },
 
     /** Simpan timeline + field turunan (crop/kanvas/trim) ke proyek. */
@@ -662,7 +799,8 @@ const StudioTimeline = (() => {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = kind === "audio" ? "audio/*" : "video/*,image/*";
-      input.onchange = () => resolve(input.files[0] ? input.files[0].name : null);
+      input.onchange = () => resolve(input.files[0] || null);
+      input.oncancel = () => resolve(null);
       input.click();
     });
   }

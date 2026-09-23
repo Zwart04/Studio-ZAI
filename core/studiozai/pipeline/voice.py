@@ -13,8 +13,8 @@ from ..utils import ffmpeg
 ProgressCb = Callable[[float, str], None]
 
 LANG_DEFAULT_VOICE = {
-    "id": "piper-id_ID-news_tts-medium",
-    "en": "piper-en_US-lessac-medium",
+    "id": "supertonic-3-int8",
+    "en": "piper-en_US-ljspeech-medium",
 }
 
 _CHATTERBOX_CACHE: dict[str, Any] = {}
@@ -29,11 +29,11 @@ SUPERTONIC_FILES = (
 
 
 def tts_models() -> list[dict[str, Any]]:
-    return models.manager.models_by_kind("tts")
+    return [m for m in models.manager.models_by_kind("tts") if not m.get("deprecated")]
 
 
 def clone_models() -> list[dict[str, Any]]:
-    return [m for m in models.manager.models_by_kind("clone") if not m.get("experimental")]
+    return [m for m in models.manager.models_by_kind("clone") if not m.get("deprecated")]
 
 
 def zipvoice_available() -> bool:
@@ -262,7 +262,16 @@ def chatterbox_available() -> bool:
     return True
 
 
-def _load_chatterbox(model_id: str = "chatterbox-base", language: str = "id") -> Any:
+def _load_chatterbox(model_id: str = "chatterbox-id-finetune", language: str = "id") -> Any:
+    if model_id not in {"chatterbox-base", "chatterbox-id-finetune"}:
+        raise ValueError("Model kloning tidak dikenal.")
+    if model_id == "chatterbox-base" and language != "en":
+        raise ValueError("Chatterbox dasar hanya mendukung English; pilih model Indonesia untuk Bahasa Indonesia.")
+    if model_id == "chatterbox-id-finetune":
+        if language != "id":
+            raise ValueError("Chatterbox Indonesia hanya mendukung Bahasa Indonesia.")
+        if not models.manager.is_installed(model_id):
+            raise FileNotFoundError("Unduh checkpoint Chatterbox Indonesia dari halaman Model dahulu.")
     if not chatterbox_available():
         raise RuntimeError(
             "chatterbox-tts belum terpasang. Jalankan: pip install -e \"core[clone]\""
@@ -281,7 +290,7 @@ def _load_chatterbox(model_id: str = "chatterbox-base", language: str = "id") ->
     from chatterbox.tts import ChatterboxTTS  # type: ignore
 
     model = ChatterboxTTS.from_pretrained(device=device)
-    if language == "id" and models.manager.is_installed("chatterbox-id-finetune") and device == "cpu":
+    if model_id == "chatterbox-id-finetune":
         model = _apply_indonesian_checkpoint(model)
     _CHATTERBOX_CACHE[key] = (model, device)
     return _CHATTERBOX_CACHE[key]
@@ -290,15 +299,13 @@ def _load_chatterbox(model_id: str = "chatterbox-base", language: str = "id") ->
 def _apply_indonesian_checkpoint(model: Any) -> Any:
     try:
         from safetensors.torch import load_file
-    except ImportError:
-        return model
+    except ImportError as exc:
+        raise RuntimeError("safetensors diperlukan untuk checkpoint Chatterbox Indonesia.") from exc
     checkpoint = models.manager.model_dir("chatterbox-id-finetune") / "t3_cfg.safetensors"
     if not checkpoint.exists():
-        return model
-    try:
-        model.t3.load_state_dict(load_file(str(checkpoint), device="cpu"))
-    except (RuntimeError, KeyError, OSError):
-        pass
+        raise FileNotFoundError("Checkpoint Chatterbox Indonesia belum lengkap. Unduh ulang model.")
+    # Gagal memuat bobot harus menjadi error, bukan diam-diam memakai suara English.
+    model.t3.load_state_dict(load_file(str(checkpoint), device="cpu"))
     return model
 
 
@@ -307,25 +314,40 @@ def clone_speak(
     out_path: str | Path,
     sample: str | Path | None = None,
     language: str = "id",
-    model_id: str = "chatterbox-base",
+    model_id: str = "zipvoice-zh-en",
     progress_cb: ProgressCb | None = None,
     reference_text: str = "",
 ) -> Path:
-    """Zero-shot cloning: reference sample (>= 6s) plus text -> wav (PerTh watermarked)."""
+    """Zero-shot cloning from a local recording; ffmpeg accepts common formats."""
     if not text.strip():
         raise ValueError("teks kosong")
     if not sample:
         raise ValueError("butuh contoh suara (sample) untuk kloning")
+    sample = Path(sample).expanduser()
+    if not sample.is_file():
+        raise FileNotFoundError("Rekaman contoh tidak ditemukan. Pilih berkas audio yang masih ada.")
     if model_id == "zipvoice-zh-en":
         if language not in {"en", "zh"}:
             raise ValueError("ZipVoice mendukung English/Mandarin. Gunakan Piper atau suara online untuk Indonesia.")
         return _zipvoice(text, sample, reference_text, Path(out_path), progress_cb)
-    model, device = _load_chatterbox(model_id, language)
-    if progress_cb:
-        progress_cb(20.0, f"mengkloning suara ({device})")
-    wav = model.generate(text, audio_prompt_path=str(sample))
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out_path.with_suffix(".reference.wav")
+    try:
+        converted = ffmpeg.run_ffmpeg([
+            "-i", str(sample), "-t", "30", "-vn", "-ac", "1", "-ar", "24000",
+            "-c:a", "pcm_s16le", str(temporary),
+        ], timeout=120)
+        if not converted.ok:
+            raise ValueError("Rekaman contoh tidak dapat dibaca; coba berkas audio lain.")
+        if duration_of(temporary) < 6:
+            raise ValueError("Rekaman contoh terlalu pendek; gunakan suara jelas selama 6–30 detik.")
+        model, device = _load_chatterbox(model_id, language)
+        if progress_cb:
+            progress_cb(20.0, f"mengkloning suara ({device})")
+        wav = model.generate(text, audio_prompt_path=str(temporary))
+    finally:
+        temporary.unlink(missing_ok=True)
     try:
         import torchaudio
 

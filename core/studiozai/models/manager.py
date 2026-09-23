@@ -125,11 +125,13 @@ def resolve_tier(hw: dict[str, Any], lang: str = "id") -> dict[str, Any]:
             asr, reasons = "whisper-tiny-int8", ["RAM Android < 6GB -> Whisper tiny"]
         else:
             asr, reasons = "whisper-base-int8", ["Android arm64 -> Whisper base int8"]
-        clone = "zipvoice-zh-en" if (ram or 0) >= 6 else None
+        clone = "zipvoice-zh-en" if lang == "en" and (ram or 0) >= 6 else None
         if clone:
-            reasons.append("RAM >= 6GB -> ZipVoice (cloning EN)")
+            reasons.append("RAM >= 6GB -> ZipVoice (kloning English)")
+        elif lang == "id":
+            reasons.append("Kloning Indonesia belum tersedia dalam runtime Android ringan")
         else:
-            reasons.append("RAM < 6GB -> cloning dimatikan")
+            reasons.append("RAM < 6GB -> kloning dimatikan")
     else:
         if ram and ram < 8:
             asr = "whisper-base-int8"
@@ -137,11 +139,13 @@ def resolve_tier(hw: dict[str, Any], lang: str = "id") -> dict[str, Any]:
         else:
             asr = "whisper-small-int8"
             reasons.append("RAM >= 8GB -> Whisper small (akurasi ID lebih baik)")
-        clone = "zipvoice-zh-en" if (ram or 0) >= 6 else None
+        clone = "zipvoice-zh-en" if lang == "en" and (ram or 0) >= 6 else None
         if clone:
-            reasons.append("ZipVoice CPU opsional (English / Mandarin, bukan Indonesia)")
+            reasons.append("ZipVoice CPU opsional (English / Mandarin)")
+        elif lang == "id":
+            reasons.append("Kloning Indonesia opsional di desktop source, perlu PyTorch dan RAM besar")
 
-    tts = "piper-id_ID-news_tts-medium" if lang == "id" else "piper-en_US-lessac-medium"
+    tts = "supertonic-3-int8" if lang == "id" else "piper-en_US-ljspeech-medium"
     return {"asr": asr, "tts": tts, "clone": clone, "reasons": reasons}
 
 
@@ -165,6 +169,10 @@ def marker_path(model_id: str) -> Path:
 
 
 def is_installed(model_id: str) -> bool:
+    if model_id == "chatterbox-id-finetune":
+        checkpoint = model_dir(model_id) / "t3_cfg.safetensors"
+        return (marker_path(model_id).exists() and checkpoint.is_file()
+                and checkpoint.stat().st_size > 1024**3)
     if model_id == "supertonic-3-int8":
         directory = model_dir(model_id)
         required = (
@@ -207,10 +215,15 @@ def status() -> list[dict[str, Any]]:
             continue
         rows.append(
             {
-                **{k: model.get(k) for k in ("id", "kind", "langs", "platforms", "tier", "size_mb", "license", "note", "homepage")},
+                **{k: model.get(k) for k in (
+                    "id", "kind", "langs", "platforms", "tier", "size_mb", "license",
+                    "note", "homepage", "commercial_use", "license_url", "license_note",
+                    "license_kind", "runtime_note", "recommended",
+                )},
                 "installed": is_installed(model["id"]),
                 "installed_mb": installed_size_mb(model["id"]) if is_installed(model["id"]) else 0,
-                "requires_pip": model.get("download", {}).get("type") == "lib",
+                "requires_pip": (model.get("download", {}).get("type") == "lib"
+                                 or "source-only" in model.get("platforms", [])),
             }
         )
     return rows

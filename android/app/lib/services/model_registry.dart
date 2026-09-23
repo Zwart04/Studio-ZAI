@@ -44,34 +44,63 @@ class ModelRegistry {
     langs: ['id'],
     sizeMb: 63,
     license: 'MIT',
-    note: 'Suara Indonesia (Piper) — realtime di HP',
+    note: 'Satu suara Indonesia, ringan di HP; hak data suara belum jelas.',
     url:
         'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-id_ID-news_tts-medium.tar.bz2',
     tier: 0,
+    commercialUse: 'unverified',
+    licenseNote:
+        'Kode/model berlabel MIT, tetapi asal dan izin rekaman suara belum terverifikasi.',
+    recommended: false,
   );
 
   static final piperEn = ModelInfo(
-    id: 'piper-en_US-lessac-medium',
+    id: 'piper-en_US-ljspeech-medium',
     kind: 'tts',
     langs: ['en'],
     sizeMb: 63,
     license: 'MIT',
-    note: 'Suara Inggris (Piper)',
+    note: 'Suara English ringan dari data LJSpeech domain publik.',
+    url:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ljspeech-medium.tar.bz2',
+    tier: 0,
+    commercialUse: 'allowed',
+    licenseUrl:
+        'https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD',
+    licenseNote:
+        'Model MIT; model card menyatakan dilatih dari awal memakai LJSpeech domain publik.',
+  );
+
+  static final piperEnLessac = ModelInfo(
+    id: 'piper-en_US-lessac-medium',
+    kind: 'tts',
+    langs: ['en'],
+    sizeMb: 63,
+    license: 'Data riset saja',
+    note: 'Model lama; data suara Lessac tidak ditujukan untuk komersial.',
     url:
         'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2',
-    tier: 0,
+    commercialUse: 'restricted',
+    licenseNote:
+        'Tidak direkomendasikan untuk publikasi atau produk komersial.',
+    recommended: false,
   );
 
   static final zipVoice = ModelInfo(
     id: 'zipvoice-zh-en',
     kind: 'clone',
-    langs: ['en'],
+    langs: ['en', 'zh'],
     sizeMb: 350,
     license: 'Apache-2.0',
-    note: 'Kloning EN ringan (butuh rekaman contoh)',
+    note:
+        'Kloning English/Mandarin dari rekaman contoh; bukan Bahasa Indonesia.',
     url:
         'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2',
     tier: 1,
+    commercialUse: 'allowed',
+    licenseUrl: 'https://github.com/k2-fsa/ZipVoice/blob/master/LICENSE',
+    licenseNote:
+        'Apache-2.0. Gunakan hanya rekaman suara milik sendiri atau yang diizinkan.',
   );
 
   static final whisperSmall = ModelInfo(
@@ -104,10 +133,13 @@ class ModelRegistry {
     langs: ['en'],
     sizeMb: 63,
     license: 'MIT',
-    note: 'Suara Inggris (British) alternatif',
+    note: 'Suara Inggris alternatif; hak data suara perlu diperiksa.',
     url:
         'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-alba-medium.tar.bz2',
     tier: 0,
+    commercialUse: 'unverified',
+    licenseNote: 'Model card belum cukup untuk memastikan izin komersial.',
+    recommended: false,
   );
 
   static final vad = ModelInfo(
@@ -148,6 +180,11 @@ class ModelRegistry {
         'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2',
     tier: 1,
     sha256: '82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427',
+    commercialUse: 'allowed',
+    licenseUrl:
+        'https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE',
+    licenseNote:
+        'OpenRAIL-M mengizinkan komersial dengan syarat. Model berbobot terbuka, bukan lisensi open source OSI.',
   );
 
   static final all = <ModelInfo>[
@@ -157,16 +194,22 @@ class ModelRegistry {
     whisperMedium,
     piperId,
     piperEn,
+    piperEnLessac,
     piperEnGb,
-    ...['amy', 'ryan', 'joe', 'ljspeech'].map((name) => ModelInfo(
+    ...['amy', 'ryan', 'joe'].map((name) => ModelInfo(
           id: 'piper-en_US-$name-medium',
           kind: 'tts',
           langs: ['en'],
           sizeMb: 63,
-          license: 'Lihat model card',
-          note: 'English US · $name · opsional',
+          license: name == 'ryan' ? 'CC BY-NC-SA' : 'Perlu verifikasi',
+          note: 'English US · $name · model lama',
           url:
               'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-$name-medium.tar.bz2',
+          commercialUse: name == 'ryan' ? 'restricted' : 'unverified',
+          licenseNote: name == 'ryan'
+              ? 'Data suara berlisensi nonkomersial.'
+              : 'Hak data suara belum terverifikasi.',
+          recommended: false,
         )),
     zipVoice,
     vad,

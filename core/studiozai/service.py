@@ -308,6 +308,59 @@ def refresh_captions(project: projects.Project, clip: projects.Clip) -> list[dic
     return clip.captions
 
 
+def generate_captions_for_clip(
+    project: projects.Project,
+    clip: projects.Clip,
+    job: Job | None = None,
+) -> list[dict[str, Any]]:
+    """Create captions from local speech recognition for one editor clip.
+
+    A project made without automatic subtitles has no transcript. Running ASR on
+    its entire source here would make a short edit of an hour-long video appear
+    stuck. Extract only the selected range in that case. Existing project
+    transcripts are already local ASR results and can be reused directly.
+    """
+    if project.transcript.get("segments"):
+        _report(job, 90, "subtitle", "memakai transkrip AI proyek")
+        return refresh_captions(project, clip)
+
+    media = project.media_path()
+    if media is None:
+        raise FileNotFoundError("media sumber tidak ditemukan")
+    if clip.duration <= 0:
+        raise ValueError("durasi klip harus lebih besar dari nol")
+
+    import tempfile
+
+    project.root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="caption-", dir=project.root) as temp_dir:
+        audio = Path(temp_dir) / "clip.wav"
+        _report(job, 5, "subtitle", "menyiapkan audio klip")
+        result = ffmpeg.run_ffmpeg(
+            [
+                "-ss", f"{clip.start:.3f}",
+                "-i", str(media),
+                "-t", f"{clip.duration:.3f}",
+                "-vn", "-ac", "1", "-ar", "16000",
+                "-c:a", "pcm_s16le", str(audio),
+            ],
+            timeout=max(120, int(clip.duration * 3)),
+        )
+        if not result.ok or not audio.exists():
+            raise RuntimeError("Audio klip tidak dapat dibaca untuk subtitle otomatis")
+
+        settings = config.load_settings()
+        transcript = transcribe.transcribe(
+            audio,
+            model_id=settings.get("asr_model", "whisper-small-int8"),
+            lang=project.language,
+            progress_cb=lambda p, m: _report(job, 15 + p * 0.75, "subtitle", m),
+        )
+    clip.captions = captions_for_range(transcript, 0.0, clip.duration)
+    _report(job, 95, "subtitle", f"{len(clip.captions)} baris subtitle dibuat")
+    return clip.captions
+
+
 # --------------------------------------------------------------------------- render
 
 

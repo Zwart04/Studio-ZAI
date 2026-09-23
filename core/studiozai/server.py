@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from . import __version__, ai, config, credentials, jobs, models, projects, service, typography
 from .pipeline import download as download_pipeline
 from .pipeline import subtitle, voice
-from .utils.text import clock
+from .utils.text import clock, sanitize_filename
 
 app = FastAPI(title="Studio ZAI", version=__version__)
 
@@ -84,6 +84,7 @@ class CloneRequest(BaseModel):
     text: str
     sample: str
     lang: str = "id"
+    model_id: str | None = None
     clip: int | None = None
     reference_text: str = ""
 
@@ -199,10 +200,16 @@ async def upload_voice_sample(request: Request) -> dict[str, str]:
         with temporary.open("wb") as output:
             async for chunk in request.stream():
                 size += len(chunk)
-                if size > 15 * 1024 * 1024:
-                    raise HTTPException(413, "Rekaman maksimal 15 MB")
+                if size > 100 * 1024 * 1024:
+                    raise HTTPException(413, "Berkas contoh suara maksimal 100 MB")
                 output.write(chunk)
-        result = await asyncio.to_thread(ffmpeg.run_ffmpeg, ["-i", str(temporary), "-t", "30", "-vn", "-ar", "24000", "-ac", "1", str(target)])
+        if not size:
+            raise HTTPException(400, "Berkas contoh suara kosong")
+        result = await asyncio.to_thread(
+            ffmpeg.run_ffmpeg,
+            ["-i", str(temporary), "-t", "30", "-vn", "-ar", "24000", "-ac", "1", str(target)],
+            timeout=180,
+        )
         if not result.ok:
             target.unlink(missing_ok=True)
             raise HTTPException(400, "Rekaman tidak dapat dibaca. Pilih berkas audio lain.")
@@ -493,9 +500,8 @@ def generate_clip_captions(project_id: str, index: int) -> dict[str, Any]:
 
     def run(job: jobs.Job) -> dict[str, Any]:
         current = projects.load_project(project_id)
-        service.ensure_transcript(current, job=job)
         clip = current.clip(index)
-        service.refresh_captions(current, clip)
+        service.generate_captions_for_clip(current, clip, job=job)
         current.save()
         return {"captions": clip.captions}
 
@@ -538,6 +544,42 @@ def add_project_asset(project_id: str, payload: AssetRequest) -> dict[str, Any]:
     return {"path": path}
 
 
+@app.post("/api/projects/{project_id}/assets/upload")
+async def upload_project_asset(project_id: str, request: Request) -> dict[str, str]:
+    """Stream a dropped browser file into project storage without loading it into RAM."""
+    import uuid
+    from urllib.parse import unquote
+
+    project = _project(project_id)
+    raw_name = unquote(request.headers.get("x-filename", ""))
+    name = sanitize_filename(raw_name, "media")
+    allowed = {
+        ".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi",
+        ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
+        ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wma", ".aif", ".aiff",
+    }
+    if Path(name).suffix.lower() not in allowed:
+        raise HTTPException(400, "Pilih berkas video, gambar, atau audio yang didukung")
+    directory = project.root / "assets"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"{uuid.uuid4().hex[:12]}-{name}"
+    temporary = directory / f".{target.name}.upload"
+    size = 0
+    try:
+        with temporary.open("wb") as output:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 4 * 1024**3:
+                    raise HTTPException(413, "Berkas maksimal 4 GB")
+                output.write(chunk)
+        if not size:
+            raise HTTPException(400, "Berkas kosong")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"path": str(target)}
+
+
 @app.post("/api/projects/{project_id}/export")
 def export_project(project_id: str) -> dict[str, Any]:
     _project(project_id)
@@ -569,17 +611,39 @@ def project_clone(project_id: str, payload: CloneRequest) -> dict[str, Any]:
     job = jobs.MANAGER.submit(
         "clone",
         "Kloning suara",
-        lambda j: {"path": str(service.make_clone(project, payload.text, payload.sample, payload.lang, for_clip=payload.clip, job=j, reference_text=payload.reference_text))},
+        lambda j: {"path": str(service.make_clone(project, payload.text, payload.sample, payload.lang, model_id=payload.model_id, for_clip=payload.clip, job=j, reference_text=payload.reference_text))},
     )
     return job.as_dict()
 
 
 @app.get("/api/voices")
 def list_voices() -> dict[str, Any]:
+    tts_models = voice.tts_models()
+    clone_models = voice.clone_models()
+    runtime = {
+        "piper": voice.piper_available(),
+        "chatterbox": voice.chatterbox_available(),
+        "zipvoice": voice.zipvoice_available(),
+    }
+
+    def runnable(model: dict[str, Any]) -> bool:
+        if not models.manager.is_installed(model["id"]):
+            return False
+        if model["id"].startswith("chatterbox"):
+            return runtime["chatterbox"]
+        if model["id"] == "zipvoice-zh-en" or model["id"] == "supertonic-3-int8":
+            return runtime["zipvoice"]
+        return runtime["piper"]
+
+    descriptors = [
+        {**model, "installed": models.manager.is_installed(model["id"]), "runnable": runnable(model)}
+        for model in (*tts_models, *clone_models)
+    ]
     return {
-        "piper": [m["id"] for m in voice.tts_models() if models.manager.is_installed(m["id"])],
-        "clone": [m["id"] for m in voice.clone_models() if models.manager.is_installed(m["id"])],
-        "available": {"piper": voice.piper_available(), "chatterbox": voice.chatterbox_available(), "zipvoice": voice.zipvoice_available()},
+        "piper": [m["id"] for m in tts_models if runnable(m) and not m.get("deprecated")],
+        "clone": [m["id"] for m in clone_models if runnable(m)],
+        "models": descriptors,
+        "available": runtime,
         "default": {"id": voice.default_voice("id"), "en": voice.default_voice("en")},
     }
 
@@ -624,7 +688,7 @@ def _quick_clone_task(payload: CloneRequest):
             target,
             sample=payload.sample,
             language=payload.lang,
-            model_id=settings.get("clone_model", "zipvoice-zh-en"),
+            model_id=payload.model_id or settings.get("clone_model", "zipvoice-zh-en"),
             reference_text=payload.reference_text,
             progress_cb=lambda p, m: job.report(p, "mengkloning", m),
         )

@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,9 @@ def wait_job(job):
 
 
 if __name__ == '__main__':
-    env = dict(os.environ, LOCALAPPDATA=str(ROOT / 'build/packaged-smoke-v17'))
+    # Use fresh app data on every run so earlier smoke images/projects cannot
+    # make the empty-state assertion depend on test order.
+    env = dict(os.environ, LOCALAPPDATA=str(ROOT / f'build/packaged-smoke-v18-{uuid.uuid4().hex[:8]}'))
     # Reuse an already verified weight through an NTFS hardlink for the
     # packaged-image smoke. This does not copy 683 MB or modify the original.
     image_model = Path(os.environ.get('LOCALAPPDATA', '')) / 'StudioZAI/models/sdxs-512'
@@ -57,7 +60,7 @@ if __name__ == '__main__':
                 time.sleep(.5)
         else:
             raise TimeoutError('Packaged server did not start')
-        assert health['version'] == '1.7.0', health
+        assert health['version'] == '1.8.0', health
         voices = request('/api/voices')
         assert voices['available']['piper'] and voices['available']['zipvoice'], voices
         assert 'anthropic' in request('/api/ai/providers')['providers']
@@ -68,10 +71,10 @@ if __name__ == '__main__':
                 'provider': 'sdxs_local',
             }))['image']
             assert Path(generated).read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
-        with urllib.request.urlopen(BASE + '/timeline.js?v=1.7.0') as response:
+        with urllib.request.urlopen(BASE + '/timeline.js?v=1.8.0') as response:
             script = response.read().decode()
             assert 'schedulePreview()' in script and 'data-tl="preview"' not in script
-        source = next((ROOT / 'build/readme-demo-v17/projects').glob('*/source/studio-session.mp4'))
+        source = next((ROOT / 'build/readme-demo-v18-release/projects').glob('*/source/studio-session.mp4'))
         project = request('/api/projects', {'title': 'Packaged smoke', 'source': str(source), 'lang': 'id'})
         for _ in range(60):
             project = request('/api/projects/' + project['id'])
@@ -91,7 +94,7 @@ if __name__ == '__main__':
         report = {'health': health, 'voice_runtimes': voices['available'],
             'unique_previews': True, 'local_image': test_local_image,
             'render': final['mp4'], 'project': project['id']}
-        (ROOT / 'build/packaged-smoke-v170.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+        (ROOT / 'build/packaged-smoke-v180.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         request(route, method='DELETE')
         assert not (Path(env['LOCALAPPDATA']) / 'StudioZAI/projects' / project['id']).exists()
         print(json.dumps(report))

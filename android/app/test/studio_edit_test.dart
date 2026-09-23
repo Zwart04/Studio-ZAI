@@ -65,4 +65,21 @@ void main() {
     expect(result, isNot(contains('generated')));
     expect(result, contains('overlay'));
   });
+  test('Partial subtitle drafts fail validation instead of dropping a line',
+      () {
+    const saved = '0.00|2.50|Halo semuanya';
+    final captions = SubtitleBuilder.parseEditorDraft(saved);
+    expect(captions, [
+      {'start': 0.0, 'end': 2.5, 'text': 'Halo semuanya'}
+    ]);
+    expect(
+        () => SubtitleBuilder.parseEditorDraft('$saved\n2.50|'),
+        throwsA(isA<FormatException>().having((error) => error.message,
+            'message', contains('Baris subtitle 2'))));
+    expect(() => SubtitleBuilder.parseEditorDraft('$saved\n2.50|3.00|'),
+        throwsFormatException);
+    expect(() => SubtitleBuilder.parseEditorDraft('$saved\n3.00|2.50|Balik'),
+        throwsFormatException);
+    expect(SubtitleBuilder.parseEditorDraft('$saved\n\n'), captions);
+  });
 }

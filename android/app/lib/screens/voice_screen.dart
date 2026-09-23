@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:record/record.dart';
 import '../services/cloud_ai.dart';
+import '../services/voice_reference.dart';
 import 'cloud_settings_screen.dart';
+import 'models_screen.dart';
 
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
@@ -23,14 +25,17 @@ class VoiceScreen extends StatefulWidget {
 
 class _VoiceScreenState extends State<VoiceScreen> {
   final _text = TextEditingController();
+  final _cloneText = TextEditingController();
   final _sample = TextEditingController();
   final _sampleText = TextEditingController();
   String _modelId = '';
   int _speakerId = 0;
   String _language = 'id';
   String? _lastFile;
+  String? _samplePath;
   bool _cloning = false;
   bool _online = false, _generating = false, _recording = false;
+  bool _preparingSample = false;
   String _voice = 'marin';
   final _recorder = AudioRecorder();
   Timer? _timer;
@@ -40,16 +45,43 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _timer?.cancel();
     _recorder.dispose();
     _text.dispose();
+    _cloneText.dispose();
     _sample.dispose();
     _sampleText.dispose();
     super.dispose();
   }
 
   Future<void> _pickSample() async {
-    final files = await FilePicker.pickFiles(type: FileType.audio);
-    if (files.isEmpty) return;
-    final path = files.first.path;
-    if (path != null) setState(() => _sample.text = path);
+    try {
+      // FileType.audio can hide WhatsApp/M4A/OGG recordings on Android file
+      // providers. Decode the selected file rather than trusting its suffix.
+      final files = await FilePicker.pickFiles(type: FileType.any);
+      if (files.isEmpty || !mounted) return;
+      setState(() => _preparingSample = true);
+      final dir = Directory('${widget.state.dataDir.path}/voices/references');
+      final file = await VoiceReference.importFile(files.first, dir);
+      final previous = _samplePath;
+      if (previous != null &&
+          previous.startsWith('${dir.path}/') &&
+          previous != file.path) {
+        try {
+          await File(previous).delete();
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          _samplePath = file.path;
+          _sample.text = files.first.name;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _preparingSample = false);
+    }
   }
 
   Future<void> _record() async {
@@ -60,7 +92,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
         if (mounted) {
           setState(() {
             _recording = false;
-            if (path != null) _sample.text = path;
+            if (path != null) {
+              _samplePath = path;
+              _sample.text = 'Rekaman mikrofon · 30 detik maks.';
+            }
           });
         }
         return;
@@ -101,9 +136,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
             (m.id == 'supertonic-3-int8' ||
                 m.id.startsWith(_language == 'id' ? 'piper-id_' : 'piper-en_')))
         .toList();
+    final preferred =
+        _language == 'id' ? 'supertonic-3-int8' : 'piper-en_US-ljspeech-medium';
+    installed.sort((a, b) {
+      if (a.id == preferred) return -1;
+      if (b.id == preferred) return 1;
+      return a.id.compareTo(b.id);
+    });
+    final cloneInstalled =
+        state.catalog.any((m) => m.id == 'zipvoice-zh-en' && m.installed);
     _modelId = installed.any((m) => m.id == _modelId)
         ? _modelId
         : (installed.isEmpty ? '' : installed.first.id);
+    final selectedModel = installed.where((m) => m.id == _modelId).firstOrNull;
 
     return ListView(
       padding: const EdgeInsets.all(Tokens.space4),
@@ -117,6 +162,35 @@ class _VoiceScreenState extends State<VoiceScreen> {
         Text(state.translate('voice.lead'),
             style: const TextStyle(color: Tokens.textDim)),
         const SizedBox(height: Tokens.space4),
+        if (state.voiceModelUpgradeAvailable) ...[
+          SectionCard(
+            title: 'Pilihan suara baru',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Model suara yang sudah terpasang tetap bisa dipakai. Supertonic 3 (Indonesia/English) dan Piper LJSpeech (English) tersedia sebagai pembaruan opsional.',
+                  style: TextStyle(color: Tokens.textDim, fontSize: 12),
+                ),
+                const SizedBox(height: Tokens.space2),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Model')),
+                        body: ModelsScreen(state: state),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.download_outlined, size: 18),
+                  label: const Text('Lihat model suara baru'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: Tokens.space4),
+        ],
         SectionCard(
           title: state.translate('voice.generate'),
           child: Column(
@@ -156,8 +230,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
               TextField(
                   controller: _text,
                   maxLines: 4,
-                  decoration: InputDecoration(
-                      labelText: state.translate('voice.text'))),
+                  decoration: const InputDecoration(
+                      labelText: 'Teks narasi',
+                      helperText: 'Teks ini dipakai untuk TTS di bagian ini.')),
               const SizedBox(height: Tokens.space4),
               Row(children: [
                 Expanded(
@@ -169,8 +244,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
                       DropdownMenuItem(value: 'id', child: Text('Indonesia')),
                       DropdownMenuItem(value: 'en', child: Text('English')),
                     ],
-                    onChanged: (value) =>
-                        setState(() => _language = value ?? 'id'),
+                    onChanged: (value) => setState(() {
+                      _language = value ?? 'id';
+                      _modelId = '';
+                    }),
                   ),
                 ),
                 if (!_online) ...[
@@ -181,6 +258,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                             style:
                                 TextStyle(color: Tokens.textDim, fontSize: 12))
                         : DropdownButtonFormField<String>(
+                            key: ValueKey('local-voice-$_language'),
                             initialValue: _modelId,
                             decoration: InputDecoration(
                                 labelText: state.translate('voice.model')),
@@ -190,9 +268,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                                     child: Text(
                                         m.id == 'supertonic-3-int8'
                                             ? 'Supertonic 3 · 10 suara'
-                                            : m.id
-                                                .replaceFirst('piper-', '')
-                                                .replaceAll('-medium', ''),
+                                            : '${m.id.replaceFirst('piper-', '').replaceAll('-medium', '')}${m.recommended ? '' : ' · lama'}',
                                         overflow: TextOverflow.ellipsis)))
                                 .toList(),
                             onChanged: (value) =>
@@ -219,6 +295,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 const Text(
                     'Sepuluh karakter suara tersedia untuk Indonesia dan English.',
                     style: TextStyle(color: Tokens.textDim, fontSize: 12)),
+              ],
+              if (!_online && selectedModel != null) ...[
+                const SizedBox(height: Tokens.space2),
+                Text(
+                  selectedModel.licenseNote.isNotEmpty
+                      ? selectedModel.licenseNote
+                      : 'Periksa lisensi model sebelum publikasi.',
+                  style: const TextStyle(color: Tokens.textDim, fontSize: 12),
+                ),
               ],
               const SizedBox(height: Tokens.space4),
               FilledButton(
@@ -289,8 +374,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
               const SizedBox(height: Tokens.space3),
               TextField(
                 controller: _sample,
-                decoration:
-                    InputDecoration(labelText: state.translate('voice.sample')),
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: state.translate('voice.sample'),
+                  helperText:
+                      'Pilih audio apa saja atau rekam 4–30 detik. Audio diubah ke WAV lokal.',
+                ),
               ),
               const SizedBox(height: Tokens.space2),
               Wrap(
@@ -298,12 +387,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 runSpacing: Tokens.space2,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _pickSample,
+                    onPressed:
+                        _preparingSample || _recording ? null : _pickSample,
                     icon: const Icon(Icons.audiotrack, size: 18),
-                    label: Text(state.translate('voice.pickSample')),
+                    label: Text(_preparingSample
+                        ? 'Menyiapkan rekaman…'
+                        : state.translate('voice.pickSample')),
                   ),
                   OutlinedButton.icon(
-                      onPressed: _record,
+                      onPressed: _preparingSample ? null : _record,
                       icon: Icon(_recording ? Icons.stop : Icons.mic_none),
                       label: Text(_recording
                           ? 'Selesai · maks. 30 detik'
@@ -312,14 +404,31 @@ class _VoiceScreenState extends State<VoiceScreen> {
               ),
               const SizedBox(height: Tokens.space3),
               const Text(
-                  'ZipVoice mendukung kloning suara English / Mandarin. Untuk narasi Indonesia, pilih Piper atau Supertonic 3 di atas.',
+                  'ZipVoice memakai rekaman contoh dan transkripnya untuk meniru warna suara. Hasil teks baru didukung English/Mandarin; kloning Indonesia belum tersedia di model lokal ringan.',
                   style: TextStyle(color: Tokens.textDim, fontSize: 12)),
+              if (!cloneInstalled) ...[
+                const SizedBox(height: Tokens.space2),
+                const Text(
+                    'Pasang ZipVoice (EN/ZH) di tab Model sebelum membuat kloning.',
+                    style: TextStyle(color: Tokens.textDim, fontSize: 12)),
+              ],
               const SizedBox(height: Tokens.space3),
               TextField(
                 controller: _sampleText,
                 decoration: InputDecoration(
                   labelText: state.translate('voice.sampleText'),
-                  hintText: 'teks yang diucapkan di rekaman contoh',
+                  hintText: 'tulis persis kata yang terdengar pada contoh',
+                ),
+              ),
+              const SizedBox(height: Tokens.space3),
+              TextField(
+                controller: _cloneText,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Teks baru yang akan dibacakan',
+                  hintText: 'Write the new English sentence here',
+                  helperText:
+                      'Berbeda dari transkrip contoh: ini isi suara hasil kloning.',
                 ),
               ),
               SwitchListTile(
@@ -330,7 +439,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     style: const TextStyle(fontSize: 13)),
               ),
               OutlinedButton(
-                onPressed: !state.cloneConsent
+                onPressed: !state.cloneConsent ||
+                        !cloneInstalled ||
+                        _cloning ||
+                        _preparingSample ||
+                        state.jobState == JobState.running
                     ? null
                     : () async {
                         // Messenger diambil SEBELUM await supaya `context` tidak
@@ -339,8 +452,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
                         try {
                           setState(() => _cloning = true);
                           final file = await state.speech.cloneWithZipVoice(
-                            text: _text.text,
-                            referenceWav: _sample.text,
+                            text: _cloneText.text,
+                            referenceWav: _samplePath ?? '',
                             referenceText: _sampleText.text,
                             outputPath: '${state.dataDir.path}/voices/clone-'
                                 '${DateTime.now().millisecondsSinceEpoch}.wav',

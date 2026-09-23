@@ -34,7 +34,7 @@ class AppState extends ChangeNotifier {
 
   String lang = 'id';
   String asrModelId = 'whisper-base';
-  String ttsModelId = 'piper-id_ID-news_tts-medium';
+  String ttsModelId = 'supertonic-3-int8';
   String cloneModelId = 'zipvoice-zh-en';
   String defaultCrop = 'center';
   bool cloneConsent = false;
@@ -59,6 +59,8 @@ class AppState extends ChangeNotifier {
     cloneModelId = _prefs!.getString('clone') ?? cloneModelId;
     defaultCrop = _prefs!.getString('crop') ?? defaultCrop;
     cloneConsent = _prefs!.getBool('cloneConsent') ?? false;
+    // Keep existing installations unlocked. The v1.8 voice models are offered
+    // as an upgrade in Suara instead of forcing returning users through setup.
     setupComplete = _prefs!.getInt('setupVersion') == 2;
 
     final base = await getApplicationSupportDirectory();
@@ -77,13 +79,18 @@ class AppState extends ChangeNotifier {
   }
 
   ModelManager get models => _models!;
+  bool get voiceModelUpgradeAvailable =>
+      setupComplete &&
+      !['supertonic-3-int8', 'piper-en_US-ljspeech-medium'].every(
+          (id) => catalog.any((model) => model.id == id && model.installed));
+
   Future<void> finishSetup() async {
     await refreshModels();
     final needed = [
       asrModelId,
       'silero-vad',
-      'piper-id_ID-news_tts-medium',
-      'piper-en_US-lessac-medium'
+      'supertonic-3-int8',
+      'piper-en_US-ljspeech-medium'
     ];
     if (needed.any((id) => !catalog.any((m) => m.id == id && m.installed))) {
       throw Exception('Pasang model inti sampai selesai sebelum melanjutkan.');
@@ -486,27 +493,61 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> generateCaptions(Clip clip) async {
+  Future<int> generateCaptions(Clip clip) async {
     if (jobState == JobState.running) {
       throw Exception('Tunggu pekerjaan aktif selesai.');
     }
     final project = currentProject;
     if (project == null) throw Exception('Tidak ada proyek aktif.');
+    if (!catalog.any((model) => model.id == asrModelId && model.installed)) {
+      throw Exception(
+          'Model transkripsi $asrModelId belum terpasang. Unduh di tab Model.');
+    }
+    if (!File(project.source).existsSync()) {
+      throw Exception('Video sumber tidak ditemukan. Periksa proyek ini.');
+    }
+    if (clip.duration <= 0) {
+      throw Exception(
+          'Rentang klip kosong. Atur potongan video terlebih dahulu.');
+    }
     setJob(JobState.running, progress: 5, stage: 'membuat subtitle');
+    final path = '${projectDir(project).path}/captions-${clip.index}.wav';
     try {
-      final path = '${projectDir(project).path}/captions-${clip.index}.wav';
       await MediaTools.extractAudioRange(
           project.source, path, clip.start, clip.end);
-      final segments =
-          await speech.transcribeFile(path, asrModelId, project.language);
-      clip.captions = Pipeline.captionsForRange(segments, 0, clip.duration)
+      _report(20, 'menyiapkan transkripsi');
+      var lastSeconds = -2.0;
+      final segments = await speech.transcribeFile(
+          path, asrModelId, project.language, onProgress: (seconds) {
+        if (seconds - lastSeconds < 2 && seconds < clip.duration) return;
+        lastSeconds = seconds;
+        _report((20 + 70 * seconds / clip.duration).clamp(20, 90),
+            'transkripsi ${seconds.toStringAsFixed(0)}/${clip.duration.toStringAsFixed(0)} detik');
+      });
+      final captions = Pipeline.captionsForRange(segments, 0, clip.duration)
           .map((c) => c.toJson())
           .toList();
+      if (captions.isEmpty) {
+        setJob(JobState.done,
+            progress: 100,
+            stage: 'tidak ada ucapan terdeteksi',
+            message: 'Subtitle lama tetap tersimpan.');
+        return 0;
+      }
+      clip.captions = captions;
       await saveProject(project);
       setJob(JobState.done, progress: 100, stage: 'subtitle siap');
+      return captions.length;
     } catch (error) {
       setJob(JobState.error, stage: 'error', message: '$error');
       rethrow;
+    } finally {
+      final wav = File(path);
+      if (wav.existsSync()) {
+        try {
+          wav.deleteSync();
+        } catch (_) {}
+      }
     }
   }
 

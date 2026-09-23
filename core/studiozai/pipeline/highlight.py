@@ -506,9 +506,7 @@ def _introduces_topic(segments: Sequence[dict[str, Any]], index: int) -> bool:
         return False
     if re.search(r"\b(?:lebih\s+suka|suka|prefer|lebih\s+baik|better)\s*$", preceding):
         return False
-    if re.search(r"\bnomor\s+\d+\s+ya\s+ini\b", current.lower()):
-        return False
-    return True
+    return re.search(r"\bnomor\s+\d+\s+ya\s+ini\b", current.lower()) is None
 
 
 def _topic_start_time(segments: Sequence[dict[str, Any]], index: int) -> float:
@@ -544,10 +542,10 @@ def _adaptive_transcript_windows(transcript: dict[str, Any]) -> list[dict[str, A
 
     anchors = [0]
     for index, segment in enumerate(segments):
-        if index and _introduces_topic(segments, index):
+        if (index and _introduces_topic(segments, index)
+                and segment["start"] - segments[anchors[-1]]["start"] >= 8.0):
             # A product can be introduced across two adjacent ASR segments.
-            if segment["start"] - segments[anchors[-1]]["start"] >= 8.0:
-                anchors.append(index)
+            anchors.append(index)
 
     windows: list[dict[str, Any]] = []
     if len(anchors) > 1:

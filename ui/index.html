@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.7.0" />
-<link rel="stylesheet" href="/styles.css?v=1.7.0" />
-<link rel="stylesheet" href="/studio.css?v=1.7.0" />
+<link rel="stylesheet" href="/tokens.css?v=1.8.0" />
+<link rel="stylesheet" href="/styles.css?v=1.8.0" />
+<link rel="stylesheet" href="/studio.css?v=1.8.0" />
 </head>
 <body>
 <div id="app">
@@ -72,7 +72,7 @@
           <summary>Subtitle &amp; analisis <span>Atur teks dan pemilihan momen</span></summary>
           <div class="advanced-content">
             <div class="field"><label for="subPos">Posisi subtitle</label><select id="subPos" aria-describedby="subPosHelp"><option value="bottom">Bawah (standar)</option><option value="middle">Tengah</option><option value="top">Atas</option><option value="off">Tanpa subtitle tambahan</option></select><p class="field-help" id="subPosHelp">Pilih tanpa subtitle jika video sumber sudah menampilkan teks permanen.</p></div>
-            <div class="switch-group"><label class="switch"><input type="checkbox" id="useTranscript" checked /><span class="track"></span><span class="switch-label" data-i18n="home.transcript">Buat subtitle dari ucapan</span></label><p class="field-help">Transkrip adalah teks ucapan yang disimpan; subtitle adalah teks bertiming yang tampil di video.</p></div>
+            <div class="switch-group"><label class="switch"><input type="checkbox" id="useTranscript" checked /><span class="track"></span><span class="switch-label" data-i18n="home.transcript">Subtitle AI dari audio (offline)</span></label><p class="field-help" data-i18n="home.transcriptHelp">Studio ZAI mentranskrip audio video dengan model lokal, lalu membuat subtitle bertiming. Teks subtitle bawaan dari link tidak dipakai.</p></div>
             <div class="switch-group"><label class="switch"><input type="checkbox" id="useLlm" /><span class="track"></span><span class="switch-label" data-i18n="home.llm">Pilih momen dengan AI dari Pengaturan</span></label><p class="field-help">Opsional. Pemilihan lokal tetap tersedia tanpa API key.</p></div>
           </div>
         </details>
@@ -138,9 +138,10 @@
             <label for="ttsLang" data-i18n="voice.lang">Bahasa</label>
             <select id="ttsLang"><option value="id">Indonesia</option><option value="en">English</option></select>
           </div>
-          <div>
+          <div id="ttsLocalVoiceWrap">
             <label for="ttsVoice" data-i18n="voice.model">Model suara</label>
             <select id="ttsVoice"></select>
+            <p class="field-help" id="ttsModelHint">Pilih suara yang sudah terpasang. Rincian lisensi tersedia di halaman Model.</p>
           </div>
         </div>
         <div class="row" style="margin-top:var(--s4)">
@@ -148,25 +149,40 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card voice-clone-card">
         <h3 data-i18n="voice.clone">Kloning suara</h3>
-        <p class="muted" data-i18n="voice.cloneNote" style="margin:0 0 var(--s4)">Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. Output otomatis mengandung watermark PerTh.</p>
+        <p class="muted" data-i18n="voice.cloneNote" style="margin:0 0 var(--s4)">Gunakan rekaman suaramu sendiri atau yang kamu punya izin. Pilih bahasa dan model sebelum membuat suara.</p>
         <div class="grid-2">
-          <div>
-            <label for="cloneSample" data-i18n="voice.sample">Contoh rekaman (wav/mp3, 10-30 detik)</label>
-            <input type="text" id="cloneSample" placeholder="D:\suara-saya.wav" />
-          </div>
           <div>
             <label for="cloneLang" data-i18n="voice.lang">Bahasa</label>
             <select id="cloneLang"><option value="id">Indonesia</option><option value="en">English</option></select>
           </div>
+          <div>
+            <label for="cloneModel">Model kloning</label>
+            <select id="cloneModel"></select>
+            <p class="field-help" id="cloneModelHint"></p>
+          </div>
         </div>
-        <div style="margin-top:var(--s4)">
-          <label for="cloneText" data-i18n="voice.text">Teks</label>
+        <div class="field" style="margin-top:var(--s4)">
+          <span class="field-label" data-i18n="voice.sample">Contoh suara (6–30 detik, semua format yang dapat dibaca FFmpeg)</span>
+          <div class="voice-sample-row">
+            <input type="hidden" id="cloneSample" />
+            <span class="voice-sample-name" id="cloneSampleName">Belum ada rekaman dipilih</span>
+            <button class="ghost" id="pickSample" type="button" data-i18n="home.pick">Pilih berkas</button>
+          </div>
+          <input type="file" id="cloneFileInput" hidden />
+          <audio id="cloneSamplePlayer" controls hidden></audio>
+          <p class="field-help">Pilih rekaman atau pakai mikrofon. Studio ZAI menyiapkan format audio otomatis secara lokal.</p>
+        </div>
+        <div class="field" id="cloneReferenceWrap" style="margin-top:var(--s4)">
+          <label for="referenceText">Ucapan persis di rekaman contoh <span class="muted">(wajib untuk ZipVoice)</span></label>
+          <textarea id="referenceText" rows="2" placeholder="Contoh: Halo, ini suara saya."></textarea>
+        </div>
+        <div class="field" style="margin-top:var(--s4)">
+          <label for="cloneText" data-i18n="voice.text">Teks yang ingin diucapkan</label>
           <textarea id="cloneText" placeholder="Teks yang akan diucapkan dengan suara kloningan…"></textarea>
         </div>
         <div class="row" style="margin-top:var(--s4)">
-          <button class="ghost" id="pickSample" data-i18n="home.pick">Pilih berkas</button>
           <button class="primary" id="cloneBtn" data-i18n="voice.cloneRun">Kloning</button>
         </div>
         <p class="muted" id="cloneHint" style="margin:var(--s3) 0 0"></p>
@@ -288,8 +304,8 @@
 </div>
 <div id="toast"></div>
 
-<script src="/app.js?v=1.7.0"></script>
-<script src="/timeline.js?v=1.7.0"></script>
-<script src="/studio.js?v=1.7.0"></script>
+<script src="/app.js?v=1.8.0"></script>
+<script src="/timeline.js?v=1.8.0"></script>
+<script src="/studio.js?v=1.8.0"></script>
 </body>
 </html>

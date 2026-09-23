@@ -26,7 +26,8 @@ class Caption {
         (json['start'] as num).toDouble(),
         (json['end'] as num).toDouble(),
         json['text'] as String? ?? '',
-        List<Map<String, dynamic>>.from((json['words'] as List? ?? const []).map((e) => Map<String, dynamic>.from(e as Map))),
+        List<Map<String, dynamic>>.from((json['words'] as List? ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))),
       );
 }
 
@@ -40,13 +41,44 @@ class SubtitleBuilder {
 
   /// Template tipografi. Ukuran ditulis untuk tinggi kanvas 1920 lalu
   /// diskalakan (lihat [toAss]) sehingga proporsional di kanvas lain.
-  static final Map<String, Map<String, dynamic>> presets = {...creatorTextPresets};
+  static final Map<String, Map<String, dynamic>> presets = {
+    ...creatorTextPresets
+  };
 
   static const defaultPreset = 'clean';
 
   static List<Map<String, String>> presetList() => presets.entries
-      .map((entry) => {'id': entry.key, 'label': entry.value['label'] as String})
+      .map(
+          (entry) => {'id': entry.key, 'label': entry.value['label'] as String})
       .toList();
+
+  /// Parse the editor's start|end|text format without silently discarding a
+  /// partially typed line. The editor autosaves for previews, so an incomplete
+  /// draft must leave the previously saved captions and the text field intact.
+  static List<Map<String, dynamic>> parseEditorDraft(String value) {
+    final captions = <Map<String, dynamic>>[];
+    final lines = value.split('\n');
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index].trim();
+      if (line.isEmpty) continue;
+      final parts = line.split('|');
+      final start = parts.isNotEmpty ? double.tryParse(parts[0].trim()) : null;
+      final end = parts.length > 1 ? double.tryParse(parts[1].trim()) : null;
+      final text = parts.length > 2 ? parts.sublist(2).join('|').trim() : '';
+      if (start == null ||
+          end == null ||
+          !start.isFinite ||
+          !end.isFinite ||
+          start < 0 ||
+          end <= start ||
+          text.isEmpty) {
+        throw FormatException(
+            'Baris subtitle ${index + 1} belum lengkap. Gunakan mulai|selesai|teks, misalnya 0.00|2.50|Halo.');
+      }
+      captions.add({'start': start, 'end': end, 'text': text});
+    }
+    return captions;
+  }
 
   /// Nama template yang aman dipakai sebagai nama style ASS.
   ///
@@ -85,7 +117,9 @@ class SubtitleBuilder {
         final joined = '${buffer.map((w) => w['word']).join(' ')} $text';
         final tooLong = joined.length > maxChars;
         final tooMany = buffer.length >= maxWords;
-        final bigGap = (word['start'] as num).toDouble() - (buffer.last['end'] as num).toDouble() > gap;
+        final bigGap = (word['start'] as num).toDouble() -
+                (buffer.last['end'] as num).toDouble() >
+            gap;
         if (tooLong || tooMany || bigGap) flush();
       }
       buffer.add({'word': text, 'start': word['start'], 'end': word['end']});
@@ -111,7 +145,8 @@ class SubtitleBuilder {
       var current = <String>[];
       for (final token in tokens) {
         final candidate = [...current, token].join(' ');
-        if (current.isNotEmpty && (candidate.length > maxChars || current.length >= maxWords)) {
+        if (current.isNotEmpty &&
+            (candidate.length > maxChars || current.length >= maxWords)) {
           chunks.add(current);
           current = [token];
         } else {
@@ -161,12 +196,17 @@ class SubtitleBuilder {
     return buffer.toString();
   }
 
-  static String _escape(String text) =>
-      text.replaceAll(r'\', r'\\').replaceAll('{', r'\{').replaceAll('}', r'\}').replaceAll('\n', r'\N');
+  static String _escape(String text) => text
+      .replaceAll(r'\', r'\\')
+      .replaceAll('{', r'\{')
+      .replaceAll('}', r'\}')
+      .replaceAll('\n', r'\N');
 
-  static String _styleLine(String name, Map<String, dynamic> style, double scale, int alignment, int marginV) {
+  static String _styleLine(String name, Map<String, dynamic> style,
+      double scale, int alignment, int marginV) {
     final marginH = (SubtitleBuilder.marginH * scale).round();
-    final fontSize = (((style['size'] as num?) ?? 56) * scale).round().clamp(10, 300);
+    final fontSize =
+        (((style['size'] as num?) ?? 56) * scale).round().clamp(10, 300);
     final outline = ((style['outline'] as num?) ?? 3) * scale;
     final shadow = ((style['shadow'] as num?) ?? 1) * scale;
     return 'Style: $name,${style['font'] ?? 'Roboto'},$fontSize,${style['primary']},${style['secondary']},'
@@ -176,9 +216,12 @@ class SubtitleBuilder {
   }
 
   static String _karaoke(Caption caption, Map<String, dynamic> style) {
-    if (style['karaoke'] != true || caption.words.isEmpty) return _escape(caption.text);
+    if (style['karaoke'] != true || caption.words.isEmpty) {
+      return _escape(caption.text);
+    }
     return caption.words.map((w) {
-      final duration = ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
+      final duration =
+          ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
       return '{\\k${duration.round().clamp(1, 100000)}}${_escape(w['word'] as String)}';
     }).join(' ');
   }
@@ -194,9 +237,14 @@ class SubtitleBuilder {
   }) {
     final style = presets[preset] ?? presets[defaultPreset]!;
     final scale = height / 1920.0;
-    final marginV = position == 'middle' ? 0 : ((style['marginV'] as num? ?? 220) * scale).round();
+    final marginV = position == 'middle'
+        ? 0
+        : ((style['marginV'] as num? ?? 220) * scale).round();
 
-    final styles = <String>[_styleLine('Default', style, scale, {'bottom':2,'middle':5,'top':8}[position] ?? 2, marginV)];
+    final styles = <String>[
+      _styleLine('Default', style, scale,
+          {'bottom': 2, 'middle': 5, 'top': 8}[position] ?? 2, marginV)
+    ];
     final usedTemplates = <String>{
       for (final item in textItems) templateId(item['template']),
     }.toList()
@@ -234,10 +282,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
       final template = templateId(item['template']);
       final start = (item['start'] as num?)?.toDouble() ?? 0;
       final end = (item['end'] as num?)?.toDouble() ?? (start + 2);
-      final x = ((item['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * width;
-      final y = ((item['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * height;
+      final x =
+          ((item['x'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * width;
+      final y =
+          ((item['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * height;
       final anim = presets[template]?['anim'] as String? ?? '';
-      events.add('Dialogue: 0,${_assTime(start)},${_assTime(end < start + 0.2 ? start + 0.2 : end)},'
+      events.add(
+          'Dialogue: 0,${_assTime(start)},${_assTime(end < start + 0.2 ? start + 0.2 : end)},'
           'Tpl_$template,,0,0,0,,{\\an5\\pos(${x.round()},${y.round()})}$anim${_escape(text)}');
     }
     return '$header\n${events.join('\n')}\n';
