@@ -34,7 +34,8 @@ class ModelManager {
     return dir;
   }
 
-  bool isInstalled(ModelInfo model) => File('${dirFor(model.id).path}/.installed').existsSync();
+  bool isInstalled(ModelInfo model) => File('${dirFor(model.id).path}/.installed').existsSync() &&
+      (model.id != 'zipvoice-zh-en' || File('${dirFor(model.id).path}/vocos_24khz.onnx').existsSync());
 
   double installedSizeMb(String modelId) {
     final dir = Directory('${modelsDir.path}/$modelId');
@@ -85,6 +86,12 @@ class ModelManager {
     final rawName = model.url.split('/').last;
     final target = File('${dir.path}/$rawName');
 
+    if (model.id == 'zipvoice-zh-en' && File('${dir.path}/.installed').existsSync() && fileWith(model, ['encoder.int8.onnx']) != null) {
+      await _zipVocoder(dir, onProgress);
+      onProgress(100, 'terpasang');
+      return;
+    }
+
     try {
       await _fetch(model, target, onProgress);
 
@@ -115,6 +122,7 @@ class ModelManager {
       } else {
         _verifySingleFile(model, target);
       }
+      if (model.id == 'zipvoice-zh-en') await _zipVocoder(dir, onProgress);
       File('${dir.path}/.installed').writeAsStringSync(model.toJson().toString());
       onProgress(100, 'terpasang');
     } catch (e) {
@@ -126,6 +134,15 @@ class ModelManager {
       } catch (_) {}
       rethrow;
     }
+  }
+
+  Future<void> _zipVocoder(Directory dir, void Function(double, String) onProgress) async {
+    final vocoder = ModelInfo(id: 'zipvoice-vocoder', kind: 'clone', langs: ['en'], sizeMb: 54, license: 'MIT', note: 'Vocoder ZipVoice', archive: false,
+      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx');
+    final target = File('${dir.path}/vocos_24khz.onnx');
+    if (await target.exists() && await target.length() > 1024 * 1024) return;
+    await _fetch(vocoder, target, (p, m) => onProgress(97 + p * .02, 'Vocoder · $m'));
+    _verifySingleFile(vocoder, target);
   }
 
   /// Unduh (atau lanjutkan) berkas model ke [target].

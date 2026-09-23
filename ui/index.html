@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css" />
-<link rel="stylesheet" href="/styles.css" />
-<link rel="stylesheet" href="/studio.css" />
+<link rel="stylesheet" href="/tokens.css?v=1.6.0" />
+<link rel="stylesheet" href="/styles.css?v=1.6.0" />
+<link rel="stylesheet" href="/studio.css?v=1.6.0" />
 </head>
 <body>
 <div id="app">
@@ -78,8 +78,14 @@
           <p class="muted" id="qualityHint" style="margin:var(--s2) 0 0"></p>
         </div>
 
-        <!-- Pengaturan klip (selalu terlihat) -->
-        <div id="advDetails" class="stack" style="margin-top:var(--s5); padding-top:var(--s5); border-top:1px solid var(--separator); gap:var(--s4)">
+        <div id="audioTrackWrap" style="display:none;margin-top:20px">
+          <label for="audioTrack">Track audio sumber</label>
+          <select id="audioTrack"></select>
+          <p class="muted" id="audioTrackHint" style="margin:8px 0 0"></p>
+        </div>
+        <details id="advDetails" class="clip-options">
+          <summary>Opsi klip <span>Ukuran, durasi, subtitle, dan suara</span></summary>
+          <div class="stack" style="gap:var(--s4);margin-top:20px">
           <div class="grid-2">
             <div>
               <label for="canvasSize">Ukuran klip</label>
@@ -117,12 +123,6 @@
             </div>
           </div>
 
-          <div id="audioTrackWrap" style="display:none">
-            <label for="audioTrack">Track audio sumber</label>
-            <select id="audioTrack"></select>
-            <p class="muted" id="audioTrackHint" style="margin:8px 0 0"></p>
-          </div>
-
           <div class="stack" style="gap:var(--s3)">
             <label class="switch">
               <input type="checkbox" id="useTranscript" checked />
@@ -136,9 +136,10 @@
               <span class="switch-label" data-i18n="home.llm">Pakai LLM lokal untuk pilih momen</span>
             </label>
           </div>
-        </div>
+          </div>
+        </details>
 
-        <div class="row" style="margin-top:var(--s6)">
+        <div class="row" style="margin-top:var(--s5)">
           <button class="primary" id="startBtn" data-i18n="home.start">Mulai buat klip</button>
           <button class="ghost" id="doctorBtn" data-i18n="home.doctor">Cek perangkat</button>
         </div>
@@ -189,7 +190,7 @@
     <!-- --------------------------------------------------------- voice -->
     <section id="page-voice" class="page">
       <h1 data-i18n="voice.title">Suara otomatis</h1>
-      <p class="lead" data-i18n="voice.lead">Buat voiceover Bahasa Indonesia atau Inggris dengan Piper (super ringan), atau kloning suaramu sendiri dengan Chatterbox.</p>
+      <p class="lead" data-i18n="voice.lead">Buat narasi Indonesia atau Inggris. Pilih suara lokal, gunakan layanan online, atau rekam contoh untuk kloning ZipVoice.</p>
 
       <div class="card">
         <h3 data-i18n="voice.tts">Text to speech</h3>
@@ -284,8 +285,8 @@
         </div>
       </div>
 
-      <h2 data-i18n="settings.llm">LLM lokal (opsional)</h2>
-      <div class="card">
+      <details class="card ai-profile"><summary>Koneksi LLM lama (lanjutan)</summary>
+      <div>
         <p class="muted" data-i18n="settings.llmNote" style="margin:0 0 var(--s4)">Untuk pemilihan momen yang lebih pintar. Contoh Ollama: http://127.0.0.1:11434/v1</p>
         <div class="grid-2">
           <div>
@@ -298,11 +299,12 @@
           </div>
           <div>
             <label for="setLlmKey">API key</label>
-            <input type="text" id="setLlmKey" placeholder="(kosongkan jika tidak perlu)" />
+            <input type="password" id="setLlmKey" placeholder="(kosongkan jika tidak perlu)" />
           </div>
         </div>
       </div>
 
+      </details>
       <div class="card">
         <label class="switch">
           <input type="checkbox" id="setConsent" />
@@ -348,7 +350,8 @@
 </div>
 <div id="toast"></div>
 
-<script src="/app.js"></script>
-<script src="/timeline.js"></script>
+<script src="/app.js?v=1.6.0"></script>
+<script src="/timeline.js?v=1.6.0"></script>
+<script src="/studio.js?v=1.6.0"></script>
 </body>
 </html>

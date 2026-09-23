@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'youtube_source.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -33,14 +35,14 @@ class Downloader {
     String url,
     Directory outDir,
     void Function(double, String) onProgress,
-    {String? audioLanguage}
+    {String? audioLanguage, void Function(String)? onTitle}
   ) async {
     outDir.createSync(recursive: true);
     if (looksLikeMediaFile(url)) {
       return _downloadDirect(url, outDir, onProgress);
     }
     if (isYoutube(url)) {
-      return _downloadYoutube(url, outDir, onProgress, audioLanguage: audioLanguage);
+      return _downloadYoutube(url, outDir, onProgress, audioLanguage: audioLanguage, onTitle: onTitle);
     }
     throw Exception(
       'Link ini butuh yt-dlp, yang untuk saat ini hanya jalan di aplikasi desktop '
@@ -91,38 +93,42 @@ class Downloader {
     Directory outDir,
     void Function(double, String) onProgress, {
     String? audioLanguage,
+    void Function(String)? onTitle,
   }) async {
     final youtube = YoutubeExplode();
     final scratch = Directory('${outDir.path}/.download-${DateTime.now().microsecondsSinceEpoch}');
     try {
       scratch.createSync(recursive: true);
       onProgress(3, 'membaca info video');
-      final video = await youtube.videos.get(url);
-      final manifest = await youtube.videos.streamsClient.getManifest(video.id);
-      final target = File('${outDir.path}/${_safeName(video.title)}.mp4');
-      final audio = manifest.audioOnly.where((stream) => audioLanguage == null
-          ? (stream.audioTrack == null || stream.audioTrack!.audioIsDefault)
-          : matchesLanguage(stream.audioTrack?.id ?? '', audioLanguage)).toList()
-        ..sort((a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
-      if (audioLanguage != null && audio.isEmpty) {
-        throw Exception('Track audio $audioLanguage tidak tersedia. Pilih audio bawaan atau bahasa lain.');
-      }
-      final videos = manifest.videoOnly.toList()
-        ..sort((a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
-      if (videos.isNotEmpty && audio.isNotEmpty) {
-        final v = File('${scratch.path}/video.${videos.first.container.name}');
-        final a = File('${scratch.path}/audio.${audio.first.container.name}');
-        await _saveStream(youtube, videos.first, v, (p) => onProgress(5 + p * 0.65, 'mengunduh video'));
-        await _saveStream(youtube, audio.first, a, (p) => onProgress(70 + p * 0.23, 'mengunduh audio ${audioLanguage ?? "bawaan"}'));
-        final session = await FFmpegKit.execute('-y -i "${v.path}" -i "${a.path}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -movflags +faststart "${target.path}"');
-        if (!ReturnCode.isSuccess(await session.getReturnCode())) {
-          throw Exception('Gagal menggabungkan track video dan audio.');
-        }
-      } else if (audioLanguage == null && manifest.muxed.isNotEmpty) {
-        await _saveStream(youtube, manifest.muxed.withHighestBitrate(), target,
-            (p) => onProgress(5 + p * 0.93, 'mengunduh video'));
-      } else {
-        throw Exception('Stream video atau audio tidak tersedia.');
+      final manifest = await YoutubeSource.manifest(url,
+        onStatus: (message) => onProgress(3, message));
+      // Metadata is optional; stream extraction must not depend on a watch page.
+      var title = VideoId.fromString(url).value;
+      try {
+        final video = await youtube.videos.get(url).timeout(const Duration(seconds: 12));
+        title = video.title;
+      } catch (_) {}
+      onTitle?.call(title);
+      final target = File('${outDir.path}/${_safeName(title)}.mp4');
+      final selectedVideo = YoutubeSource.video(manifest);
+      // Validate the selected language before transferring a large video.
+      YoutubeSource.audio(manifest, audioLanguage);
+      final v = File('${scratch.path}/video.mp4');
+      final a = File('${scratch.path}/audio.m4a');
+      await _saveStream(youtube, selectedVideo, v,
+        (p, detail) => onProgress(5 + p * 0.65, 'Video 720p · $detail'));
+      // Android YouTube stream URLs may be single-use. Get fresh audio URLs
+      // after downloading the video instead of reusing the original manifest.
+      final fresh = await YoutubeSource.manifest(url,
+        onStatus: (message) => onProgress(70, message));
+      final selectedAudio = YoutubeSource.audio(fresh, audioLanguage);
+      await _saveStream(youtube, selectedAudio, a,
+        (p, detail) => onProgress(70 + p * 0.23, 'Audio ${audioLanguage ?? "bawaan"} · $detail'));
+      onProgress(94, 'Menggabungkan video dan audio');
+      final session = await FFmpegKit.execute('-y -i "${v.path}" -i "${a.path}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -movflags +faststart "${target.path}"');
+      if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+        if (target.existsSync()) target.deleteSync();
+        throw Exception('Gagal menggabungkan track video dan audio.');
       }
       onProgress(100, 'selesai');
       return target;
@@ -134,25 +140,32 @@ class Downloader {
     }
   }
 
-  static Future<void> _saveStream(YoutubeExplode youtube, StreamInfo stream, File target, void Function(double) progress) async {
+  static Future<void> _saveStream(YoutubeExplode youtube, StreamInfo stream, File target, void Function(double, String) progress) async {
     final sink = target.openWrite();
     var received = 0;
     var buffered = 0;
     final clock = Stopwatch()..start();
+    var lastEmit = 0;
     try {
-      await for (final chunk in youtube.videos.streamsClient.get(stream)) {
+      await for (final chunk in YoutubeSource.bytes(stream).timeout(const Duration(seconds: 90))) {
         sink.add(chunk);
         received += chunk.length;
         buffered += chunk.length;
         if (buffered >= 1024 * 1024) { await sink.flush(); buffered = 0; }
-        if (clock.elapsedMilliseconds >= 200 && stream.size.totalBytes > 0) {
-          progress(received / stream.size.totalBytes * 100);
-          clock.reset();
+        if (clock.elapsedMilliseconds - lastEmit >= 300 && stream.size.totalBytes > 0) {
+          final speed = received / (clock.elapsedMilliseconds / 1000);
+          final remaining = ((stream.size.totalBytes - received) / speed).ceil();
+          progress(received / stream.size.totalBytes * 100,
+            '${(received / 1048576).toStringAsFixed(1)}/${(stream.size.totalBytes / 1048576).toStringAsFixed(1)} MB · '
+            '${(speed / 1048576).toStringAsFixed(1)} MB/s · sisa ${remaining ~/ 60}:${(remaining % 60).toString().padLeft(2, "0")}');
+          lastEmit = clock.elapsedMilliseconds;
         }
       }
       await sink.flush();
     } finally { await sink.close(); }
-    if (received == 0) throw Exception('Unduhan kosong.');
+    if (received == 0 || (stream.size.totalBytes > 0 && received != stream.size.totalBytes)) {
+      throw Exception('Unduhan terputus. Periksa koneksi dan coba lagi.');
+    }
   }
 
   static String _safeName(String input) {

@@ -113,6 +113,11 @@ class ModelRegistry {
     piperId,
     piperEn,
     piperEnGb,
+    ...['amy', 'ryan', 'joe', 'ljspeech'].map((name) => ModelInfo(
+      id: 'piper-en_US-$name-medium', kind: 'tts', langs: ['en'], sizeMb: 63,
+      license: 'Lihat model card', note: 'English US · $name · opsional',
+      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-$name-medium.tar.bz2',
+    )),
     zipVoice,
     vad,
   ];

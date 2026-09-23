@@ -68,6 +68,7 @@ class Clip {
     this.crop = 'center',
     this.canvas = 'portrait',
     this.subtitlePreset = 'clean',
+    this.subtitlePosition = 'bottom',
     this.audioMode = 'original',
     this.originalVolume = 0.25,
     this.voiceVolume = 1.0,
@@ -87,6 +88,7 @@ class Clip {
   String crop;
   String canvas;
   String subtitlePreset;
+  String subtitlePosition;
   String audioMode;
   double originalVolume;
   double voiceVolume;
@@ -111,6 +113,7 @@ class Clip {
         'crop': crop,
         'canvas': canvas,
         'subtitlePreset': subtitlePreset,
+        'subtitlePosition': subtitlePosition,
         'audioMode': audioMode,
         'originalVolume': originalVolume,
         'voiceVolume': voiceVolume,
@@ -131,6 +134,7 @@ class Clip {
         crop: json['crop'] as String? ?? 'center',
         canvas: json['canvas'] as String? ?? 'portrait',
         subtitlePreset: json['subtitlePreset'] as String? ?? 'clean',
+        subtitlePosition: json['subtitlePosition'] as String? ?? 'bottom',
         audioMode: json['audioMode'] as String? ?? 'original',
         originalVolume: (json['originalVolume'] as num?)?.toDouble() ?? 0.25,
         voiceVolume: (json['voiceVolume'] as num?)?.toDouble() ?? 1.0,
@@ -153,6 +157,7 @@ class Project {
     this.sourceIsUrl = false,
     this.clips = const [],
     this.createdAt,
+    this.transcript = const [],
   });
 
   final String id;
@@ -163,6 +168,7 @@ class Project {
   bool sourceIsUrl;
   List<Clip> clips;
   DateTime? createdAt;
+  List<Map<String, dynamic>> transcript;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -171,6 +177,7 @@ class Project {
         'language': language,
         'duration': duration,
         'sourceIsUrl': sourceIsUrl,
+        'transcript': transcript,
         'clips': clips.map((c) => c.toJson()).toList(),
         'createdAt': (createdAt ?? DateTime.now()).toIso8601String(),
       };
@@ -182,6 +189,7 @@ class Project {
         language: json['language'] as String? ?? 'id',
         duration: (json['duration'] as num?)?.toDouble() ?? 0,
         sourceIsUrl: json['sourceIsUrl'] as bool? ?? false,
+        transcript: List<Map<String, dynamic>>.from((json['transcript'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map))),
         clips: (json['clips'] as List? ?? const []).map((e) => Clip.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
       );

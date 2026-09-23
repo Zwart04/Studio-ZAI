@@ -1,3 +1,18 @@
+# v1.6.0 — 23 September 2026
+
+- Unduhan Android dengan profil stream baru, retry terbatas, progres byte, dan track bahasa tetap.
+- Progres transkripsi panjang diperbaiki; SSE tidak macet setelah banyak segmen.
+- Pemutar langsung, pembaruan otomatis, trim/split, sumber tersimpan, tipografi custom, dan subtitle tanpa track ganda.
+- Duplikat proyek independen dan cache Android tidak menghapus video sumber.
+- 7 pilihan Piper, ZipVoice CPU Windows/Android, rekaman mikrofon, 13 suara OpenAI opsional.
+- AI teks OpenAI/Anthropic/DeepSeek/compatible, gambar OpenAI/SD.cpp server, kunci terlindungi.
+- Beranda ringkas, logo kontras, README dan screenshot baru.
+- Satu APK universal, Windows ZIP dan checksum; tidak ada demo MP4.
+
+[Validasi dan batasan](RELEASE-1.6.0.md).
+
+---
+
 # CHANGELOG — Studio ZAI
 
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan [Semantic Versioning](https://semver.org/).

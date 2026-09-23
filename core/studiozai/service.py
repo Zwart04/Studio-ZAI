@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import config, models, projects
+from . import config, credentials, models, projects
 from .jobs import Job
 from .pipeline import crop as crop_mod
 from .pipeline import download, highlight, probe, render, subtitle, transcribe, voice
@@ -146,8 +146,7 @@ def ingest(
         )
         project.source = info["path"]
         project.source_kind = "url"
-        if not project.title or project.title.startswith("http"):
-            project.title = sanitize_filename(info["title"], "proyek")
+        project.title = info["title"]
     else:
         src_path = Path(source)
         if not src_path.exists():
@@ -273,7 +272,8 @@ def generate_clips(
             count=count,
             base_url=settings.get("llm_base_url") or "http://127.0.0.1:11434/v1",
             model=settings.get("llm_model") or "qwen2.5:7b",
-            api_key=settings.get("llm_api_key") or None,
+            api_key=credentials.read().get("llm_api_key") or settings.get("llm_api_key") or None,
+            provider=settings.get("ai_provider") or None,
         )
         if llm_rows:
             words = [w for s in transcript.get("segments", []) for w in s.get("words") or []]
@@ -285,7 +285,7 @@ def generate_clips(
             index=position,
             start=candidate.start,
             end=min(candidate.end, project.duration or candidate.end),
-            title=candidate.title or f"Klip {position + 1}",
+            title=f"{project.title} · {candidate.title or f'Klip {position + 1}'}",
             score=candidate.score,
             reason=candidate.reason,
             crop=settings.get("crop", projects.DEFAULT_CROP),
@@ -454,7 +454,14 @@ def render_preview(project: projects.Project, clip: projects.Clip, job: Job | No
     if clip.audio_mode == "voice":
         base_volume = 0.0
 
-    out = directory / "preview.mp4"
+    import time
+    # A playing preview must not be overwritten (Windows locks open media).
+    for old in sorted(directory.glob("preview-*.mp4"), key=lambda p: p.stat().st_mtime)[:-2]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    out = directory / f"preview-{time.time_ns()}.mp4"
     _report(job, 20, "pratinjau", "merender draf cepat")
     timeline_mod.render_timeline(
         media,
@@ -540,6 +547,7 @@ def make_clone(
     model_id: str | None = None,
     for_clip: int | None = None,
     job: Job | None = None,
+    reference_text: str = "",
 ) -> Path:
     settings = config.load_settings()
     project.voices_dir.mkdir(parents=True, exist_ok=True)
@@ -550,7 +558,8 @@ def make_clone(
         out,
         sample=sample,
         language=lang,
-        model_id=model_id or settings.get("clone_model", "chatterbox-base"),
+        model_id=model_id or settings.get("clone_model", "zipvoice-zh-en"),
+        reference_text=reference_text,
         progress_cb=lambda p, m: _report(job, 10 + p * 0.85, "mengkloning", m),
     )
     if for_clip is not None:

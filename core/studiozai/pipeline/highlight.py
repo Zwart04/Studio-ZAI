@@ -651,6 +651,7 @@ def rank_with_llm(
     model: str = "qwen2.5:7b",
     api_key: str | None = None,
     timeout: int = 120,
+    provider: str | None = None,
 ) -> list[dict[str, Any]]:
     """Ask a local OpenAI-compatible server to pick moments from the transcript text."""
     segments = transcript.get("segments", [])
@@ -665,30 +666,34 @@ def rank_with_llm(
         '{"start":<detik>,"end":<detik>,"title":"<judul singkat>"}. '
         f"Durasi tiap momen 15-60 detik.\n\n{numbered}"
     )
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "Jawab hanya dengan JSON valid."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        }
-    ).encode("utf-8")
-    request = urllib.request.Request(
-        base_url.rstrip("/") + "/chat/completions",
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            **({"Authorization": f"Bearer {api_key}"} if api_key else {}),
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return []
-    content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    if provider:
+        from .. import ai
+        content = ai.text(prompt)
+    else:
+        payload = json.dumps(
+            {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "Jawab hanya dengan JSON valid."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.2,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            base_url.rstrip("/") + "/chat/completions",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                **({"Authorization": f"Bearer {api_key}"} if api_key else {}),
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            return []
+        content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
     start = content.find("[")
     end = content.rfind("]")
     if start < 0 or end < 0:
@@ -706,14 +711,15 @@ def rank_with_llm(
             finish = float(item["end"])
         except (KeyError, TypeError, ValueError):
             continue
-        if finish - begin < 3:
+        max_end = max((float(s.get("end", 0)) for s in segments), default=0)
+        if not math.isfinite(begin) or not math.isfinite(finish) or begin < 0 or finish - begin < 3 or finish > max_end + 1:
             continue
         results.append(
             {
                 "start": begin,
                 "end": finish,
                 "score": 1.0,
-                "reason": "dipilih LLM lokal",
+                "reason": "dipilih AI",
                 "title": str(item.get("title") or "").strip(),
             }
         )

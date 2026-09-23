@@ -64,7 +64,7 @@ class _LogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Grayscale version of the brand logo so it blends with the dark UI.
-    return Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain);
+    return ColorFiltered(colorFilter: const ColorFilter.matrix([-1,0,0,0,255,0,-1,0,0,255,0,0,-1,0,255,0,0,0,1,0]), child: Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain));
   }
 }
 

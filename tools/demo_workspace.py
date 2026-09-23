@@ -10,7 +10,7 @@ from studiozai import config, projects, service
 from studiozai.pipeline import voice, timeline
 
 ROOT = Path(__file__).resolve().parents[1]
-DEMO = ROOT / "build" / "readme-demo"
+DEMO = ROOT / "build" / "readme-demo-v16"
 real_models = config.models_dir()
 config._base_dir = lambda: DEMO
 config.models_dir = lambda: real_models
@@ -22,20 +22,29 @@ def prepare():
     existing = projects.list_projects()
     if existing:
         return existing[0]
-    project = projects.Project.create("Studio session — dari ide menjadi klip", language="id")
+    project = projects.Project.create("Studio Notes — Setiap ide punya cerita", language="id")
     wav = project.source_dir / "narration.wav"
     wav.parent.mkdir(parents=True, exist_ok=True)
-    voice.synthesize("Selamat datang di Studio ZAI. Ubah video menjadi klip, tambahkan subtitle otomatis, dan sesuaikan gaya teks. Semua diproses di perangkatmu sendiri.", wav, lang="id")
+    voice.synthesize("Setiap ide punya cerita. Mulai dari satu video. Pilih bagian yang kamu suka, tambahkan suara, lalu susun kata menjadi cerita. Karya berikutnya dimulai dari sini.", wav, lang="id")
     source = project.source_dir / "studio-session.mp4"
-    vf = "drawgrid=w=80:h=80:t=1:c=0x234251,drawbox=x=80:y=170:w=8:h=270:color=0x73e0c8:t=fill,drawtext=fontfile='C\\:/Windows/Fonts/arialbd.ttf':text='MAKE IT YOURS.':fontsize=70:fontcolor=white:x=120:y=210,drawtext=fontfile='C\\:/Windows/Fonts/arial.ttf':text='A local creative workflow':fontsize=30:fontcolor=0x9bbbc8:x=124:y=308,drawtext=fontfile='C\\:/Windows/Fonts/arial.ttf':text='STUDIO ZAI  /  DEMO SESSION':fontsize=19:fontcolor=0x73e0c8:x=124:y=390"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=0x10222d:s=1280x720:r=24", "-i", str(wav), "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(source)], check=True)
+    regular = "fontfile='C\\:/Windows/Fonts/arial.ttf'"
+    bold = "fontfile='C\\:/Windows/Fonts/arialbd.ttf'"
+    vf = ",".join([
+        "drawbox=x=80:y=100:w=1120:h=1:color=0x3a3a3c:t=fill",
+        f"drawtext={regular}:text='STUDIO NOTES':fontsize=19:fontcolor=0xaaaaae:x=80:y=62",
+        f"drawtext={regular}:text='01 / CREATIVE SESSION':fontsize=19:fontcolor=0xaaaaae:x=w-tw-80:y=62",
+        f"drawtext={bold}:text='Setiap ide':fontsize=78:fontcolor=white:x=(w-tw)/2:y=242",
+        f"drawtext={bold}:text='punya cerita.':fontsize=78:fontcolor=white:x=(w-tw)/2:y=332",
+        f"drawtext={regular}:text='Buat. Susun. Bagikan.':fontsize=22:fontcolor=0xaaaaae:x=(w-tw)/2:y=460",
+        "fade=t=in:st=0:d=0.4",
+    ])
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=0x151517:s=1280x720:r=24", "-i", str(wav), "-vf", vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(source)], check=True)
     service.ingest(project, str(source))
     transcript = service.ensure_transcript(project, model_id="whisper-tiny-int8", lang="id")
     assert transcript.get("segments"), "Whisper must recognize generated Indonesian narration"
-    clip = projects.Clip(index=0, start=0, end=min(project.duration, 12), title="Create. Caption. Export.", canvas="original", crop="fit", subtitle_preset="tiktok_pop")
+    clip = projects.Clip(index=0, start=0, end=min(project.duration, 12), title="Setiap ide punya cerita", canvas="original", crop="fit", subtitle_preset="clean")
     clip.captions = service.captions_for_range(transcript, clip.start, clip.end)
     clip.timeline = timeline.default_timeline(clip.start, clip.end, project.source, crop="fit", canvas="original")
-    clip.timeline["tracks"][2]["items"].append({"id": "t0", "start": 0, "end": 4, "text": "YOUR NEXT STORY STARTS HERE", "template": "minimal_lower", "x": 0.5, "y": 0.16})
     project.clips = [clip]
     project.save()
     service.render_clip(project, clip)

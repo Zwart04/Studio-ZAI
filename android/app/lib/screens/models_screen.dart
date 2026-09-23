@@ -66,7 +66,7 @@ class ModelsScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('${device.model} · ${device.androidVersion}'),
-                    Text('RAM ${device.ramGb} GB · Disk bebas ${device.diskFreeGb.toStringAsFixed(1)} GB',
+                    Text('RAM ${device.ramGb.toStringAsFixed(1)} GB · Disk bebas ${device.diskFreeGb.toStringAsFixed(1)} GB',
                         style: const TextStyle(color: Tokens.textDim, fontSize: 13)),
                     Text('ABI: ${device.abis.join(', ')}', style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
                     const SizedBox(height: Tokens.space2),

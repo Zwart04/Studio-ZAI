@@ -118,8 +118,6 @@ def detect_hardware() -> dict[str, Any]:
 def resolve_tier(hw: dict[str, Any], lang: str = "id") -> dict[str, Any]:
     """Pick the lightest model set that comfortably fits the detected device."""
     ram = hw.get("ram_gb") or 0
-    gpu = hw.get("gpu") or {}
-    vram = float(gpu.get("vram_gb") or 0)
     reasons: list[str] = []
 
     if hw.get("android"):
@@ -139,15 +137,9 @@ def resolve_tier(hw: dict[str, Any], lang: str = "id") -> dict[str, Any]:
         else:
             asr = "whisper-small-int8"
             reasons.append("RAM >= 8GB -> Whisper small (akurasi ID lebih baik)")
-        if vram >= 6:
-            clone = "chatterbox-base"
-            reasons.append(f"GPU {gpu.get('name', 'CUDA')} ({vram}GB VRAM) -> Chatterbox nyaman")
-        elif gpu:
-            clone = "chatterbox-base"
-            reasons.append(f"GPU {gpu.get('name')} VRAM terbatas -> Chatterbox bisa lambat")
-        else:
-            clone = "chatterbox-base"
-            reasons.append("CPU-only -> Chatterbox jalan tapi lebih lambat dari realtime")
+        clone = "zipvoice-zh-en" if (ram or 0) >= 6 else None
+        if clone:
+            reasons.append("ZipVoice CPU opsional (English / Mandarin, bukan Indonesia)")
 
     tts = "piper-id_ID-news_tts-medium" if lang == "id" else "piper-en_US-lessac-medium"
     return {"asr": asr, "tts": tts, "clone": clone, "reasons": reasons}
@@ -173,6 +165,9 @@ def marker_path(model_id: str) -> Path:
 
 
 def is_installed(model_id: str) -> bool:
+    if model_id == "zipvoice-zh-en":
+        directory = model_dir(model_id)
+        return marker_path(model_id).exists() and (directory / "vocos_24khz.onnx").is_file() and any(directory.rglob("encoder.int8.onnx"))
     if model_id.startswith("whisper-"):
         directory = model_dir(model_id)
         return (marker_path(model_id).exists()
@@ -193,6 +188,8 @@ def installed_size_mb(model_id: str) -> float:
 def status() -> list[dict[str, Any]]:
     rows = []
     for model in load_registry():
+        if model.get("experimental") and not is_installed(model["id"]):
+            continue
         rows.append(
             {
                 **{k: model.get(k) for k in ("id", "kind", "langs", "platforms", "tier", "size_mb", "license", "note", "homepage")},
@@ -356,6 +353,8 @@ def download(model_id: str, progress_cb: ProgressCb | None = None) -> Path:
     else:
         raise RuntimeError(f"spesifikasi unduhan tidak dikenal untuk {model_id}")
 
+    for item in spec.get("extra_files", []):
+        _download_file(item["url"], target_dir / item["name"], progress_cb, 97, 2)
     marker_path(model_id).write_text(
         json.dumps({"id": model_id, "source": spec.get("provider") or spec.get("url", "")}),
         encoding="utf-8",

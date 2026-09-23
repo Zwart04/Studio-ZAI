@@ -40,7 +40,7 @@ class SubtitleBuilder {
 
   /// Template tipografi. Ukuran ditulis untuk tinggi kanvas 1920 lalu
   /// diskalakan (lihat [toAss]) sehingga proporsional di kanvas lain.
-  static const presets = creatorTextPresets;
+  static final Map<String, Map<String, dynamic>> presets = {...creatorTextPresets};
 
   static const defaultPreset = 'clean';
 
@@ -164,7 +164,7 @@ class SubtitleBuilder {
   static String _escape(String text) =>
       text.replaceAll(r'\', r'\\').replaceAll('{', r'\{').replaceAll('}', r'\}').replaceAll('\n', r'\N');
 
-  static String _styleLine(String name, Map<String, Object> style, double scale, int alignment, int marginV) {
+  static String _styleLine(String name, Map<String, dynamic> style, double scale, int alignment, int marginV) {
     final marginH = (SubtitleBuilder.marginH * scale).round();
     final fontSize = (((style['size'] as num?) ?? 56) * scale).round().clamp(10, 300);
     final outline = ((style['outline'] as num?) ?? 3) * scale;
@@ -175,7 +175,7 @@ class SubtitleBuilder {
         '$marginH,$marginH,$marginV,1';
   }
 
-  static String _karaoke(Caption caption, Map<String, Object> style) {
+  static String _karaoke(Caption caption, Map<String, dynamic> style) {
     if (style['karaoke'] != true || caption.words.isEmpty) return _escape(caption.text);
     return caption.words.map((w) {
       final duration = ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
@@ -187,15 +187,16 @@ class SubtitleBuilder {
   static String toAss(
     List<Caption> captions, {
     String preset = defaultPreset,
+    String position = 'bottom',
     int width = 1080,
     int height = 1920,
     List<Map<String, dynamic>> textItems = const [],
   }) {
     final style = presets[preset] ?? presets[defaultPreset]!;
     final scale = height / 1920.0;
-    final marginV = ((style['marginV'] as int? ?? 220) * scale).round();
+    final marginV = position == 'middle' ? 0 : ((style['marginV'] as num? ?? 220) * scale).round();
 
-    final styles = <String>[_styleLine('Default', style, scale, 2, marginV)];
+    final styles = <String>[_styleLine('Default', style, scale, {'bottom':2,'middle':5,'top':8}[position] ?? 2, marginV)];
     final usedTemplates = <String>{
       for (final item in textItems) templateId(item['template']),
     }.toList()
@@ -221,7 +222,7 @@ ${styles.join('\n')}
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text''';
 
     final events = <String>[];
-    for (final caption in captions) {
+    for (final caption in position == 'off' ? <Caption>[] : captions) {
       final anim = style['anim'] as String? ?? '';
       events.add('Dialogue: 0,${_assTime(caption.start)},'
           '${_assTime(caption.end > caption.start ? caption.end : caption.start + 0.2)},'

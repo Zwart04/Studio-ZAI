@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .. import config, models
+from .. import models
 
 ProgressCb = Callable[[float, str], None]
 ModelCache: dict[tuple[str, str], Any] = {}
@@ -64,7 +64,7 @@ def transcribe(
     model_id: str = "whisper-small-int8",
     lang: str | None = None,
     progress_cb: ProgressCb | None = None,
-    chunk_minutes: float = 10.0,
+    chunk_minutes: float = 1.5,
 ) -> dict[str, Any]:
     """Transkrip dengan chunking agar video panjang tidak macet di tengah jalan.
 
@@ -89,7 +89,7 @@ def transcribe(
     import hashlib
 
     fingerprint = hashlib.sha1(f"{media_path.resolve()}|{total_duration:.1f}".encode()).hexdigest()[:12]
-    cache_dir = config.transcript_cache_dir()
+    cache_dir = media_path.parent / ".transcript-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     all_segments: list[dict[str, Any]] = []
     language = lang or "unknown"
@@ -132,10 +132,13 @@ def transcribe(
             if progress_cb:
                 progress_cb(
                     min(95.0, _base + p / 100.0 * _span),
-                    f"menranskripsi audio (bagian {_index + 1})",
+                    f"Bagian {_index + 1}/{int((total_duration + chunk_seconds - 1) // chunk_seconds)} · {m}",
                 )
 
-        part = _transcribe_single(chunk_path, model_id, lang, _chunk_progress, offset=cursor)
+        try:
+            part = _transcribe_single(chunk_path, model_id, lang, _chunk_progress, offset=cursor)
+        finally:
+            chunk_path.unlink(missing_ok=True)
         if index == 0:
             language = part.get("language", language)
             language_probability = part.get("language_probability", 0.0)
@@ -169,9 +172,11 @@ def _transcribe_single(
     progress_cb: ProgressCb | None = None,
     offset: float = 0.0,
 ) -> dict[str, Any]:
+    if progress_cb:
+        progress_cb(0.0, "Memuat model ASR; pemuatan pertama dapat lebih lama")
     model = load_model(model_id)
     if progress_cb:
-        progress_cb(5.0, "memuat model ASR")
+        progress_cb(0.0, "Menganalisis ucapan awal")
     segments_iter, info = model.transcribe(
         str(media_path),
         language=None if lang in (None, "auto") else lang,
@@ -199,7 +204,7 @@ def _transcribe_single(
             }
         )
         if progress_cb and total:
-            progress_cb(min(95.0, segment.end / total * 100), "menranskripsi audio")
+            progress_cb(min(95.0, segment.end / total * 100), f"Audio {int(offset + segment.end)} detik sudah ditranskripsi")
 
     transcript = {
         "language": getattr(info, "language", lang) or lang or "unknown",

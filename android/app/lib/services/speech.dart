@@ -44,15 +44,21 @@ class SpeechService {
   bool get asrReady => _recognizer != null;
   bool get ttsReady => _tts != null;
 
-  Future<List<TranscriptSegment>> transcribeFile(String path, String modelId, String language) async {
+  Future<List<TranscriptSegment>> transcribeFile(String path, String modelId, String language, {void Function(double)? onProgress}) async {
     final modelRoot = models.modelsDir.path;
-    return Isolate.run(() async {
-      final worker = SpeechService(ModelManager.forDirectory(Directory(modelRoot)));
-      try {
-        await worker.loadAsr(modelId, language: language);
-        return await worker.transcribeWav(path, language: language);
-      } finally { worker.reset(); }
-    });
+    final port = ReceivePort();
+    final send = port.sendPort;
+    final subscription = port.listen((value) { if (value is double) onProgress?.call(value); });
+    try {
+      return await Isolate.run(() async {
+        final worker = SpeechService(ModelManager.forDirectory(Directory(modelRoot)));
+        try {
+          await worker.loadAsr(modelId, language: language);
+          return await worker.transcribeWav(path, language: language,
+            onProgress: (seconds) => send.send(seconds));
+        } finally { worker.reset(); }
+      });
+    } finally { await subscription.cancel(); port.close(); }
   }
 
   void reset() {
@@ -110,7 +116,7 @@ class SpeechService {
   }
 
   /// Transcribe a 16 kHz mono WAV; silero VAD splits it into speech segments.
-  Future<List<TranscriptSegment>> transcribeWav(String wavPath, {String? language}) async {
+  Future<List<TranscriptSegment>> transcribeWav(String wavPath, {String? language, void Function(double)? onProgress}) async {
     if (language != null && language != _loadedLanguage && _loadedAsr != null) {
       await loadAsr(_loadedAsr!, language: language);
     }
@@ -160,10 +166,13 @@ class SpeechService {
           }
         }
       }
+      var processed = 0.0;
       try {
         for (final samples in readWavChunks(wavPath)) {
           vad.acceptWaveform(samples);
           drain();
+          processed += samples.length / 16000.0;
+          onProgress?.call(processed);
         }
         vad.flush();
         drain();
@@ -179,6 +188,7 @@ class SpeechService {
         final end = offset + samples.length / 16000.0;
         if (text.trim().isNotEmpty) segments.add(TranscriptSegment(offset, end, text.trim()));
         offset = end;
+        onProgress?.call(end);
       }
     }
     return segments;
@@ -238,6 +248,16 @@ class SpeechService {
     required String outputPath,
     double speed = 1.0,
   }) async {
+    if (text.trim().isEmpty) throw Exception('Teks kosong.');
+    final root = models.modelsDir.path;
+    return Isolate.run(() async {
+      final worker = SpeechService(ModelManager.forDirectory(Directory(root)));
+      try { return await worker._synthesize(text: text, modelId: modelId, outputPath: outputPath, speed: speed); }
+      finally { worker.reset(); }
+    });
+  }
+
+  Future<File> _synthesize({required String text, required String modelId, required String outputPath, required double speed}) async {
     await loadTts(modelId);
     final audio = _tts!.generate(text: text, sid: 0, speed: speed);
     await MediaTools.writeWav(outputPath, audio.samples, audio.sampleRate);
@@ -258,6 +278,20 @@ class SpeechService {
   }) async {
     if (text.trim().isEmpty) throw Exception('Teks kosong.');
     if (!File(referenceWav).existsSync()) throw Exception('Rekaman contoh tidak ditemukan.');
+    if (referenceText.trim().isEmpty) throw Exception('Isi teks yang diucapkan pada rekaman contoh.');
+    final converted = '$outputPath.reference.wav';
+    File(outputPath).parent.createSync(recursive: true);
+    await MediaTools.extractAudioRange(referenceWav, converted, 0, 30);
+    final root = models.modelsDir.path;
+    try {
+      return await Isolate.run(() async {
+        final worker = SpeechService(ModelManager.forDirectory(Directory(root)));
+        return worker._cloneWithZipVoice(text: text, referenceWav: converted, referenceText: referenceText, outputPath: outputPath);
+      });
+    } finally { final temporary = File(converted); if (temporary.existsSync()) temporary.deleteSync(); }
+  }
+
+  Future<File> _cloneWithZipVoice({required String text, required String referenceWav, required String referenceText, required String outputPath}) async {
 
     final model = models.find('zipvoice-zh-en');
     if (model == null || !models.isInstalled(model)) {
@@ -265,8 +299,10 @@ class SpeechService {
     }
     final encoder = models.fileWith(model, ['encoder.onnx', 'encoder.int8.onnx']);
     final decoder = models.fileWith(model, ['decoder.onnx', 'decoder.int8.onnx']);
-    final vocoder = models.fileWith(model, ['vocoder.onnx', 'vocoder.int8.onnx']);
+    final vocoder = models.fileWith(model, ['vocos_24khz.onnx', 'vocoder.onnx', 'vocoder.int8.onnx']);
     final tokens = models.fileWith(model, ['tokens.txt']);
+    final data = models.directoryWith(model, 'espeak-ng-data');
+    final lexicon = models.fileWith(model, ['lexicon.txt']);
     if (encoder == null || decoder == null || vocoder == null || tokens == null) {
       throw Exception('Berkas model ZipVoice tidak lengkap.');
     }
@@ -280,6 +316,8 @@ class SpeechService {
             encoder: encoder.path,
             decoder: decoder.path,
             vocoder: vocoder.path,
+            dataDir: data?.path ?? '',
+            lexicon: lexicon?.path ?? '',
           ),
           numThreads: 2,
           provider: 'cpu',
@@ -297,7 +335,7 @@ class SpeechService {
           referenceSampleRate: 16000,
           referenceText: referenceText,
           speed: 1.0,
-          numSteps: 8,
+          numSteps: 4,
         ),
       );
       await MediaTools.writeWav(outputPath, audio.samples, audio.sampleRate);
@@ -312,7 +350,7 @@ class SpeechService {
     var samples = MediaTools.readWavSamples(path);
     if (samples.isEmpty) throw Exception('Rekaman contoh tidak bisa dibaca (gunakan WAV 16 kHz mono).');
     // Keep the reference short: 4-15 seconds is plenty and much faster.
-    final maxSamples = 16000 * 15;
+    final maxSamples = 16000 * 30;
     if (samples.length > maxSamples) samples = Float32List.sublistView(samples, 0, maxSamples);
     return samples;
   }

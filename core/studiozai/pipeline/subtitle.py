@@ -212,6 +212,9 @@ def template_id(name: Any) -> str:
     tidak pernah dibuat dan libass diam-diam memakai Default.
     """
     text = str(name or DEFAULT_PRESET)
+    if text.startswith("custom_") and text not in PRESETS:
+        from .. import typography
+        PRESETS.update(typography.load())
     return text if text in PRESETS else DEFAULT_PRESET
 
 
@@ -412,7 +415,7 @@ def to_ass(
     position: str = "bottom",
     text_items: Sequence[dict[str, Any]] | None = None,
 ) -> str:
-    style = dict(PRESETS.get(preset, PRESETS[DEFAULT_PRESET]))
+    style = dict(PRESETS[template_id(preset)])
     width, height = play_res
     scale = height / 1920.0  # semua ukuran preset ditulis untuk tinggi 1920
 

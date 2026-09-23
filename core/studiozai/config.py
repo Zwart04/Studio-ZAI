@@ -15,7 +15,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "asr_model": "whisper-small-int8",
     "tts_voice_id": "piper-id_ID-news_tts-medium",
     "tts_voice_en": "piper-en_US-lessac-medium",
-    "clone_model": "chatterbox-base",
+    "clone_model": "zipvoice-zh-en",
     "clone_consent": False,
     "llm_base_url": "",
     "llm_model": "",
@@ -79,7 +79,7 @@ def cleanup_stale_transcript_chunks(max_age_hours: float = 24.0) -> int:
     removed = 0
     now = time.time()
     try:
-        entries = list(cache.glob("chunk_*.wav"))
+        entries = list(cache.glob("*.wav"))
     except OSError:
         return 0
     for entry in entries:
@@ -104,12 +104,28 @@ def load_settings() -> dict[str, Any]:
             data.update(json.loads(path.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, OSError):
             pass
+    # Older releases selected Chatterbox even in packages without its runtime.
+    if data.get("clone_model", "").startswith("chatterbox"):
+        from .pipeline.voice import chatterbox_available
+        if not chatterbox_available():
+            data["clone_model"] = "zipvoice-zh-en"
     return data
 
 
 def save_settings(values: dict[str, Any]) -> dict[str, Any]:
+    from . import credentials
     data = load_settings()
+    values = dict(values)
+    for kind in ("ai", "image", "speech"):
+        if f"{kind}_provider" in values and values[f"{kind}_provider"] != data.get(f"{kind}_provider") and values.get(f"{kind}_api_key", "***") == "***":
+            values[f"{kind}_api_key"] = ""
     data.update(values)
+    keys = {k: str(v) for k, v in data.items() if k.endswith("_api_key") and v}
+    if keys:
+        credentials.update(keys)
+    # An explicitly empty key removes it; masked placeholders preserve it.
+    credentials.update({k: str(v) for k, v in values.items() if k.endswith("_api_key")})
+    data = {k: v for k, v in data.items() if not k.endswith("_api_key")}
     path = settings_path()
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     try:

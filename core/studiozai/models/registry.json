@@ -209,13 +209,12 @@
         "en"
       ],
       "platforms": [
-        "desktop",
-        "android"
+        "source-only"
       ],
       "tier": 2,
       "size_mb": 1500,
       "license": "MIT",
-      "note": "Zero-shot voice cloning (EN). Output otomatis ber-watermark PerTh. Di Android hanya eksperimental (GGUF Q4).",
+      "note": "Arsip eksperimen; runtime PyTorch manual, tidak direkomendasikan untuk paket ringan. Dukungan Indonesia belum tervalidasi.",
       "homepage": "https://huggingface.co/ResembleAI/chatterbox",
       "download": {
         "type": "lib",
@@ -223,7 +222,8 @@
         "repo": "ResembleAI/chatterbox",
         "note": "Instal dengan: pip install -e \"core[clone]\". Bobot diunduh otomatis."
       },
-      "sha256": null
+      "sha256": null,
+      "experimental": true
     },
     {
       "id": "chatterbox-id-finetune",
@@ -232,12 +232,12 @@
         "id"
       ],
       "platforms": [
-        "desktop"
+        "source-only"
       ],
       "tier": 2,
       "size_mb": 600,
       "license": "Apache-2.0",
-      "note": "Checkpoint fine-tune Bahasa Indonesia untuk Chatterbox (grandhigh). Butuh chatterbox-base.",
+      "note": "Arsip eksperimen; runtime PyTorch manual, tidak direkomendasikan untuk paket ringan. Dukungan Indonesia belum tervalidasi.",
       "homepage": "https://huggingface.co/grandhigh/Chatterbox-TTS-Indonesian",
       "download": {
         "type": "files",
@@ -250,7 +250,8 @@
           }
         ]
       },
-      "sha256": null
+      "sha256": null,
+      "experimental": true
     },
     {
       "id": "zipvoice-zh-en",
@@ -259,21 +260,147 @@
         "en"
       ],
       "platforms": [
-        "android",
-        "desktop"
+        "desktop",
+        "android"
       ],
       "tier": 1,
-      "size_mb": 350,
+      "size_mb": 410,
       "license": "Apache-2.0",
-      "note": "Cloning EN ringan via sherpa-onnx (butuh reference audio + teksnya). Cocok untuk Android.",
+      "note": "Kloning English / Mandarin di CPU. Perlu rekaman 6–30 detik beserta teks persisnya. Tidak mendukung Indonesia.",
       "homepage": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models",
       "download": {
         "type": "archive",
         "provider": "sherpa-onnx",
         "name": "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2",
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2"
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2",
+        "extra_files": [
+          {
+            "name": "vocos_24khz.onnx",
+            "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx"
+          }
+        ]
       },
       "sha256": null
+    },
+    {
+      "id": "piper-en_US-amy-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "Lihat model card",
+      "note": "English US · Amy · suara lokal opsional",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/amy/medium/MODEL_CARD",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_US-amy-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx"
+          },
+          {
+            "name": "en_US-amy-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "piper-en_US-ryan-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "Lihat model card",
+      "note": "English US · Ryan · suara lokal opsional",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ryan/medium/MODEL_CARD",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_US-ryan-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx"
+          },
+          {
+            "name": "en_US-ryan-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "piper-en_US-joe-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "Lihat model card",
+      "note": "English US · Joe · suara lokal opsional",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/joe/medium/MODEL_CARD",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_US-joe-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx"
+          },
+          {
+            "name": "en_US-joe-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "piper-en_US-ljspeech-medium",
+      "kind": "tts",
+      "langs": [
+        "en"
+      ],
+      "platforms": [
+        "desktop",
+        "android"
+      ],
+      "tier": 0,
+      "size_mb": 63,
+      "license": "Lihat model card",
+      "note": "English US · Ljspeech · suara lokal opsional",
+      "homepage": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD",
+      "download": {
+        "type": "files",
+        "provider": "piper",
+        "files": [
+          {
+            "name": "en_US-ljspeech-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx"
+          },
+          {
+            "name": "en_US-ljspeech-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json"
+          }
+        ]
+      }
     }
   ]
 }

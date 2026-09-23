@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,9 @@ import '../services/model_manager.dart';
 import '../services/pipeline.dart';
 import '../services/speech.dart';
 import '../services/timeline.dart';
+import '../services/subtitle_builder.dart';
+import '../services/cloud_ai.dart';
+import '../services/clip_edits.dart';
 
 enum JobState { idle, running, done, error }
 
@@ -62,6 +66,8 @@ class AppState extends ChangeNotifier {
     _speech = SpeechService(_models!);
     await refreshModels();
     await refreshDevice();
+    final custom = jsonDecode(_prefs!.getString('typography') ?? '{}') as Map;
+    for (final entry in custom.entries) { SubtitleBuilder.presets[entry.key as String] = Map<String, dynamic>.from(entry.value as Map); }
     loadProjects();
     notifyListeners();
   }
@@ -153,9 +159,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteProject(Project project) async {
     final file = File('${projectsDir.path}/${project.id}.json');
-    if (file.existsSync()) file.deleteSync();
     final folder = Directory('${dataDir.path}/work/${project.id}');
     if (folder.existsSync()) folder.deleteSync(recursive: true);
+    if (file.existsSync()) file.deleteSync();
     if (currentProject?.id == project.id) currentProject = null;
     loadProjects();
   }
@@ -175,6 +181,7 @@ class AppState extends ChangeNotifier {
 
   void setJob(JobState state, {double progress = 0, String stage = '', String message = ''}) {
     jobState = state;
+    const MethodChannel('studiozai/device').invokeMethod<void>('keepAwake', state == JobState.running).catchError((Object _) {});
     jobProgress = progress;
     jobStage = stage;
     jobMessage = message;
@@ -196,6 +203,7 @@ class AppState extends ChangeNotifier {
     required int count,
     required String language,
     required bool useTranscript,
+    bool useAi = false,
     String? audioLanguage,
     String canvas = 'portrait',
   }) async {
@@ -214,7 +222,7 @@ class AppState extends ChangeNotifier {
       final directory = projectDir(project);
       File media;
       if (project.sourceIsUrl) {
-        media = await Downloader.download(source, directory, _report, audioLanguage: audioLanguage);
+        media = await Downloader.download(source, directory, (p, m) => _report(1 + p * .18, m), audioLanguage: audioLanguage, onTitle: (title) => project.title = title);
       } else {
         media = File(source);
         if (!media.existsSync()) throw Exception('Berkas tidak ditemukan: $source');
@@ -224,6 +232,7 @@ class AppState extends ChangeNotifier {
       }
       project.source = media.path;
       project.duration = await MediaTools.duration(media.path);
+      await saveProject(project); // Keep source even if ASR/render fails; allow editing without another download.
       _report(20, 'mengekstrak audio');
 
       final pipeline = Pipeline(models: models, speech: speech, projectDir: directory);
@@ -232,11 +241,26 @@ class AppState extends ChangeNotifier {
       var segments = <TranscriptSegment>[];
       if (useTranscript) {
         _report(30, 'menranskripsi');
-        segments = await speech.transcribeFile(wav.path, asrModelId, language);
+        segments = await speech.transcribeFile(wav.path, asrModelId, language, onProgress: (seconds) => _report(30 + 29 * (seconds / project.duration).clamp(0, 1), 'Audio ${seconds.toInt()}/${project.duration.toInt()} detik ditranskripsi'));
       }
 
+      project.transcript = segments.map((s) => s.toJson()).toList();
+      await saveProject(project);
       _report(60, 'mencari momen terbaik');
-      final candidates = await Pipeline.pickClipsFromWav(wav.path, project.duration, segments, count);
+      var candidates = await Pipeline.pickClipsFromWav(wav.path, project.duration, segments, count);
+      if (useAi) {
+        if (segments.isEmpty) throw Exception('Aktifkan subtitle otomatis agar AI dapat membaca ucapan video.');
+        _report(62, 'AI sedang memilih momen dari transkrip');
+        final compact = segments.map((s) => '${s.start.toStringAsFixed(1)}-${s.end.toStringAsFixed(1)} ${s.text}').join('\n');
+        final result = await CloudAI.text('Select up to $count interesting non-overlapping clips (15–60 seconds) within 0–${project.duration} seconds from this transcript. Return only a JSON array of objects with numeric start, end and a short reason.\n$compact');
+        final first = result.indexOf('['), last = result.lastIndexOf(']');
+        if (first < 0 || last < first) throw Exception('AI tidak mengirim rentang klip yang valid. Coba tanpa AI.');
+        final rows = jsonDecode(result.substring(first, last + 1)) as List;
+        candidates = rows.whereType<Map>().where((r) => r['start'] is num && r['end'] is num)
+          .where((r) => r['start'] >= 0 && r['end'] <= project.duration && r['end'] - r['start'] >= 3)
+          .take(count).map((r) => ClipCandidate((r['start'] as num).toDouble(), (r['end'] as num).toDouble(), 1, '${r['reason'] ?? 'AI'}')).toList();
+        if (candidates.isEmpty) throw Exception('AI tidak menemukan rentang klip yang valid. Video sumber tetap tersimpan.');
+      }
 
       project.clips = [];
       for (var i = 0; i < candidates.length; i++) {
@@ -245,7 +269,7 @@ class AppState extends ChangeNotifier {
           index: i,
           start: candidate.start,
           end: candidate.end,
-          title: 'Klip ${i + 1}',
+          title: '${project.title} · Klip ${i + 1}',
           score: candidate.score,
           reason: candidate.reason,
           crop: defaultCrop,
@@ -255,7 +279,8 @@ class AppState extends ChangeNotifier {
       }
 
       for (final clip in project.clips) {
-        await pipeline.renderClip(project, clip, _report);
+        await pipeline.renderClip(project, clip, (p, stage) => _report(65 + 34 * (clip.index + p / 100) / project.clips.length, 'Klip ${clip.index + 1}/${project.clips.length} · $stage'));
+        await saveProject(project);
       }
       await saveProject(project);
       currentProject = project;
@@ -265,6 +290,27 @@ class AppState extends ChangeNotifier {
       setJob(JobState.error, stage: 'error', message: error.toString());
       rethrow;
     }
+  }
+
+  Future<String> saveTypography(Map<String, dynamic> style) async {
+    final id = 'custom_${DateTime.now().microsecondsSinceEpoch}';
+    SubtitleBuilder.presets[id] = style;
+    await _prefs!.setString('typography', jsonEncode(Map.fromEntries(SubtitleBuilder.presets.entries.where((e) => e.key.startsWith('custom_')))));
+    notifyListeners();
+    return id;
+  }
+
+  Future<Clip> addSourceClip(double start, double end, String canvas) async {
+    final project = currentProject!;
+    if (start < 0 || end <= start || end > project.duration || !File(project.source).existsSync()) {
+      throw Exception('Pilih rentang di dalam durasi video sumber.');
+    }
+    final index = project.clips.fold<int>(-1, (a, c) => a > c.index ? a : c.index) + 1;
+    final clip = Clip(index: index, start: start, end: end, canvas: canvas, crop: 'fit', title: '${project.title} · ${start.toStringAsFixed(1)}–${end.toStringAsFixed(1)}');
+    clip.captions = Pipeline.captionsForRange(project.transcript.map(TranscriptSegment.fromJson).toList(), start, end).map((c) => c.toJson()).toList();
+    project.clips = [...project.clips, clip];
+    await saveProject(project);
+    return clip;
   }
 
   Future<void> renderClip(Clip clip) async {
@@ -335,16 +381,10 @@ class AppState extends ChangeNotifier {
     if (project == null) return;
     final folder = Directory('${projectDir(project).path}/clips/${clip.index}');
     if (folder.existsSync()) {
-      try {
-        folder.deleteSync(recursive: true);
-      } catch (_) {
-        // Berkas mungkin masih dipakai pemutar; yang penting klip hilang dari daftar.
-      }
+      folder.deleteSync(recursive: true);
     }
     project.clips.removeWhere((c) => c.index == clip.index);
-    for (var i = 0; i < project.clips.length; i++) {
-      project.clips[i].index = i;
-    }
+    // Indices also name output folders; keep them stable after deletion.
     await saveProject(project);
   }
 
@@ -352,6 +392,17 @@ class AppState extends ChangeNotifier {
   Future<void> saveClip(Clip clip) async {
     final project = currentProject;
     if (project == null) return;
+    await saveProject(project);
+  }
+
+  Future<void> splitClip(Clip clip, double seconds) async {
+    final project = currentProject!;
+    final at = clip.start + seconds;
+    final next = project.clips.fold<int>(-1, (a, c) => a > c.index ? a : c.index) + 1;
+    final left = sliceClip(clip, clip.start, at, clip.index);
+    final right = sliceClip(clip, at, clip.end, next);
+    final position = project.clips.indexOf(clip);
+    project.clips.removeAt(position); project.clips.insertAll(position, [left, right]);
     await saveProject(project);
   }
 
@@ -490,10 +541,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> clearCache() async {
-    final cache = Directory('${dataDir.path}/work');
-    if (cache.existsSync()) cache.deleteSync(recursive: true);
-    final voices = Directory('${dataDir.path}/voices');
-    if (voices.existsSync()) voices.deleteSync(recursive: true);
+    if (jobState == JobState.running) throw Exception('Tunggu pekerjaan aktif selesai sebelum membersihkan cache.');
+    // Project sources and exported voices are persistent user media, not cache.
+    for (final project in projects) {
+      final cache = Directory('${projectDir(project).path}/work');
+      if (cache.existsSync()) cache.deleteSync(recursive: true);
+    }
     notifyListeners();
   }
 

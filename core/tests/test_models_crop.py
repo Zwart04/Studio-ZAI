@@ -36,14 +36,15 @@ def test_resolve_tier_android_capable():
 def test_resolve_tier_desktop():
     desktop = models.manager.resolve_tier({"android": False, "ram_gb": 16.0, "gpu": {"name": "RTX 4060", "vram_gb": 8}}, "id")
     assert desktop["asr"] == "whisper-small-int8"
-    assert desktop["clone"] == "chatterbox-base"
+    assert desktop["clone"] == "zipvoice-zh-en"
     weak = models.manager.resolve_tier({"android": False, "ram_gb": 4.0}, "id")
     assert weak["asr"] == "whisper-base-int8"
 
 
 def test_status_and_kinds():
     rows = models.manager.status()
-    assert len(rows) == len(models.manager.load_registry())
+    expected = [m for m in models.manager.load_registry() if not m.get('experimental') or models.manager.is_installed(m['id'])]
+    assert {r['id'] for r in rows} == {m['id'] for m in expected}
     assert models.manager.models_by_kind("tts")
     assert models.manager.models_by_kind("clone")
 

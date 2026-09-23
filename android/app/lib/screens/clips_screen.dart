@@ -9,6 +9,7 @@ import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/preview_player.dart';
 import 'editor_screen.dart';
+import '../widgets/source_editor.dart';
 
 class ClipsScreen extends StatelessWidget {
   const ClipsScreen({super.key, required this.state});
@@ -60,6 +61,8 @@ class ClipsScreen extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height:12),
+        OutlinedButton.icon(onPressed: state.jobState == JobState.running ? null : ()=>openSourceEditor(context,state), icon:const Icon(Icons.content_cut),label:const Text('Ambil bagian video sumber')),
         if (state.jobState == JobState.running) ...[
           const SizedBox(height: Tokens.space3),
           ProgressStrip(progress: state.jobProgress, label: '${state.jobStage} ${state.jobMessage}'),

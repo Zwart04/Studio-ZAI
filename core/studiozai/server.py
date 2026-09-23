@@ -7,12 +7,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, config, jobs, models, projects, service
+from . import __version__, ai, config, credentials, jobs, models, projects, service, typography
 from .pipeline import download as download_pipeline
 from .pipeline import subtitle, voice
 from .utils.text import clock
@@ -67,6 +67,12 @@ class AssetRequest(BaseModel):
     path: str
 
 
+class ManualClip(BaseModel):
+    start: float
+    end: float
+    canvas: str = "original"
+
+
 class TtsRequest(BaseModel):
     text: str
     lang: str = "id"
@@ -79,10 +85,21 @@ class CloneRequest(BaseModel):
     sample: str
     lang: str = "id"
     clip: int | None = None
+    reference_text: str = ""
 
 
 class SettingsUpdate(BaseModel):
     values: dict[str, Any]
+
+
+class PromptRequest(BaseModel):
+    prompt: str
+
+
+class CloudSpeechRequest(BaseModel):
+    text: str
+    voice: str = "marin"
+    language: str = "id"
 
 
 def _project(project_id: str) -> projects.Project:
@@ -118,14 +135,79 @@ def doctor() -> dict[str, Any]:
 @app.get("/api/settings")
 def get_settings() -> dict[str, Any]:
     settings = dict(config.load_settings())
-    if settings.get("llm_api_key"):
-        settings["llm_api_key"] = "***"
+    for key, value in {**settings, **credentials.read()}.items():
+        if key.endswith("_api_key"):
+            settings[key] = "***" if value else ""
     return settings
 
 
 @app.post("/api/settings")
 def post_settings(payload: SettingsUpdate) -> dict[str, Any]:
-    return service.update_settings(payload.values)
+    service.update_settings(payload.values)
+    return get_settings()
+
+
+@app.get("/api/ai/providers")
+def ai_providers() -> dict[str, Any]:
+    return {"providers": ai.PROVIDERS, "voices": ai.VOICES}
+
+
+@app.post("/api/ai/text")
+def generate_text(payload: PromptRequest) -> dict[str, Any]:
+    return jobs.MANAGER.submit("text", "Menyusun teks", lambda _: {"text": ai.text(payload.prompt)}).as_dict()
+
+
+@app.post("/api/images")
+def generate_image(payload: PromptRequest) -> dict[str, Any]:
+    return jobs.MANAGER.submit("image", "Membuat gambar", lambda _: {"image": str(ai.image(payload.prompt))}).as_dict()
+
+
+@app.get("/api/images")
+def list_images() -> list[dict[str, str]]:
+    return [{"path": str(p), "name": p.name} for p in sorted((config.data_dir() / "images").glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)]
+
+
+@app.delete("/api/images/{name}")
+def delete_image(name: str) -> dict[str, bool]:
+    import re
+    if not re.fullmatch(r"image-[a-f0-9]{12}\.png", name):
+        raise HTTPException(400, "Nama gambar tidak valid")
+    path = config.data_dir() / "images" / name
+    path.unlink(missing_ok=True)
+    path.with_suffix(".json").unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@app.post("/api/ai/speech")
+def cloud_speech(payload: CloudSpeechRequest) -> dict[str, Any]:
+    return jobs.MANAGER.submit("tts", "Membuat suara online", lambda _: {"path": str(ai.speech(payload.text, payload.voice, payload.language))}).as_dict()
+
+
+@app.post("/api/voice-sample")
+async def upload_voice_sample(request: Request) -> dict[str, str]:
+    import asyncio
+    import uuid
+
+    from .utils import ffmpeg
+    directory = config.data_dir() / "voices"
+    directory.mkdir(exist_ok=True)
+    target = directory / f"sample-{uuid.uuid4().hex[:12]}.wav"
+    temporary = target.with_suffix(".upload")
+    size = 0
+    try:
+        with temporary.open("wb") as output:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 15 * 1024 * 1024:
+                    raise HTTPException(413, "Rekaman maksimal 15 MB")
+                output.write(chunk)
+        result = await asyncio.to_thread(ffmpeg.run_ffmpeg, ["-i", str(temporary), "-t", "30", "-vn", "-ar", "24000", "-ac", "1", str(target)])
+        if not result.ok:
+            target.unlink(missing_ok=True)
+            raise HTTPException(400, "Rekaman tidak dapat dibaca. Pilih berkas audio lain.")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"path": str(target)}
 
 
 # --------------------------------------------------------------------------- models
@@ -327,6 +409,20 @@ def update_clip(project_id: str, index: int, payload: ClipUpdate) -> dict[str, A
     return clip.as_dict()
 
 
+@app.post("/api/projects/{project_id}/clips")
+def create_manual_clip(project_id: str, payload: ManualClip) -> dict[str, Any]:
+    project = _project(project_id)
+    if project.media_path() is None:
+        raise HTTPException(400, "Video sumber belum tersimpan")
+    if not 0 <= payload.start < payload.end <= project.duration or payload.canvas not in {"original", "portrait", "landscape", "square"}:
+        raise HTTPException(400, "Rentang harus berada di dalam durasi video dan kanvas harus valid")
+    clip = project.add_clip(projects.Clip(index=0, start=payload.start, end=payload.end,
+        title=f"{project.title} · {clock(payload.start)}–{clock(payload.end)}", canvas=payload.canvas, crop="fit"))
+    clip.captions = service.captions_for_range(project.transcript, clip.start, clip.end)
+    project.save()
+    return clip.as_dict()
+
+
 @app.delete("/api/projects/{project_id}/clips/{index}")
 def delete_clip(project_id: str, index: int) -> dict[str, Any]:
     project = _project(project_id)
@@ -416,7 +512,18 @@ def _preview_task(project_id: str, index: int):
 @app.get("/api/subtitle-presets")
 def subtitle_presets() -> list[dict[str, str]]:
     """Daftar template tipografi untuk galeri di editor."""
+    subtitle.PRESETS.update(typography.load())
     return subtitle.preset_list()
+
+
+@app.post("/api/subtitle-presets")
+def create_subtitle_preset(values: dict[str, Any]) -> dict[str, str]:
+    try:
+        key, style = typography.create(values)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    subtitle.PRESETS[key] = style
+    return {"id": key}
 
 
 @app.post("/api/projects/{project_id}/assets")
@@ -461,7 +568,7 @@ def project_clone(project_id: str, payload: CloneRequest) -> dict[str, Any]:
     job = jobs.MANAGER.submit(
         "clone",
         "Kloning suara",
-        lambda j: {"path": str(service.make_clone(project, payload.text, payload.sample, payload.lang, for_clip=payload.clip, job=j))},
+        lambda j: {"path": str(service.make_clone(project, payload.text, payload.sample, payload.lang, for_clip=payload.clip, job=j, reference_text=payload.reference_text))},
     )
     return job.as_dict()
 
@@ -471,7 +578,7 @@ def list_voices() -> dict[str, Any]:
     return {
         "piper": [m["id"] for m in voice.tts_models() if models.manager.is_installed(m["id"])],
         "clone": [m["id"] for m in voice.clone_models() if models.manager.is_installed(m["id"])],
-        "available": {"piper": voice.piper_available(), "chatterbox": voice.chatterbox_available()},
+        "available": {"piper": voice.piper_available(), "chatterbox": voice.chatterbox_available(), "zipvoice": voice.zipvoice_available()},
         "default": {"id": voice.default_voice("id"), "en": voice.default_voice("en")},
     }
 
@@ -516,7 +623,8 @@ def _quick_clone_task(payload: CloneRequest):
             target,
             sample=payload.sample,
             language=payload.lang,
-            model_id=settings.get("clone_model", "chatterbox-base"),
+            model_id=settings.get("clone_model", "zipvoice-zh-en"),
+            reference_text=payload.reference_text,
             progress_cb=lambda p, m: job.report(p, "mengkloning", m),
         )
         return {"path": str(target)}
@@ -561,12 +669,21 @@ def job_events(job_id: str) -> StreamingResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     def stream():
-        cursor = 0
+        previous = None
+        last_emit = 0.0
         while True:
             job = jobs.MANAGER.get(job_id)
-            while cursor < len(job.events):
-                payload = job.events[cursor].as_dict()
-                cursor += 1
+            # The event list is bounded (400 entries). An array-index cursor
+            # permanently stalls after 400 reports. Follow the latest event.
+            latest = job.events[-1] if job.events else None
+            if latest is not None and (latest is not previous or time.time() - last_emit >= 1):
+                payload = latest.as_dict()
+                payload["elapsed"] = int(time.time() - job.created)
+                idle = time.time() - latest.time
+                if idle >= 10:
+                    payload["message"] += f" · tahap ini masih berjalan ({int(idle)} dtk tanpa hasil baru)"
+                previous = latest
+                last_emit = time.time()
                 yield f"data: {json.dumps({'type': 'progress', **payload})}\n\n"
             if job.status in {"done", "error", "cancelled"}:
                 yield f"data: {json.dumps({'type': 'end', **job.as_dict()})}\n\n"

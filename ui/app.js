@@ -1,14 +1,15 @@
 const I18N = {
   id: {
-    "editor.style": "Tipografi subtitle", "editor.trimHint": "Framing mengikuti rasio kanvas pilihanmu.", "editor.timelineHint": "Pilih blok untuk mengedit. Geser tepi untuk durasi, lalu klik Pratinjau.",
+    "common.processing": "Memproses",
+    "editor.style": "Tipografi subtitle", "editor.trimHint": "Framing mengikuti rasio kanvas pilihanmu.", "editor.timelineHint": "Pilih blok untuk mengedit. Geser tepi untuk durasi. Video diperbarui otomatis.",
     "nav.home": "Beranda", "nav.projects": "Proyek", "nav.voice": "Suara", "nav.models": "Model", "nav.settings": "Pengaturan",
     "common.refresh": "Muat ulang", "common.back": "Kembali", "common.save": "Simpan", "common.cancel": "Batal",
     "common.delete": "Hapus", "common.render": "Render", "common.edit": "Edit", "common.close": "Tutup", "common.preview": "Pratinjau",
-    "home.title": "Buat klip dari video apa pun",
-    "home.lead": "Tempel link YouTube / TikTok / Instagram atau pilih berkas video lokal. Klip 9:16, subtitle otomatis, dan voiceover dibuat lokal di perangkatmu.",
+    "home.title": "Apa yang ingin kamu buat?",
+    "home.lead": "Satu ruang untuk video, subtitle, suara, dan gambar. Mulai dengan video atau pilih alat studio.",
     "home.source": "Link atau lokasi berkas", "home.pick": "Pilih berkas", "home.count": "Jumlah klip",
     "home.lang": "Bahasa konten", "home.min": "Durasi minimum (detik)", "home.max": "Durasi maksimum (detik)",
-    "home.transcript": "Transkrip otomatis (subtitle)", "home.llm": "Pakai LLM lokal untuk pilih momen",
+    "home.transcript": "Buat subtitle dari ucapan", "home.llm": "Pilih momen dengan AI dari Pengaturan",
     "home.start": "Mulai buat klip", "home.doctor": "Cek perangkat", "home.recent": "Proyek terakhir",
     "home.quality": "Kualitas video", "home.advanced": "Pengaturan lanjutan",
     "home.linkReading": "Membaca link…", "home.linkReady": "Link siap", "home.linkFail": "Link tidak bisa dibaca",
@@ -21,10 +22,10 @@ const I18N = {
     "editor.template": "Template teks", "editor.previewDraft": "Pratinjau cepat", "editor.deleteItem": "Hapus item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Teks", "timeline.audio": "Audio",
     "voice.title": "Suara otomatis",
-    "voice.lead": "Buat voiceover Bahasa Indonesia atau Inggris dengan Piper (super ringan), atau kloning suaramu sendiri dengan Chatterbox.",
+    "voice.lead": "Buat narasi Indonesia atau Inggris. Pilih suara lokal, gunakan layanan online, atau rekam contoh untuk kloning ZipVoice.",
     "voice.tts": "Text to speech", "voice.text": "Teks", "voice.lang": "Bahasa", "voice.model": "Model suara",
     "voice.generate": "Buat suara", "voice.clone": "Kloning suara",
-    "voice.cloneNote": "Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. Output otomatis mengandung watermark PerTh.",
+    "voice.cloneNote": "Gunakan hanya suara milikmu sendiri atau yang kamu punya izin. ZipVoice memerlukan rekaman dan teks persisnya; mendukung English / Mandarin.",
     "voice.sample": "Contoh rekaman (wav/mp3, 10-30 detik)", "voice.cloneRun": "Kloning", "voice.result": "Hasil",
     "models.title": "Model",
     "models.lead": "Model tidak dibundel dalam aplikasi. Studio ZAI mendeteksi perangkatmu dan menyarankan model paling ringan yang cocok.",
@@ -44,11 +45,12 @@ const I18N = {
     "toast.done": "Selesai", "toast.error": "Terjadi kesalahan", "toast.saved": "Tersimpan",
   },
   en: {
-    "editor.style": "Subtitle typography", "editor.trimHint": "Framing follows the selected canvas ratio.", "editor.timelineHint": "Select a block to edit. Drag its edge to trim, then click Preview.",
+    "common.processing": "Processing",
+    "editor.style": "Subtitle typography", "editor.trimHint": "Framing follows the selected canvas ratio.", "editor.timelineHint": "Select a block to edit. Drag its edge to trim. Video updates automatically.",
     "nav.home": "Home", "nav.projects": "Projects", "nav.voice": "Voice", "nav.models": "Models", "nav.settings": "Settings",
     "common.refresh": "Refresh", "common.back": "Back", "common.save": "Save", "common.cancel": "Cancel",
     "common.delete": "Delete", "common.render": "Render", "common.edit": "Edit", "common.close": "Close", "common.preview": "Preview",
-    "home.title": "Turn any video into clips",
+    "home.title": "What will you create?",
     "home.lead": "Paste a YouTube / TikTok / Instagram link or pick a local video file. 9:16 clips, automatic subtitles and voiceover — all local.",
     "home.source": "Link or file path", "home.pick": "Pick file", "home.count": "Number of clips",
     "home.lang": "Content language", "home.min": "Minimum length (seconds)", "home.max": "Maximum length (seconds)",
@@ -65,10 +67,10 @@ const I18N = {
     "editor.template": "Text template", "editor.previewDraft": "Quick preview", "editor.deleteItem": "Delete item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Text", "timeline.audio": "Audio",
     "voice.title": "Voice",
-    "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with Chatterbox.",
+    "voice.lead": "Generate Indonesian or English voiceover with Piper (ultra light), or clone your own voice with ZipVoice.",
     "voice.tts": "Text to speech", "voice.text": "Text", "voice.lang": "Language", "voice.model": "Voice model",
     "voice.generate": "Generate voice", "voice.clone": "Voice cloning",
-    "voice.cloneNote": "Only clone your own voice or voices you have permission to use. Outputs carry the PerTh watermark.",
+    "voice.cloneNote": "Only clone your own voice or voices you have permission to use. ZipVoice requires matching reference text; English / Mandarin only.",
     "voice.sample": "Reference recording (wav/mp3, 10-30 s)", "voice.cloneRun": "Clone", "voice.result": "Result",
     "models.title": "Models",
     "models.lead": "Models are not bundled. Studio ZAI detects your device and recommends the lightest matching models.",
@@ -257,6 +259,7 @@ function trackJob(job) {
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
+      if (data.result?.image && window.renderImages) { setPage("images"); renderImages(); }
       if (data.result && data.result.path) playAudio(data.result.path);
     }
   };
@@ -280,12 +283,14 @@ function playAudio(path) {
 /* ------------------------------------------------------------------ nav */
 
 function setPage(name) {
+  if (name !== 'voice') window.stopStudioRecording?.();
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
   $$("#nav button").forEach((button) => button.classList.toggle("active", button.dataset.page === name));
   if (name === "home") renderHomeProjects();
   if (name === "projects") renderProjects();
   if (name === "models") renderModels();
-  if (name === "settings") renderSettings();
+  if (name === "settings") { renderSettings(); if (window.renderAiSettings) renderAiSettings(); }
+  if (name === "images" && window.renderImages) renderImages();
   if (name === "voice") renderVoice();
 }
 
@@ -475,7 +480,7 @@ function projectCard(project) {
   return `<article class="clip" data-project="${project.id}" style="cursor:pointer">
     ${thumb}
     <div class="meta">
-      <strong>${project.title}</strong>
+      <strong>${escapeHtml(project.title)}</strong>
       <span class="score">${project.clips} klip · ${project.duration_label || formatClock(project.duration)} · ${project.language || ""}</span>
     </div>
   </article>`;
@@ -496,7 +501,7 @@ async function renderProjects() {
     list.innerHTML = `<div class="card tight">${projects.map((project) => `
       <div class="row settings">
         <div style="display:grid;gap:2px;min-width:0">
-          <span style="font-weight:600">${project.title}</span>
+          <span style="font-weight:600">${escapeHtml(project.title)}</span>
           <span class="muted">${project.clips} klip · ${project.duration_label || ""} · ${new Date(project.updated * 1000).toLocaleDateString()}</span>
         </div>
         <div class="row" style="gap:var(--s2)">
@@ -507,7 +512,7 @@ async function renderProjects() {
     list.querySelectorAll("[data-open]").forEach((node) => node.addEventListener("click", () => openProject(node.dataset.open)));
     list.querySelectorAll("[data-delete]").forEach((node) =>
       node.addEventListener("click", async () => {
-        if (!window.confirm(t("projects.deleteConfirm"))) return;
+        if (!await confirmAction(t("projects.deleteConfirm"))) return;
         try {
           await api(`/api/projects/${node.dataset.delete}`, { method: "DELETE" });
           await Promise.all([renderProjects(), renderHomeProjects()]);
@@ -535,6 +540,14 @@ function renderProjectDetail() {
   $("#projectDetail").style.display = "block";
   $("#detailTitle").textContent = project.title;
   $("#detailMeta").textContent = `${project.clips.length} klip · ${formatClock(project.duration)} · ${project.language || ""}`;
+  let sourceAction = $("#sourceAction");
+  if (!sourceAction) {
+    sourceAction = document.createElement("button"); sourceAction.id = "sourceAction";
+    sourceAction.className = "ghost"; sourceAction.textContent = "＋ Ambil bagian dari video sumber";
+    $("#detailMeta").after(sourceAction);
+    sourceAction.addEventListener("click", openSourceEditor);
+  }
+  sourceAction.disabled = !project.source || !project.duration;
   const grid = $("#clipGrid");
   if (!project.clips.length) {
     grid.innerHTML = `<div class="empty">${t("projects.empty")}</div>`;
@@ -549,7 +562,7 @@ function renderProjectDetail() {
     return `<article class="clip">
       ${thumb}
       <div class="meta">
-        <strong>${clip.title || "Klip " + (clip.index + 1)}</strong>
+        <strong>${escapeHtml(clip.title || "Klip " + (clip.index + 1))}</strong>
         <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · skor ${(clip.score || 0).toFixed(2)}</span>
         <span>${status} <span class="badge">${clip.crop}</span></span>
       </div>
@@ -571,7 +584,7 @@ function renderProjectDetail() {
   );
   grid.querySelectorAll("[data-remove]").forEach((node) =>
     node.addEventListener("click", async () => {
-      if (!window.confirm(t("clips.deleteConfirm"))) return;
+      if (!await confirmAction(t("clips.deleteConfirm"))) return;
       try {
         await api(`/api/projects/${project.id}/clips/${node.dataset.remove}`, { method: "DELETE" });
         state.project = await api(`/api/projects/${project.id}`);
@@ -587,10 +600,9 @@ function renderProjectDetail() {
     node.addEventListener("click", () => {
       const clip = state.project.clips.find((c) => c.index === Number(node.dataset.preview));
       if (!clip || !clip.files || !clip.files.mp4) return toast(t("common.render"), "error");
-      const track = clip.files.vtt ? `<track kind="subtitles" srclang="id" src="${mediaUrl(clip.files.vtt)}" default />` : "";
       openPanel(`
-        <div class="spread"><h3>${clip.title || "Klip"}</h3><button class="mini" data-close>${t("common.close")}</button></div>
-        <video controls autoplay src="${mediaUrl(clip.files.mp4)}">${track}</video>
+        <div class="spread"><h3>${escapeHtml(clip.title || "Klip")}</h3><button class="mini" data-close>${t("common.close")}</button></div>
+        <video controls autoplay src="${mediaUrl(clip.files.mp4)}"></video>
         <p class="muted">${mediaUrl(clip.files.mp4)}</p>`);
     })
   );
@@ -638,25 +650,26 @@ function voiceLabel(id) {
   const fake = { id, size_mb: null, note: "", langs: [] };
   if (id.includes("id_ID")) fake.langs = ["id"];
   else if (id.includes("en_")) fake.langs = ["en"];
-  return modelName(fake);
+  return modelName(fake).replace(/ — \? MB$/, "");
 }
 
 function renderVoice() {
   const select = $("#ttsVoice");
-  const available = state.voices.piper || [];
+  const language = $("#ttsLang").value;
+  const available = (state.voices.piper || []).filter(id => id.includes(language === "id" ? "id_ID" : "en_"));
   select.innerHTML = available.map((id) => `<option value="${id}">${voiceLabel(id)}</option>`).join("");
   select.disabled = available.length === 0;
   const ttsBtn = $("#ttsBtn");
   if (ttsBtn) {
-    ttsBtn.disabled = available.length === 0;
+    ttsBtn.disabled = available.length === 0 && $("#ttsEngine")?.value !== "cloud";
     ttsBtn.title = available.length === 0 ? "Unduh dulu model suara di halaman Model" : "";
   }
   if (available.length === 0) {
     select.innerHTML = `<option value="">— belum ada model suara —</option>`;
   }
   const hint = $("#cloneHint");
-  if (!state.voices.available || !state.voices.available.chatterbox) {
-    hint.textContent = "Chatterbox belum terpasang (pip install -e \"core[clone]\") — kloning nonaktif.";
+  if (!state.voices.available || !state.voices.available.zipvoice) {
+    hint.textContent = "Pasang ZipVoice di halaman Model untuk kloning English / Mandarin.";
   } else if (!state.settings.clone_consent) {
     hint.textContent = t("settings.consent");
   } else {
@@ -667,6 +680,9 @@ function renderVoice() {
 async function runTts() {
   const text = $("#ttsText").value.trim();
   if (!text) return toast(t("voice.text"), "error");
+  if ($('#ttsEngine')?.value === 'cloud') {
+    const job = await api('/api/ai/speech',{method:'POST',body:JSON.stringify({text,voice:$('#cloudVoice').value,language:$('#ttsLang').value})});trackJob(job);return;
+  }
   const job = await api("/api/tts", {
     method: "POST",
     body: JSON.stringify({ text, lang: $("#ttsLang").value, voice_id: $("#ttsVoice").value || null }),
@@ -681,7 +697,7 @@ async function runClone() {
   state.settings.clone_sample = sample;
   const job = await api("/api/clone", {
     method: "POST",
-    body: JSON.stringify({ text, sample, lang: $("#cloneLang").value }),
+    body: JSON.stringify({ text, sample, lang: $("#cloneLang").value, reference_text: $("#referenceText").value }),
   });
   trackJob(job);
 }
@@ -700,7 +716,8 @@ function modelName(model) {
   }
   if (id.startsWith("piper-")) {
     const lang = (model.langs || [])[0] === "id" ? "Indonesia" : (model.langs || [])[0] === "en" ? "English" : "";
-    const voice = id.includes("news_tts") ? "News" : id.includes("lessac") ? "Lessac" : id.includes("alba") ? "Alba" : "";
+    const voices = {news_tts: "News", lessac: "Lessac", alba: "Alba", amy: "Amy", ryan: "Ryan", joe: "Joe", ljspeech: "LJ"};
+    const voice = Object.entries(voices).find(([key]) => id.includes(key))?.[1] || "";
     return `Suara ${lang}${voice ? ` ${voice}` : ""} — ${model.size_mb ?? "?"} MB`;
   }
   if (id === "chatterbox-base") return `Kloning Suara EN — ${model.size_mb ?? "?"} MB`;
@@ -898,7 +915,7 @@ function wizardShowRecommend() {
   const recTts = wizard.models.find((m) => m.id === tier.tts);
   $("#wizardBody").innerHTML = `
     <p class="muted" style="text-align:left;margin:0 0 var(--s3)">Rekomendasi untuk perangkatmu: <strong>${recAsr ? modelName(recAsr) : tier.asr}</strong> + <strong>${recTts ? modelName(recTts) : tier.tts}</strong></p>
-    <p class="muted">FFmpeg, transkripsi, dan Piper termasuk paket Windows. Kloning desktop memerlukan runtime tambahan; lihat panduan Model. LLM lokal memerlukan server Ollama yang dikonfigurasi terpisah.</p>
+    <p class="muted">FFmpeg, transkripsi, Piper, dan runtime ZipVoice termasuk paket Windows. Unduh model sesuai fitur yang dibutuhkan. AI teks lokal dan gambar lokal memerlukan server terpisah; lihat Pengaturan.</p>
     ${rows}`;
   $("#wizardActions").innerHTML = `
     <button class="primary" id="wzInstall">Unduh & pasang</button>
@@ -1157,3 +1174,57 @@ document.querySelectorAll('[data-source-mode]').forEach(button => button.addEven
   document.querySelector('#pickFile').hidden = !local;
   document.querySelector('#source').focus();
 }));
+
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function confirmAction(message) {
+  const dialog = document.createElement('dialog'); dialog.className = 'studio-dialog';
+  dialog.innerHTML = `<h3>Hapus dari perangkat?</h3><p>${escapeHtml(message)}</p><p class="field-help">Hasil yang dipilih akan dihapus dari penyimpanan Studio ZAI. Berkas asli di luar proyek tetap aman.</p><form method="dialog" class="row"><button value="cancel">Batal</button><button class="primary" value="delete">Hapus</button></form>`;
+  document.body.append(dialog); dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener('close', () => { const yes = dialog.returnValue === 'delete'; dialog.remove(); resolve(yes); }, {once:true}));
+}
+
+function openSourceEditor() {
+  const project = state.project;
+  openPanel(`<div class="spread"><h3>Video sumber</h3><button data-close>Tutup</button></div>
+    <p>${escapeHtml(project.title)}</p><video id="sourcePlayer" controls preload="metadata" src="${mediaUrl(project.source)}"></video>
+    <p class="field-help">Video tersimpan di proyek. Pilih bagian mana pun tanpa mengunduh lagi. Waktu dalam detik.</p>
+    <div class="grid-2"><label>Mulai<input id="sourceStart" type="number" min="0" step="0.1" value="0"></label><label>Selesai<input id="sourceEnd" type="number" step="0.1" max="${project.duration}" value="${Math.min(30,project.duration)}"></label></div>
+    <div class="row"><button id="markIn">Tandai mulai</button><button id="markOut">Tandai selesai</button></div>
+    <label>Kanvas<select id="sourceCanvas"><option value="original">Asli · rasio sumber</option><option value="portrait">Portrait 9:16</option><option value="square">Kotak 1:1</option><option value="landscape">Landscape 16:9</option></select></label>
+    <button class="primary" id="createRange">Buat klip & edit</button>`);
+  $('#markIn').onclick = () => { $('#sourceStart').value = $('#sourcePlayer').currentTime.toFixed(1); };
+  $('#markOut').onclick = () => { $('#sourceEnd').value = $('#sourcePlayer').currentTime.toFixed(1); };
+  $('#createRange').onclick = async () => {
+    try {
+      const clip = await api(`/api/projects/${project.id}/clips`, {method:'POST',body:JSON.stringify({start:Number($('#sourceStart').value),end:Number($('#sourceEnd').value),canvas:$('#sourceCanvas').value})});
+      closePanel(); state.project = await api(`/api/projects/${project.id}`); renderProjectDetail(); openEditor(clip.index);
+    } catch(error) {toast(error.message,'error');}
+  };
+}
+
+async function createTypography() {
+  const dialog = document.createElement('dialog'); dialog.className = 'studio-dialog';
+  dialog.innerHTML = `<h3>Tipografi buatanmu</h3><form id="typographyForm"><label>Nama template<input name="name" required maxlength="48" value="Gaya saya"></label>
+    <div class="grid-2"><label>Font<select name="font">${['Inter','Anton','Barlow Condensed','DM Serif Display','Kalam'].map(f=>`<option>${f}</option>`).join('')}</select></label><label>Ukuran relatif<input name="size" type="number" min="24" max="144" value="64"></label>
+    <label>Warna teks<input name="color" type="color" value="#ffffff"></label><label>Highlight kata<input name="highlight" type="color" value="#ffe100"></label>
+    <label>Warna tepi / kotak<input name="outline_color" type="color" value="#000000"></label><label>Ketebalan tepi<input name="outline" type="number" min="0" max="10" value="3"></label></div>
+    <label><input name="bold" type="checkbox" checked> Tebal</label><label><input name="box" type="checkbox"> Latar kotak</label><label><input name="karaoke" type="checkbox"> Highlight kata bertiming</label>
+    <p class="field-help">Template tersimpan di perangkat dan dapat dipakai di proyek berikutnya.</p><div class="row"><button type="button" id="cancelTypography">Batal</button><button class="primary">Simpan template</button></div></form>`;
+  document.body.append(dialog); dialog.showModal();
+  return new Promise(resolve=>{
+    let result=null;
+    dialog.onclose=()=>{dialog.remove();resolve(result);};
+    dialog.querySelector('#cancelTypography').onclick=()=>dialog.close();
+    dialog.querySelector('form').onsubmit=async event=>{
+      event.preventDefault(); const form=event.target;
+      const values=Object.fromEntries(new FormData(form));
+      for(const key of ['bold','box','karaoke']) values[key]=form.elements[key].checked;
+      try { result=await api('/api/subtitle-presets',{method:'POST',body:JSON.stringify(values)});dialog.close(); }
+      catch(error){toast(error.message,'error');}
+    };
+  });
+}

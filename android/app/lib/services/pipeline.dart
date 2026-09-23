@@ -25,7 +25,8 @@ class ClipCandidate {
 
 /// Auto-clip pipeline for Android: audio → transcript → scoring → render.
 class Pipeline {
-  Pipeline({required this.models, required this.speech, required this.projectDir});
+  Pipeline(
+      {required this.models, required this.speech, required this.projectDir});
 
   final ModelManager models;
   final SpeechService speech;
@@ -81,12 +82,15 @@ class Pipeline {
     final intervals = <List<double>>[];
     double? start;
     for (var i = 0; i < rms.length; i++) {
-      final db = 20 * (math.log(math.max(rms[i], 1e-9)) / math.ln10) - 20 * (math.log(math.max(peak, 1e-9)) / math.ln10);
+      final db = 20 * (math.log(math.max(rms[i], 1e-9)) / math.ln10) -
+          20 * (math.log(math.max(peak, 1e-9)) / math.ln10);
       final silent = db < thresholdDb;
       if (silent && start == null) {
         start = i * hopSeconds;
       } else if (!silent && start != null) {
-        if (i * hopSeconds - start >= minSilence) intervals.add([start, i * hopSeconds]);
+        if (i * hopSeconds - start >= minSilence) {
+          intervals.add([start, i * hopSeconds]);
+        }
         start = null;
       }
     }
@@ -96,10 +100,12 @@ class Pipeline {
     return intervals;
   }
 
-  static double _overlap(List<List<double>> intervals, double start, double end) {
+  static double _overlap(
+      List<List<double>> intervals, double start, double end) {
     var total = 0.0;
     for (final interval in intervals) {
-      total += math.max(0.0, math.min(interval[1], end) - math.max(interval[0], start));
+      total += math.max(
+          0.0, math.min(interval[1], end) - math.max(interval[0], start));
     }
     return total;
   }
@@ -133,7 +139,9 @@ class Pipeline {
           }
         }
       }
-      if (currentEnd - currentStart > 1) windows.add([currentStart, currentEnd]);
+      if (currentEnd - currentStart > 1) {
+        windows.add([currentStart, currentEnd]);
+      }
     }
     if (windows.isEmpty) {
       final length = math.min(maxLength, math.max(minLength, duration));
@@ -174,8 +182,12 @@ class Pipeline {
         loudness = n == 0 ? 0 : (sum / n) / math.max(peak, 1e-9);
       }
       final density = peakDensity == 0 ? 0.0 : densities[i] / peakDensity;
-      final silenceRatio = (_overlap(silences, window[0], window[1]) / math.max(1.0, window[1] - window[0])).clamp(0.0, 1.0);
-      final score = weightLoudness * loudness + weightDensity * density + weightSilence * (1 - silenceRatio);
+      final silenceRatio = (_overlap(silences, window[0], window[1]) /
+              math.max(1.0, window[1] - window[0]))
+          .clamp(0.0, 1.0);
+      final score = weightLoudness * loudness +
+          weightDensity * density +
+          weightSilence * (1 - silenceRatio);
       scored.add([window[0], window[1], score]);
       reasons.add('loudness ${loudness.toStringAsFixed(2)}'
           '${density > 0 ? ', kepadatan ${density.toStringAsFixed(2)}' : ''}'
@@ -183,38 +195,52 @@ class Pipeline {
     }
 
     final order = List.generate(scored.length, (i) => i)
-      ..sort((a, b) => scored[b][2] == scored[a][2] ? scored[a][0].compareTo(scored[b][0]) : scored[b][2].compareTo(scored[a][2]));
+      ..sort((a, b) => scored[b][2] == scored[a][2]
+          ? scored[a][0].compareTo(scored[b][0])
+          : scored[b][2].compareTo(scored[a][2]));
 
     final chosen = <List<double>>[];
     final chosenReasons = <String>[];
     for (final index in order) {
       if (chosen.length >= count) break;
       final candidate = scored[index];
-      final overlaps = chosen.any((c) => _overlap([c], candidate[0], candidate[1]) > 1.0);
+      final overlaps =
+          chosen.any((c) => _overlap([c], candidate[0], candidate[1]) > 1.0);
       if (overlaps) continue;
       chosen.add(candidate);
       chosenReasons.add(reasons[index]);
     }
 
     final result = <ClipCandidate>[];
-    final pairs = List.generate(chosen.length, (i) => i)..sort((a, b) => chosen[a][0].compareTo(chosen[b][0]));
+    final pairs = List.generate(chosen.length, (i) => i)
+      ..sort((a, b) => chosen[a][0].compareTo(chosen[b][0]));
     for (final index in pairs) {
       final window = chosen[index];
-      result.add(ClipCandidate(window[0], window[1], window[2], chosenReasons[index]));
+      result.add(
+          ClipCandidate(window[0], window[1], window[2], chosenReasons[index]));
     }
     return result;
   }
 
-  static Future<List<ClipCandidate>> pickClipsFromWav(String path, double duration, List<TranscriptSegment> segments, int count) => Isolate.run(() {
-    final envelope = <double>[];
-    for (final samples in readWavChunks(path, sampleCount: 8000)) {
-      envelope.addAll(rmsEnvelope(samples, 16000));
-    }
-    return pickClips(samples:Float32List(0),sampleRate:16000,duration:duration,segments:segments,count:count,envelope:envelope);
-  });
+  static Future<List<ClipCandidate>> pickClipsFromWav(String path,
+          double duration, List<TranscriptSegment> segments, int count) =>
+      Isolate.run(() {
+        final envelope = <double>[];
+        for (final samples in readWavChunks(path, sampleCount: 8000)) {
+          envelope.addAll(rmsEnvelope(samples, 16000));
+        }
+        return pickClips(
+            samples: Float32List(0),
+            sampleRate: 16000,
+            duration: duration,
+            segments: segments,
+            count: count,
+            envelope: envelope);
+      });
 
   /// Captions for a clip window, with clip-relative timings.
-  static List<Caption> captionsForRange(List<TranscriptSegment> segments, double start, double end) {
+  static List<Caption> captionsForRange(
+      List<TranscriptSegment> segments, double start, double end) {
     final rows = <Map<String, dynamic>>[];
     for (final segment in segments) {
       if (segment.end <= start || segment.start >= end) continue;
@@ -245,13 +271,15 @@ class Pipeline {
   }
 
   /// Tulis berkas ASS (caption + item track teks) dan kembalikan path-nya.
-  String? _writeAss(Clip clip, Directory directory, String stem, List<int> size, List<TimelineItem> textItems) {
+  String? _writeAss(Clip clip, Directory directory, String stem, List<int> size,
+      List<TimelineItem> textItems) {
     if (clip.captions.isEmpty && textItems.isEmpty) return null;
     final captions = clip.captions.map((c) => Caption.fromJson(c)).toList();
     final ass = File('${directory.path}/$stem.ass');
     ass.writeAsStringSync(SubtitleBuilder.toAss(
       captions,
       preset: clip.subtitlePreset,
+      position: clip.subtitlePosition,
       width: size[0],
       height: size[1],
       textItems: textItems
@@ -265,17 +293,20 @@ class Pipeline {
               })
           .toList(),
     ));
-    File('${directory.path}/$stem.srt').writeAsStringSync(SubtitleBuilder.toSrt(captions));
+    File('${directory.path}/$stem.srt')
+        .writeAsStringSync(SubtitleBuilder.toSrt(captions));
     return ass.path;
   }
 
-  static List<int> _canvasOf(Timeline timeline, Clip clip, int width, int height) {
+  static List<int> _canvasOf(
+      Timeline timeline, Clip clip, int width, int height) {
     final items = timeline.trackOf('video')?.items ?? const <TimelineItem>[];
     final canvas = items.isEmpty ? clip.canvas : items.first.canvas;
     return MediaTools.canvasSize(canvas, width, height);
   }
 
-  Future<Clip> renderClip(Project project, Clip clip, void Function(double, String) onProgress) async {
+  Future<Clip> renderClip(Project project, Clip clip,
+      void Function(double, String) onProgress) async {
     final directory = clipDir(clip.index);
     final resolution = await MediaTools.resolution(project.source);
     final sourceWidth = resolution['width'] ?? 0;
@@ -287,7 +318,8 @@ class Pipeline {
     final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
     final assPath = _writeAss(clip, directory, 'subs', size, textItems);
 
-    final output = '${directory.path}/clip_${clip.index.toString().padLeft(3, '0')}.mp4';
+    final output =
+        '${directory.path}/clip_${clip.index.toString().padLeft(3, '0')}.mp4';
     onProgress(20, 'merender klip ${clip.index + 1}');
     if (useTimeline) {
       await TimelineRender.renderClip(
@@ -319,14 +351,20 @@ class Pipeline {
     }
     final thumb = '${directory.path}/thumb.jpg';
     await MediaTools.thumbnail(output, thumb, clip.duration / 2);
-    clip.files = {...clip.files, 'mp4': output, 'thumb': thumb, if (assPath != null) 'ass': assPath};
+    clip.files = {
+      ...clip.files,
+      'mp4': output,
+      'thumb': thumb,
+      if (assPath != null) 'ass': assPath
+    };
     clip.status = 'rendered';
     onProgress(100, 'klip ${clip.index + 1} selesai');
     return clip;
   }
 
   /// Render draf cepat untuk pratinjau di editor (540x960, encoder ultrafast).
-  Future<File> renderPreview(Project project, Clip clip, void Function(double, String) onProgress) async {
+  Future<File> renderPreview(Project project, Clip clip,
+      void Function(double, String) onProgress) async {
     final directory = clipDir(clip.index);
     final resolution = await MediaTools.resolution(project.source);
     final sourceWidth = resolution['width'] ?? 0;
@@ -336,7 +374,21 @@ class Pipeline {
     final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
     final assPath = _writeAss(clip, directory, 'preview', size, textItems);
 
-    final output = '${directory.path}/preview-${DateTime.now().microsecondsSinceEpoch}.mp4';
+    final oldPreviews = directory
+        .listSync()
+        .whereType<File>()
+        .where((f) =>
+            f.uri.pathSegments.last.startsWith('preview-') &&
+            f.path.endsWith('.mp4'))
+        .toList()
+      ..sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+    for (final old in oldPreviews.take(math.max(0, oldPreviews.length - 2))) {
+      try {
+        old.deleteSync();
+      } on FileSystemException {/* Active player still owns it. */}
+    }
+    final output =
+        '${directory.path}/preview-${DateTime.now().microsecondsSinceEpoch}.mp4';
     onProgress(10, 'menyiapkan pratinjau');
     await TimelineRender.renderPreview(
       source: project.source,
@@ -352,9 +404,12 @@ class Pipeline {
     return File(output);
   }
 
-  Future<File> export(Project project, void Function(double, String) onProgress) async {
+  Future<File> export(
+      Project project, void Function(double, String) onProgress) async {
     final inputs = project.clips
-        .where((c) => (c.files['mp4'] ?? '').isNotEmpty && File(c.files['mp4']!).existsSync())
+        .where((c) =>
+            (c.files['mp4'] ?? '').isNotEmpty &&
+            File(c.files['mp4']!).existsSync())
         .map((c) => c.files['mp4']!)
         .toList();
     if (inputs.isEmpty) throw Exception('Belum ada klip yang dirender.');

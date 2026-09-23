@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import shutil
@@ -44,6 +45,7 @@ class Clip:
     # Editor timeline multi-track (video/media/teks/audio). None = proyek lama,
     # dirender lewat jalur tunggal seperti sebelumnya.
     timeline: dict[str, Any] | None = None
+    storage_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
     def duration(self) -> float:
@@ -58,6 +60,7 @@ class Clip:
     def from_dict(cls, data: dict[str, Any]) -> Clip:
         allowed = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         allowed.pop("duration", None)
+        allowed.setdefault("storage_id", f"{int(data['index']):03d}")
         return cls(**allowed)
 
 
@@ -100,7 +103,11 @@ class Project:
         return self.root / "project.json"
 
     def clip_dir(self, index: int) -> Path:
-        path = self.clips_dir / f"{index:03d}"
+        clip = next((c for c in self.clips if c.index == index), None)
+        storage = clip.storage_id if clip else f"{index:03d}"
+        if not PROJECT_ID_RE.fullmatch(storage):
+            raise ValueError("Folder klip tidak valid")
+        path = self.clips_dir / storage
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -186,7 +193,7 @@ class Project:
         self.snapshot()
         clip = self.clip(index)
         for key, value in values.items():
-            if hasattr(clip, key) and key not in {"index", "files"}:
+            if hasattr(clip, key) and key not in {"index", "files", "storage_id"}:
                 setattr(clip, key, value)
         if clip.end <= clip.start:
             clip.end = clip.start + 1.0
@@ -194,6 +201,18 @@ class Project:
 
     def remove_clip(self, index: int) -> None:
         self.snapshot()
+        clip = self.clip(index)
+        # Only remove outputs owned by this project; imported sources are never touched.
+        folders = {self.clip_dir(index)}
+        base = (self.root / "clips").resolve()
+        for value in clip.files.values():
+            parent = Path(value).resolve().parent
+            if parent.parent == base:
+                folders.add(parent)
+        other_files = {str(Path(v).resolve()) for c in self.clips if c is not clip for v in c.files.values()}
+        for folder in folders:
+            if folder.exists() and folder.resolve().parent == base and not any(str(p.resolve()) in other_files for p in folder.iterdir()):
+                shutil.rmtree(folder)
         self.clips = [c for c in self.clips if c.index != index]
         self.renumber()
 
@@ -210,12 +229,26 @@ class Project:
         self.snapshot()
         clip = self.clip(index)
         at = max(clip.start + 0.5, min(clip.end - 0.5, at))
-        right = Clip.from_dict(clip.as_dict())
+        original = copy.deepcopy(clip.as_dict())
+        right = Clip.from_dict(copy.deepcopy(original))
+        right.storage_id = uuid.uuid4().hex[:12]
         right.start = at
         right.files = {}
         right.status = "draft"
         clip.end = at
-        clip.files = {**clip.files}
+        clip.status = "draft"
+        clip.files = {}
+        for part in (clip, right):
+            offset = part.start - original["start"]
+            part.captions = trim_captions(original["captions"], offset, offset + part.duration)
+            if original["timeline"]:
+                part.timeline = copy.deepcopy(original["timeline"])
+                for track in part.timeline.get("tracks", []):
+                    if track.get("kind") == "video":
+                        for item in track.get("items", []):
+                            item.update(start=0, end=part.duration, srcStart=part.start)
+                    else:
+                        track["items"] = trim_captions(track.get("items", []), offset, offset + part.duration)
         position = self.clips.index(clip)
         self.clips.insert(position + 1, right)
         self.renumber()
@@ -289,17 +322,51 @@ def load_project(project_id: str) -> Project:
 def delete_project(project_id: str) -> None:
     directory = _project_root(project_id)
     if directory.exists():
-        shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(directory)
+
+
+def trim_captions(rows: list[dict[str, Any]], start: float, end: float) -> list[dict[str, Any]]:
+    result = []
+    for row in rows:
+        if float(row["end"]) <= start or float(row["start"]) >= end:
+            continue
+        item = copy.deepcopy(row)
+        item["start"] = max(0.0, float(row["start"]) - start)
+        item["end"] = min(end - start, float(row["end"]) - start)
+        if "srcStart" in item:
+            item["srcStart"] = float(item["srcStart"]) + max(0.0, start - float(row["start"]))
+        if row.get("words"):
+            item["words"] = trim_captions(row["words"], start, end)
+        result.append(item)
+    return result
 
 
 def duplicate_project(project_id: str) -> Project:
     project = load_project(project_id)
-    clone = Project.create(f"{project.title} (salinan)", project.source, project.source_kind, project.language)
-    clone.transcript = project.transcript
-    clone.duration = project.duration
-    clone.width = project.width
-    clone.height = project.height
-    clone.clips = [Clip.from_dict(c.as_dict()) for c in project.clips]
-    clone.renumber()
-    clone.save()
+    clone_id = uuid.uuid4().hex[:12]
+    target = _project_root(clone_id)
+    # A duplicate owns its media, so deleting the original cannot break it.
+    shutil.copytree(project.root, target)
+
+    def relocate(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: relocate(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [relocate(item) for item in value]
+        if isinstance(value, str):
+            try:
+                relative = Path(value).relative_to(project.root)
+                return str(target / relative)
+            except (ValueError, OSError):
+                pass
+        return value
+
+    try:
+        payload = relocate(project.as_dict())
+        payload.update(id=clone_id, title=f"{project.title} (salinan)", created=time.time())
+        clone = Project.from_dict(payload)
+        clone.save()
+    except Exception:
+        shutil.rmtree(target)
+        raise
     return clone

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -12,6 +15,7 @@ import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/preview_player.dart';
 import '../widgets/timeline_view.dart';
+import '../widgets/typography_editor.dart';
 
 /// Editor klip: pratinjau + timeline multi-track (video/media/teks/audio).
 class EditorScreen extends StatefulWidget {
@@ -33,6 +37,22 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _selectedId;
   String? _previewPath;
   int _tab = 0;
+  Timer? _changeTimer, _previewTimer;
+  bool _previewBusy = false;
+  String _lastFingerprint = '';
+  String _previewMessage = '';
+  String _fingerprint() => jsonEncode([
+        _timeline.toJson(),
+        _captions.text,
+        widget.clip.subtitlePreset,
+        widget.clip.subtitlePosition,
+        widget.clip.audioMode
+      ]);
+
+  void _schedulePreview() {
+    _previewTimer?.cancel();
+    _previewTimer = Timer(const Duration(milliseconds: 1000), _preview);
+  }
 
   @override
   void initState() {
@@ -42,12 +62,27 @@ class _EditorScreenState extends State<EditorScreen> {
     _captions = TextEditingController(text: _captionsToText(clip));
     _itemText = TextEditingController();
     widget.state.addListener(_stateChanged);
+    final output = clip.files['mp4'];
+    if (output != null && File(output).existsSync()) _previewPath = output;
+    _lastFingerprint = _fingerprint();
+    _schedulePreview();
+    _changeTimer = Timer.periodic(const Duration(milliseconds: 350), (_) {
+      final current = _fingerprint();
+      if (current != _lastFingerprint) {
+        _lastFingerprint = current;
+        _schedulePreview();
+      }
+    });
   }
 
-  void _stateChanged() { if (mounted) setState(() {}); }
+  void _stateChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _changeTimer?.cancel();
+    _previewTimer?.cancel();
     widget.state.removeListener(_stateChanged);
     _captions.dispose();
     _itemText.dispose();
@@ -57,7 +92,8 @@ class _EditorScreenState extends State<EditorScreen> {
   // ------------------------------------------------------------------ helpers
 
   String _captionsToText(Clip clip) => clip.captions
-      .map((c) => '${(c['start'] as num).toStringAsFixed(2)}|${(c['end'] as num).toStringAsFixed(2)}|${c['text']}')
+      .map((c) =>
+          '${(c['start'] as num).toStringAsFixed(2)}|${(c['end'] as num).toStringAsFixed(2)}|${c['text']}')
       .join('\n');
 
   List<Map<String, dynamic>> _textToCaptions(String value) {
@@ -98,6 +134,13 @@ class _EditorScreenState extends State<EditorScreen> {
     if (track == null) return;
     final index = track.items.indexWhere((entry) => entry.id == item.id);
     if (index < 0) return;
+    if (kind == 'video') {
+      final old = track.items[index];
+      item.srcStart += item.start - old.start;
+      item.end = (item.end - item.start)
+          .clamp(.2, widget.state.currentProject!.duration - item.srcStart);
+      item.start = 0;
+    }
     setState(() {
       track.items[index] = item;
       // Jangan sentuh controller kalau isinya sama — menulis ulang teks yang
@@ -116,7 +159,10 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     setState(() {
-      _timeline.trackOf(kind)?.items.removeWhere((entry) => entry.id == item.id);
+      _timeline
+          .trackOf(kind)
+          ?.items
+          .removeWhere((entry) => entry.id == item.id);
       if (_selectedId == item.id) {
         _selectedId = null;
         _selectedKind = null;
@@ -149,7 +195,8 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _addMediaOrMusic({required bool music}) async {
     // `pickFiles` di file_picker 13 sudah mengizinkan pilih satu atau banyak
     // berkas, jadi tidak ada parameter allowMultiple.
-    final files = await FilePicker.pickFiles(type: music ? FileType.audio : FileType.media);
+    final files = await FilePicker.pickFiles(
+        type: music ? FileType.audio : FileType.media);
     if (files.isEmpty) return;
     final track = _timeline.trackOf(music ? 'audio' : 'media');
     if (track == null) return;
@@ -160,8 +207,10 @@ class _EditorScreenState extends State<EditorScreen> {
         final asset = await widget.state.addAsset(path);
         final lower = asset.toLowerCase();
         final isVideo = !music &&
-            ['.mp4', '.mov', '.webm', '.mkv', '.m4v'].any((ext) => lower.endsWith(ext));
-        final end = math.min(music ? 10.0 : 4.0, math.max(1.0, _timeline.duration));
+            ['.mp4', '.mov', '.webm', '.mkv', '.m4v']
+                .any((ext) => lower.endsWith(ext));
+        final end =
+            math.min(music ? 10.0 : 4.0, math.max(1.0, _timeline.duration));
         track.items.add(TimelineItem(
           id: '${music ? 'a' : 'm'}${DateTime.now().microsecondsSinceEpoch}',
           start: 0,
@@ -173,7 +222,8 @@ class _EditorScreenState extends State<EditorScreen> {
         ));
       } catch (error) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$error')));
         }
       }
     }
@@ -182,11 +232,27 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _save() async {
     final clip = widget.clip;
-    clip.captions = _textToCaptions(_captions.text);
-    final videoItems = _timeline.trackOf('video')?.items ?? const <TimelineItem>[];
+    if (_captions.text != _captionsToText(clip)) {
+      clip.captions = _textToCaptions(_captions.text);
+    }
+    final videoItems =
+        _timeline.trackOf('video')?.items ?? const <TimelineItem>[];
     if (videoItems.isNotEmpty) {
       clip.crop = videoItems.first.crop;
       clip.canvas = videoItems.first.canvas;
+      final delta = videoItems.first.srcStart - clip.start;
+      final length = videoItems.first.end - videoItems.first.start;
+      clip.captions = clip.captions
+          .where((c) =>
+              (c['end'] as num) > delta && (c['start'] as num) < delta + length)
+          .map((c) => {
+                ...c,
+                'start':
+                    ((c['start'] as num).toDouble() - delta).clamp(0, length),
+                'end': ((c['end'] as num).toDouble() - delta).clamp(0, length)
+              })
+          .toList();
+      _captions.text = _captionsToText(clip);
       clip.start = videoItems.first.srcStart;
       clip.end = clip.start + videoItems.first.end - videoItems.first.start;
     }
@@ -195,16 +261,35 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _preview() async {
+    if (!mounted) return;
+    if (_previewBusy || widget.state.jobState == JobState.running) {
+      _schedulePreview();
+      return;
+    }
+    _previewBusy = true;
+    setState(() => _previewMessage = 'Memperbarui video…');
     try {
-      setState(() => _previewPath = null);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
       await _save();
-      final file = await widget.state.previewClip(widget.clip);
-      if (mounted) setState(() => _previewPath = file.path);
+      final fingerprint = _fingerprint();
+      _lastFingerprint = fingerprint;
+      final snapshot = Clip.fromJson(
+          jsonDecode(jsonEncode(widget.clip.toJson())) as Map<String, dynamic>);
+      final file = await widget.state.previewClip(snapshot);
+      if (!mounted) return;
+      if (fingerprint != _fingerprint()) {
+        _schedulePreview();
+        return;
+      }
+      setState(() {
+        _previewPath = file.path;
+        _previewMessage = '';
+      });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        setState(() => _previewMessage = 'Perubahan belum tampil: $error');
       }
+    } finally {
+      _previewBusy = false;
     }
   }
 
@@ -220,9 +305,49 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     }
+  }
+
+  Future<void> _split() async {
+    await _save();
+    if (!mounted) return;
+    final field = TextEditingController(
+        text: (widget.clip.duration / 2).toStringAsFixed(1));
+    final value = await showDialog<double>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('Pisahkan klip'),
+              content: TextField(
+                  controller: field,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                      labelText: 'Detik dari awal klip',
+                      helperText:
+                          'Pilih antara 0.5 dan ${(widget.clip.duration - .5).toStringAsFixed(1)}')),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Batal')),
+                FilledButton(
+                    onPressed: () {
+                      final at = double.tryParse(field.text);
+                      if (at != null &&
+                          at >= .5 &&
+                          at <= widget.clip.duration - .5) {
+                        Navigator.pop(ctx, at);
+                      }
+                    },
+                    child: const Text('Pisahkan'))
+              ],
+            ));
+    Future<void>.delayed(const Duration(milliseconds: 250), field.dispose);
+    if (value == null) return;
+    await widget.state.splitClip(widget.clip, value);
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _generateCaptions() async {
@@ -231,10 +356,15 @@ class _EditorScreenState extends State<EditorScreen> {
       await widget.state.generateCaptions(widget.clip);
       if (!mounted) return;
       setState(() => _captions.text = _captionsToText(widget.clip));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
-          widget.clip.captions.isEmpty ? 'Tidak ada ucapan terdeteksi.' : 'Subtitle siap. Pilih tipografi lalu Pratinjau atau Render.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(widget.clip.captions.isEmpty
+              ? 'Tidak ada ucapan terdeteksi.'
+              : 'Subtitle siap. Video diperbarui otomatis.')));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
     }
   }
 
@@ -246,20 +376,36 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(state.translate('editor.title')),
-        actions: [TextButton.icon(onPressed:_save,icon:const Icon(Icons.check,size:18),label:const Text('Simpan'))],
+        actions: [
+          IconButton(
+              tooltip: 'Pisahkan klip',
+              onPressed: state.jobState == JobState.running ? null : _split,
+              icon: const Icon(Icons.content_cut)),
+          TextButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Simpan'))
+        ],
       ),
-      bottomNavigationBar: SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(16,8,16,12),child:Row(children:[
-        Expanded(child:OutlinedButton.icon(onPressed:state.jobState == JobState.running ? null : _preview,icon:const Icon(Icons.play_circle_outline,size:18),label:const Text('Pratinjau'))),
-        const SizedBox(width:12),
-        Expanded(child:FilledButton.icon(onPressed:state.jobState == JobState.running ? null : _render,icon:const Icon(Icons.ios_share,size:18),label:const Text('Ekspor video'))),
-      ]))),
+      bottomNavigationBar: SafeArea(
+          child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(children: [
+                Expanded(
+                    child: FilledButton.icon(
+                        onPressed:
+                            state.jobState == JobState.running ? null : _render,
+                        icon: const Icon(Icons.ios_share, size: 18),
+                        label: const Text('Ekspor video'))),
+              ]))),
       body: Column(
         children: [
           _previewBox(state),
           if (state.jobState == JobState.running)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Tokens.space4),
-              child: ProgressStrip(progress: state.jobProgress, label: state.jobStage),
+              child: ProgressStrip(
+                  progress: state.jobProgress, label: state.jobStage),
             ),
           _tabBar(state),
           Expanded(child: _tabBody(state)),
@@ -269,36 +415,31 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _previewBox(AppState state) {
-    final path = _previewPath;
+    final path = _previewPath ?? state.currentProject?.source;
     return Container(
       margin: const EdgeInsets.all(Tokens.space4),
       height: 220,
       decoration: BoxDecoration(
-        color: Tokens.surface,
-        borderRadius: BorderRadius.circular(Tokens.radius),
-      ),
-      // `ui.Clip` (bukan `Clip` milik models.dart) yang dipakai di sini.
+          color: Tokens.surface,
+          borderRadius: BorderRadius.circular(Tokens.radius)),
       clipBehavior: ui.Clip.antiAlias,
-      child: path != null
-          ? Center(child: VideoPreview(key: ValueKey(path), path: path))
-          : Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.movie_outlined, color: Tokens.textDim, size: 30),
-                  const SizedBox(height: Tokens.space2),
-                  Text(state.translate('editor.timelineHint'),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
-                  const SizedBox(height: Tokens.space3),
-                  FilledButton.icon(
-                    onPressed: state.jobState == JobState.running ? null : _preview,
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: Text(state.translate('editor.previewDraft')),
-                  ),
-                ],
-              ),
-            ),
+      child: Stack(alignment: Alignment.center, children: [
+        if (path != null)
+          Center(
+              child: VideoPreview(
+                  key: ValueKey(path),
+                  path: path,
+                  startSeconds: _previewPath == null ? widget.clip.start : 0,
+                  endSeconds: _previewPath == null ? widget.clip.end : null)),
+        if (_previewMessage.isNotEmpty)
+          Positioned(
+              top: 8,
+              left: 12,
+              right: 12,
+              child: Text(_previewMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Tokens.textDim))),
+      ]),
     );
   }
 
@@ -320,7 +461,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 selected: _tab == i,
                 onSelected: (_) => setState(() => _tab = i),
                 selectedColor: Tokens.accent.withValues(alpha: 0.22),
-                labelStyle: TextStyle(color: _tab == i ? Tokens.accent : Tokens.text2, fontSize: 13),
+                labelStyle: TextStyle(
+                    color: _tab == i ? Tokens.accent : Tokens.text2,
+                    fontSize: 13),
                 backgroundColor: Tokens.surface2,
                 side: BorderSide.none,
               ),
@@ -375,7 +518,8 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _textTab(AppState state) {
     final selected = _selected;
-    final textItems = _timeline.trackOf('text')?.items ?? const <TimelineItem>[];
+    final textItems =
+        _timeline.trackOf('text')?.items ?? const <TimelineItem>[];
     return ListView(
       padding: const EdgeInsets.all(Tokens.space4),
       children: [
@@ -398,7 +542,9 @@ class _EditorScreenState extends State<EditorScreen> {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_unchecked,
                       size: 18,
-                      color: item.id == _selectedId ? Tokens.accent : Tokens.textDim,
+                      color: item.id == _selectedId
+                          ? Tokens.accent
+                          : Tokens.textDim,
                     ),
                     onTap: () {
                       _select('text', item);
@@ -406,7 +552,8 @@ class _EditorScreenState extends State<EditorScreen> {
                     },
                     title: Text(item.text.isEmpty ? 'Teks' : item.text,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('${item.start.toStringAsFixed(1)}s – ${item.end.toStringAsFixed(1)}s',
+                    subtitle: Text(
+                        '${item.start.toStringAsFixed(1)}s – ${item.end.toStringAsFixed(1)}s',
                         style: const TextStyle(fontSize: 11)),
                   ),
               ],
@@ -421,21 +568,30 @@ class _EditorScreenState extends State<EditorScreen> {
                 TextField(
                   controller: _itemText,
                   maxLines: 3,
-                  decoration: InputDecoration(labelText: state.translate('editor.itemText')),
-                  onChanged: (value) => _replace('text', selected.copy()..text = value),
+                  decoration: InputDecoration(
+                      labelText: state.translate('editor.itemText')),
+                  onChanged: (value) =>
+                      _replace('text', selected.copy()..text = value),
                 ),
                 const SizedBox(height: Tokens.space4),
                 Text(state.translate('editor.template'),
-                    style: const TextStyle(fontSize: 13, color: Tokens.textDim)),
+                    style:
+                        const TextStyle(fontSize: 13, color: Tokens.textDim)),
                 const SizedBox(height: Tokens.space2),
                 _TemplateGallery(
                   selected: selected.template,
-                  onPick: (template) => _replace('text', selected.copy()..template = template),
+                  onPick: (template) =>
+                      _replace('text', selected.copy()..template = template),
                 ),
                 const SizedBox(height: Tokens.space4),
                 _PositionPicker(
-                  x: selected.x, y: selected.y,
-                  onChanged: (x, y) => _replace('text', selected.copy()..x = x..y = y),
+                  x: selected.x,
+                  y: selected.y,
+                  onChanged: (x, y) => _replace(
+                      'text',
+                      selected.copy()
+                        ..x = x
+                        ..y = y),
                 ),
                 const SizedBox(height: Tokens.space2),
                 Row(children: [
@@ -446,7 +602,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       keyboardType: TextInputType.number,
                       onFieldSubmitted: (value) {
                         final parsed = double.tryParse(value);
-                        if (parsed != null) _replace('text', selected.copy()..start = parsed);
+                        if (parsed != null) {
+                          _replace('text', selected.copy()..start = parsed);
+                        }
                       },
                     ),
                   ),
@@ -454,11 +612,14 @@ class _EditorScreenState extends State<EditorScreen> {
                   Expanded(
                     child: TextFormField(
                       initialValue: selected.end.toStringAsFixed(2),
-                      decoration: const InputDecoration(labelText: 'Selesai (s)'),
+                      decoration:
+                          const InputDecoration(labelText: 'Selesai (s)'),
                       keyboardType: TextInputType.number,
                       onFieldSubmitted: (value) {
                         final parsed = double.tryParse(value);
-                        if (parsed != null) _replace('text', selected.copy()..end = parsed);
+                        if (parsed != null) {
+                          _replace('text', selected.copy()..end = parsed);
+                        }
                       },
                     ),
                   ),
@@ -482,7 +643,8 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _styleTab(AppState state) {
-    final videoItems = _timeline.trackOf('video')?.items ?? const <TimelineItem>[];
+    final videoItems =
+        _timeline.trackOf('video')?.items ?? const <TimelineItem>[];
     final base = videoItems.isEmpty ? null : videoItems.first;
     return ListView(
       padding: const EdgeInsets.all(Tokens.space4),
@@ -492,28 +654,35 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(spacing: Tokens.space2, runSpacing: Tokens.space2, children: [
-                for (final option in const [
-                  ['center', 'Center crop'],
-                  ['blur', 'Blur BG'],
-                  ['fit', 'Fit (tidak memotong)'],
-                  ['none', 'Letterbox'],
-                ])
-                  ChoiceChip(
-                    label: Text(option[1]),
-                    selected: (base?.crop ?? widget.clip.crop) == option[0],
-                    onSelected: (_) {
-                      if (base != null) _replace('video', base.copy()..crop = option[0]);
-                    },
-                    selectedColor: Tokens.accent.withValues(alpha: 0.22),
-                    backgroundColor: Tokens.surface2,
-                    labelStyle: TextStyle(
-                      fontSize: 12,
-                      color: (base?.crop ?? widget.clip.crop) == option[0] ? Tokens.accent : Tokens.text2,
-                    ),
-                    side: BorderSide.none,
-                  ),
-              ]),
+              Wrap(
+                  spacing: Tokens.space2,
+                  runSpacing: Tokens.space2,
+                  children: [
+                    for (final option in const [
+                      ['center', 'Center crop'],
+                      ['blur', 'Blur BG'],
+                      ['fit', 'Fit (tidak memotong)'],
+                      ['none', 'Letterbox'],
+                    ])
+                      ChoiceChip(
+                        label: Text(option[1]),
+                        selected: (base?.crop ?? widget.clip.crop) == option[0],
+                        onSelected: (_) {
+                          if (base != null) {
+                            _replace('video', base.copy()..crop = option[0]);
+                          }
+                        },
+                        selectedColor: Tokens.accent.withValues(alpha: 0.22),
+                        backgroundColor: Tokens.surface2,
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          color: (base?.crop ?? widget.clip.crop) == option[0]
+                              ? Tokens.accent
+                              : Tokens.text2,
+                        ),
+                        side: BorderSide.none,
+                      ),
+                  ]),
               const SizedBox(height: Tokens.space2),
               Text(state.translate('editor.trimHint'),
                   style: const TextStyle(color: Tokens.textDim, fontSize: 11)),
@@ -527,25 +696,38 @@ class _EditorScreenState extends State<EditorScreen> {
               initialValue: base?.canvas ?? widget.clip.canvas,
               decoration: const InputDecoration(labelText: 'Ukuran klip'),
               items: const [
-                DropdownMenuItem(value: 'portrait', child: Text('Portrait 9:16 (TikTok/Reels)')),
-                DropdownMenuItem(value: 'original', child: Text('Ukuran asli video')),
+                DropdownMenuItem(
+                    value: 'portrait',
+                    child: Text('Portrait 9:16 (TikTok/Reels)')),
+                DropdownMenuItem(
+                    value: 'original', child: Text('Ukuran asli video')),
                 DropdownMenuItem(value: 'square', child: Text('Kotak 1:1')),
-                DropdownMenuItem(value: 'landscape', child: Text('Landscape 16:9')),
+                DropdownMenuItem(
+                    value: 'landscape', child: Text('Landscape 16:9')),
               ],
               onChanged: (value) {
-                if (base != null && value != null) _replace('video', base.copy()..canvas = value);
+                if (base != null && value != null) {
+                  _replace('video', base.copy()..canvas = value);
+                }
               },
             ),
             const SizedBox(height: Tokens.space3),
             DropdownButtonFormField<String>(
               initialValue: widget.clip.audioMode,
-              decoration: InputDecoration(labelText: state.translate('editor.audio')),
+              decoration:
+                  InputDecoration(labelText: state.translate('editor.audio')),
               items: [
-                DropdownMenuItem(value: 'original', child: Text(state.translate('audio.original'))),
-                DropdownMenuItem(value: 'voice', child: Text(state.translate('audio.voice'))),
-                DropdownMenuItem(value: 'mix', child: Text(state.translate('audio.mix'))),
+                DropdownMenuItem(
+                    value: 'original',
+                    child: Text(state.translate('audio.original'))),
+                DropdownMenuItem(
+                    value: 'voice',
+                    child: Text(state.translate('audio.voice'))),
+                DropdownMenuItem(
+                    value: 'mix', child: Text(state.translate('audio.mix'))),
               ],
-              onChanged: (value) => setState(() => widget.clip.audioMode = value ?? 'original'),
+              onChanged: (value) =>
+                  setState(() => widget.clip.audioMode = value ?? 'original'),
             ),
           ]),
         ),
@@ -555,13 +737,38 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Gaya berlaku untuk semua subtitle klip ini. Klik Pratinjau untuk melihat perubahan.', style: TextStyle(fontSize: 12, color: Tokens.textDim)),
+              OutlinedButton.icon(
+                  onPressed: () async {
+                    final id = await editTypography(context, state);
+                    if (id != null && mounted) {
+                      setState(() => widget.clip.subtitlePreset = id);
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Buat template sendiri')),
+              DropdownButtonFormField<String>(
+                  initialValue: widget.clip.subtitlePosition,
+                  decoration:
+                      const InputDecoration(labelText: 'Posisi subtitle'),
+                  items: const [
+                    DropdownMenuItem(value: 'bottom', child: Text('Bawah')),
+                    DropdownMenuItem(value: 'middle', child: Text('Tengah')),
+                    DropdownMenuItem(value: 'top', child: Text('Atas')),
+                    DropdownMenuItem(
+                        value: 'off', child: Text('Tanpa subtitle tambahan'))
+                  ],
+                  onChanged: (v) =>
+                      setState(() => widget.clip.subtitlePosition = v!)),
+              const Text(
+                  'Gaya berlaku untuk semua subtitle klip ini. Video diperbarui otomatis setelah perubahan.',
+                  style: TextStyle(fontSize: 12, color: Tokens.textDim)),
               Text(state.translate('editor.template'),
                   style: const TextStyle(fontSize: 13, color: Tokens.textDim)),
               const SizedBox(height: Tokens.space2),
               _TemplateGallery(
                 selected: widget.clip.subtitlePreset,
-                onPick: (preset) => setState(() => widget.clip.subtitlePreset = preset),
+                onPick: (preset) =>
+                    setState(() => widget.clip.subtitlePreset = preset),
               ),
             ],
           ),
@@ -570,17 +777,19 @@ class _EditorScreenState extends State<EditorScreen> {
         SectionCard(
           title: state.translate('editor.captions'),
           child: Column(children: [
-            const Text('Transkrip adalah teks ucapan; subtitle menempatkan teks itu pada waktu tertentu di video. Format: mulai|selesai|teks (detik).'),
+            const Text(
+                'Transkrip adalah teks ucapan; subtitle menempatkan teks itu pada waktu tertentu di video. Format: mulai|selesai|teks (detik).'),
             FilledButton.icon(
-              onPressed: state.jobState == JobState.running ? null : _generateCaptions,
+              onPressed:
+                  state.jobState == JobState.running ? null : _generateCaptions,
               icon: const Icon(Icons.closed_caption_outlined),
               label: const Text('Buat subtitle otomatis'),
             ),
             TextField(
-            controller: _captions,
-            maxLines: 8,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          ),
+              controller: _captions,
+              maxLines: 8,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
           ]),
         ),
       ],
@@ -601,68 +810,202 @@ class _TemplateGalleryState extends State<_TemplateGallery> {
   String category = 'Pop';
   Color hex(Object? value, Color fallback) {
     final text = value?.toString().replaceFirst('#', '');
-    return text != null && text.length == 6 ? Color(0xff000000 | int.parse(text, radix:16)) : fallback;
+    return text != null && text.length == 6
+        ? Color(0xff000000 | int.parse(text, radix: 16))
+        : fallback;
   }
+
   @override
   Widget build(BuildContext context) {
-    final entries = SubtitleBuilder.presets.entries.where((e) => category == 'Semua' || (e.value['category'] ?? 'Essential') == category);
+    final entries = SubtitleBuilder.presets.entries.where((e) =>
+        category == 'Semua' ||
+        (e.value['category'] ?? 'Essential') == category);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-        for (final c in ['Semua','Pop','Neon','Editorial','Label','Essential'])
-          Padding(padding: const EdgeInsets.only(right:6), child: ChoiceChip(label:Text(c), selected:category == c, onSelected: (_) => setState(() => category=c))),
-      ])),
-      const SizedBox(height:12),
-      LayoutBuilder(builder:(context, constraints) => Wrap(spacing:10,runSpacing:10,children:[
-        for (final entry in entries)
-          SizedBox(width:(constraints.maxWidth-10)/2, child: Material(
-            color: Tokens.surface2, borderRadius: BorderRadius.circular(12),
-            child: InkWell(borderRadius:BorderRadius.circular(12),onTap:() => widget.onPick(entry.key),child:Container(
-              decoration:BoxDecoration(borderRadius:BorderRadius.circular(12),border:Border.all(color:widget.selected == entry.key ? Tokens.accent : Tokens.separator)),
-              child:Column(children:[
-                Container(height:88,padding:const EdgeInsets.all(10),alignment:Alignment.center,
-                  child:Container(padding:const EdgeInsets.symmetric(horizontal:5,vertical:2),
-                    color:entry.value['border'] == 3 ? hex(entry.value['preview_outline'],Colors.black) : null,
-                    child:Text(entry.value['sample'] as String? ?? 'Tell your story',textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,
-                      style:TextStyle(fontFamily:entry.value['font'] as String? ?? 'Roboto',fontSize:23,height:1.1,
-                        fontWeight:FontWeight.w700,fontStyle:entry.value['italic'] == true ? FontStyle.italic : FontStyle.normal,
-                        color:hex(entry.value['preview_color'],Colors.white),
-                        shadows:entry.value['border'] == 3 ? null : [Shadow(color:hex(entry.value['preview_outline'],Colors.black),blurRadius:category == 'Neon' ? 12 : 2,offset:const Offset(1,1))])))),
-                Padding(padding:const EdgeInsets.fromLTRB(10,0,10,10),child:Row(children:[
-                  Expanded(child:Text(entry.value['label'] as String,style:const TextStyle(fontSize:11,color:Tokens.text2),overflow:TextOverflow.ellipsis)),
-                  Icon(widget.selected == entry.key ? Icons.check_circle : Icons.add,size:15,color:widget.selected == entry.key ? Tokens.accent : Tokens.textDim),
-                ])),
-              ]),
-            )),
-          )),
-      ])),
+      SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            for (final c in [
+              'Semua',
+              'Pop',
+              'Neon',
+              'Editorial',
+              'Label',
+              'Essential',
+              'Custom'
+            ])
+              Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                      label: Text(c),
+                      selected: category == c,
+                      onSelected: (_) => setState(() => category = c))),
+          ])),
+      const SizedBox(height: 12),
+      LayoutBuilder(
+          builder: (context, constraints) =>
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                for (final entry in entries)
+                  SizedBox(
+                      width: (constraints.maxWidth - 10) / 2,
+                      child: Material(
+                        color: Tokens.surface2,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => widget.onPick(entry.key),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: widget.selected == entry.key
+                                          ? Tokens.accent
+                                          : Tokens.separator)),
+                              child: Column(children: [
+                                Container(
+                                    height: 88,
+                                    padding: const EdgeInsets.all(10),
+                                    alignment: Alignment.center,
+                                    child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 2),
+                                        color: entry.value['border'] == 3
+                                            ? hex(
+                                                entry.value['preview_outline'],
+                                                Colors.black)
+                                            : null,
+                                        child: Text(
+                                            entry.value['sample'] as String? ??
+                                                'Tell your story',
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontFamily: entry.value['font']
+                                                        as String? ??
+                                                    'Roboto',
+                                                fontSize: 23,
+                                                height: 1.1,
+                                                fontWeight: FontWeight.w700,
+                                                fontStyle:
+                                                    entry.value['italic'] ==
+                                                            true
+                                                        ? FontStyle.italic
+                                                        : FontStyle.normal,
+                                                color: hex(
+                                                    entry
+                                                        .value['preview_color'],
+                                                    Colors.white),
+                                                shadows:
+                                                    entry.value['border'] == 3
+                                                        ? null
+                                                        : [
+                                                            Shadow(
+                                                                color: hex(
+                                                                    entry.value[
+                                                                        'preview_outline'],
+                                                                    Colors
+                                                                        .black),
+                                                                blurRadius:
+                                                                    category ==
+                                                                            'Neon'
+                                                                        ? 12
+                                                                        : 2,
+                                                                offset:
+                                                                    const Offset(
+                                                                        1, 1))
+                                                          ])))),
+                                Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        10, 0, 10, 10),
+                                    child: Row(children: [
+                                      Expanded(
+                                          child: Text(
+                                              entry.value['label'] as String,
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Tokens.text2),
+                                              overflow: TextOverflow.ellipsis)),
+                                      Icon(
+                                          widget.selected == entry.key
+                                              ? Icons.check_circle
+                                              : Icons.add,
+                                          size: 15,
+                                          color: widget.selected == entry.key
+                                              ? Tokens.accent
+                                              : Tokens.textDim),
+                                    ])),
+                              ]),
+                            )),
+                      )),
+              ])),
     ]);
   }
 }
 
 class _PositionPicker extends StatelessWidget {
-  const _PositionPicker({required this.x, required this.y, required this.onChanged});
+  const _PositionPicker(
+      {required this.x, required this.y, required this.onChanged});
   final double x, y;
   final void Function(double x, double y) onChanged;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    const Text('Posisi di dalam kanvas',style:TextStyle(fontWeight:FontWeight.w600)),
-    const SizedBox(height:10),
-    for (final row in [0,1,2]) Padding(padding:const EdgeInsets.only(bottom:6),child:Row(children:[
-      for (final col in [0,1,2]) Expanded(child:Padding(padding:const EdgeInsets.symmetric(horizontal:3),child:OutlinedButton(
-        style:OutlinedButton.styleFrom(backgroundColor:(x-[.18,.5,.82][col]).abs()<.08 && (y-[.18,.5,.82][row]).abs()<.08 ? Tokens.accent.withValues(alpha:.22) : Tokens.surface2),
-        onPressed:() => onChanged([.18,.5,.82][col],[.18,.5,.82][row]),
-        child:Semantics(label:'${['Atas','Tengah','Bawah'][row]} ${['kiri','tengah','kanan'][col]}',child:const Icon(Icons.circle,size:8)),
-      ))),
-    ])),
-    const SizedBox(height:8),
-    Row(children:[
-      Expanded(child:TextFormField(key:ValueKey('x$x'),initialValue:(x*100).round().toString(),keyboardType:TextInputType.number,
-        decoration:const InputDecoration(labelText:'X (%)'),onFieldSubmitted:(v) { final n=double.tryParse(v); if(n!=null) onChanged((n/100).clamp(0,1),y); })),
-      const SizedBox(width:12),
-      Expanded(child:TextFormField(key:ValueKey('y$y'),initialValue:(y*100).round().toString(),keyboardType:TextInputType.number,
-        decoration:const InputDecoration(labelText:'Y (%)'),onFieldSubmitted:(v) { final n=double.tryParse(v); if(n!=null) onChanged(x,(n/100).clamp(0,1)); })),
-    ]),
-    const SizedBox(height:8),
-    const Text('Pilih titik, atau isi persentase untuk posisi presisi.',style:TextStyle(fontSize:12,color:Tokens.textDim)),
-  ]);
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Posisi di dalam kanvas',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 10),
+        for (final row in [0, 1, 2])
+          Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                for (final col in [0, 1, 2])
+                  Expanded(
+                      child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                                backgroundColor:
+                                    (x - [.18, .5, .82][col]).abs() < .08 &&
+                                            (y - [.18, .5, .82][row]).abs() <
+                                                .08
+                                        ? Tokens.accent.withValues(alpha: .22)
+                                        : Tokens.surface2),
+                            onPressed: () => onChanged(
+                                [.18, .5, .82][col], [.18, .5, .82][row]),
+                            child: Semantics(
+                                label: '${['Atas', 'Tengah', 'Bawah'][row]} ${[
+                                  'kiri',
+                                  'tengah',
+                                  'kanan'
+                                ][col]}',
+                                child: const Icon(Icons.circle, size: 8)),
+                          ))),
+              ])),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+              child: TextFormField(
+                  key: ValueKey('x$x'),
+                  initialValue: (x * 100).round().toString(),
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'X (%)'),
+                  onFieldSubmitted: (v) {
+                    final n = double.tryParse(v);
+                    if (n != null) onChanged((n / 100).clamp(0, 1), y);
+                  })),
+          const SizedBox(width: 12),
+          Expanded(
+              child: TextFormField(
+                  key: ValueKey('y$y'),
+                  initialValue: (y * 100).round().toString(),
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Y (%)'),
+                  onFieldSubmitted: (v) {
+                    final n = double.tryParse(v);
+                    if (n != null) onChanged(x, (n / 100).clamp(0, 1));
+                  })),
+        ]),
+        const SizedBox(height: 8),
+        const Text('Pilih titik, atau isi persentase untuk posisi presisi.',
+            style: TextStyle(fontSize: 12, color: Tokens.textDim)),
+      ]);
 }

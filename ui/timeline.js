@@ -21,6 +21,11 @@ const StudioTimeline = (() => {
     presets: [],
     previewPath: null,
     busy: false,
+    previewBusy: false,
+    previewTimer: null,
+    changeTimer: null,
+    generation: 0,
+    previewFingerprint: "",
     inspectorTab: "subtitles",
     templateCategory: "Pop",
     el: null,
@@ -30,8 +35,9 @@ const StudioTimeline = (() => {
     async open(index) {
       const clip = state.project && state.project.clips.find((c) => c.index === index);
       if (!clip) return;
+      this.close();
       this.clip = clip;
-      this.previewPath = null;
+      this.previewPath = clip.files?.mp4 || null;
       this.selected = null;
       const saved = clip.timeline && Array.isArray(clip.timeline.tracks) ? clip.timeline : null;
       this.timeline = saved ? JSON.parse(JSON.stringify(saved)) : this.defaultTimeline(clip);
@@ -44,9 +50,31 @@ const StudioTimeline = (() => {
       }
       this.shell();
       this.renderAll();
+      this.previewFingerprint = this.fingerprint();
+      this.schedulePreview();
+      this.changeTimer = setInterval(() => {
+        const fingerprint = this.fingerprint();
+        if (fingerprint !== this.previewFingerprint) {
+          this.previewFingerprint = fingerprint;
+          this.schedulePreview();
+        }
+      }, 350);
+    },
+
+    fingerprint() {
+      return JSON.stringify([this.timeline, this.clip.start, this.clip.end,
+        this.clip.captions, this.clip.subtitle_preset, this.clip.subtitle_position, this.clip.audio_mode]);
+    },
+
+    schedulePreview() {
+      clearTimeout(this.previewTimer);
+      this.previewTimer = setTimeout(() => this.preview(), 900);
     },
 
     close() {
+      clearInterval(this.changeTimer);
+      clearTimeout(this.previewTimer);
+      this.generation++;
       if (this.el) {
         this.el.querySelectorAll("video,audio").forEach((player) => {
           player.pause();
@@ -128,7 +156,6 @@ const StudioTimeline = (() => {
           <header class="editor-head">
             <div class="editor-brand"><span>Editor video</span><strong id="tlTitle"></strong></div>
             <div class="row" style="gap:var(--s2)">
-              <button class="ghost" data-tl="preview">${t("editor.previewDraft")}</button>
               <button class="ghost" data-tl="save">${t("common.save")}</button>
               <button class="primary" data-tl="render">Ekspor video</button>
               <button class="tl-close" data-tl="close" aria-label="Tutup editor" title="Tutup editor">×</button>
@@ -155,7 +182,6 @@ const StudioTimeline = (() => {
       bind("close", () => this.close());
       bind("save", () => this.save());
       bind("render", () => this.render());
-      bind("preview", () => this.preview());
       bind("add-text", () => this.addText());
       bind("add-media", () => this.addMedia());
       bind("add-music", () => this.addMusic());
@@ -174,19 +200,22 @@ const StudioTimeline = (() => {
 
     /* --------------------------------------------------------------------- stage */
 
-    renderStage() {
+    renderStage(position = 0, playing = false) {
       const stage = this.el.querySelector("#tlStage");
       if (!stage) return;
-      if (this.previewPath) {
-        stage.innerHTML = `<video id="tlVideo" controls src="${mediaUrl(this.previewPath)}&v=${Date.now()}"></video>`;
-        return;
-      }
-      const thumb = this.clip.files && this.clip.files.thumb ? mediaUrl(this.clip.files.thumb) : "";
-      stage.innerHTML = `
-        <div class="editor-stage-inner">
-          ${thumb ? `<img class="thumb" src="${thumb}" alt="" />` : ""}
-          <p class="muted">${t("editor.previewDraft")}</p>
-        </div>`;
+      const path = this.previewPath || state.project.source;
+      const sourceStart = this.previewPath ? 0 : this.clip.start;
+      stage.querySelectorAll('video').forEach(v => v.pause());
+      stage.innerHTML = `<video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video><span class="preview-status" id="tlPreviewStatus" role="status"></span>`;
+      const player = stage.querySelector('video');
+      player.addEventListener('loadedmetadata', () => {
+        player.currentTime = Math.min(sourceStart + position, Math.max(0, player.duration - .05));
+        if (playing) player.play().catch(() => {});
+      }, {once:true});
+      if (!this.previewPath) player.addEventListener('timeupdate', () => {
+        if (player.currentTime < sourceStart) player.currentTime = sourceStart;
+        if (player.currentTime >= this.clip.end) { player.pause(); player.currentTime = sourceStart; }
+      });
     },
 
     /* -------------------------------------------------------------------- tracks */
@@ -234,7 +263,7 @@ const StudioTimeline = (() => {
       const lane = node.parentElement;
       const secondsPerPx = this.duration() / lane.getBoundingClientRect().width;
       const startX = event.clientX;
-      const origin = { start: item.start, end: item.end };
+      const origin = { start: item.start, end: item.end, srcStart: item.srcStart || 0, captions: JSON.parse(JSON.stringify(this.clip.captions || [])) };
 
       const onMove = (moveEvent) => {
         const delta = (moveEvent.clientX - startX) * secondsPerPx;
@@ -246,6 +275,15 @@ const StudioTimeline = (() => {
           const length = origin.end - origin.start;
           item.start = clamp(origin.start + delta, 0, 3600);
           item.end = item.start + length;
+        }
+        if (kind === 'video') {
+          if (mode === 'move') { item.start=origin.start;item.end=origin.end; }
+          const delta=item.start-origin.start;
+          item.srcStart=origin.srcStart+delta;
+          item.end=Math.min(item.end-item.start,state.project.duration-item.srcStart);item.start=0;
+          this.clip.start=item.srcStart;this.clip.end=item.srcStart+item.end;
+          const shift=rows=>rows.filter(c=>c.end>delta && c.start<delta+item.end).map(c=>({...c,start:Math.max(0,c.start-delta),end:Math.min(item.end,c.end-delta),...(c.words?{words:shift(c.words)}:{})}));
+          this.clip.captions=shift(origin.captions);
         }
         this.renderTracks();
         this.renderInspector();
@@ -334,7 +372,7 @@ const StudioTimeline = (() => {
 
     presetGallery(value, attr) {
       const category = this.templateCategory;
-      return `<div class="template-filters" aria-label="Kategori template">${["Semua", "Pop", "Neon", "Editorial", "Label", "Essential"].map(c => `<button data-category="${c}" class="${c === category ? 'active' : ''}">${c}</button>`).join('')}</div>
+      return `<div class="template-filters" aria-label="Kategori template">${["Semua", "Pop", "Neon", "Editorial", "Label", "Essential", "Custom"].map(c => `<button data-category="${c}" class="${c === category ? 'active' : ''}">${c}</button>`).join('')}</div>
         <div class="tl-presets">${this.presets.filter(p => category === "Semua" || p.category === category).map(p => `
           <button class="tl-preset ${value === p.id ? 'active' : ''}" ${attr}="${p.id}" aria-pressed="${value === p.id}" title="${escapeHtml(p.label)}">
             <div class="preset-swatch ${p.category === 'Neon' ? 'glow' : ''}" style="--preset-color:${p.color};--preset-outline:${p.outline}"><strong style="font-family:'${p.font}';font-style:${p.italic === 'yes' ? 'italic' : 'normal'};${p.box === 'yes' ? 'background:var(--preset-outline);text-shadow:none;padding:3px 6px;' : ''}">${escapeHtml(p.sample)}</strong></div>
@@ -354,7 +392,7 @@ const StudioTimeline = (() => {
       const options = (values, value) => values.map(([id,label]) => `<option value="${id}" ${id === value ? 'selected' : ''}>${label}</option>`).join('');
       host.innerHTML = `<div class="inspector-tabs">${[['clip','Klip'],['subtitles','Subtitle'],['element','Elemen']].map(([id,label]) => `<button data-inspector="${id}" class="${this.inspectorTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
         <section class="inspector-section" ${this.inspectorTab !== 'clip' ? 'hidden' : ''}>
-          <h3>Video & audio</h3>
+          <h3>Video & audio</h3><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
           <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
           <label>Penyesuaian gambar<select id="tlCrop">${options([['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
           <p class="field-help">Fit mempertahankan seluruh gambar. Ukuran asli mengikuti rasio video sumber.</p>
@@ -363,9 +401,11 @@ const StudioTimeline = (() => {
           <label>Naskah narasi<textarea id="tlNarration" rows="3" placeholder="Tulis kalimat untuk sulih suara…"></textarea></label><button class="ghost" data-tl-clip="tts">Buat suara dari teks</button>
         </section>
         <section class="inspector-section" ${this.inspectorTab !== 'subtitles' ? 'hidden' : ''}>
-          <h3>Gaya subtitle</h3><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Pilih, lalu klik Pratinjau cepat untuk melihat hasilnya.</p>
+          <h3>Gaya subtitle</h3><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Perubahan diperbarui otomatis pada video.</p>
           <button class="caption-generate" data-tl="captions">Buat subtitle otomatis</button>
-          ${this.presetGallery(clip.subtitle_preset, 'data-preset')}
+          <label>Posisi subtitle<select id="tlSubtitlePosition">${options([['bottom','Bawah'],['middle','Tengah'],['top','Atas'],['off','Tanpa subtitle tambahan']],clip.subtitle_position || 'bottom')}</select></label>
+          <p class="field-help">Subtitle yang sudah menyatu dengan gambar sumber tidak bisa dihapus. Pilih tanpa subtitle tambahan atau pindahkan posisi agar tidak bertumpuk.</p>
+          ${this.presetGallery(clip.subtitle_preset, 'data-preset')}<button class="ghost" data-tl="custom">＋ Buat template sendiri</button>
           <details><summary>Edit teks & waktu · ${(clip.captions || []).length} baris</summary><p class="field-help">Transkrip adalah teks ucapan. Subtitle mengatur kapan teks tampil. Format: mulai|selesai|teks dalam detik.</p><textarea id="tlCaptions" rows="7">${escapeHtml(captionsToText(clip.captions))}</textarea></details>
         </section>
         <section class="inspector-section" ${this.inspectorTab !== 'element' ? 'hidden' : ''}>
@@ -384,6 +424,19 @@ const StudioTimeline = (() => {
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
       const selected = this.selectedItem();
+      host.querySelector('#tlSubtitlePosition')?.addEventListener('change',event=>{this.clip.subtitle_position=event.target.value;});
+      host.querySelector('[data-tl="split"]')?.addEventListener('click',async()=>{
+        try {
+          const at = this.clip.start + ((this.el.querySelector('video')?.currentTime - Number(this.el.querySelector('video')?.dataset.sourceStart || 0)) || (this.clip.end - this.clip.start) / 2);
+          await this.save();
+          await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/split?at=${at}`,{method:'POST'});
+          this.close();state.project=await api(`/api/projects/${state.project.id}`);renderProjectDetail();toast('Klip dipisah. Setiap bagian bisa memiliki ukuran sendiri.');
+        } catch(error){toast(error.message,'error');}
+      });
+      host.querySelector('[data-tl="custom"]')?.addEventListener('click',async()=>{
+        const result=await createTypography(); if(!result)return;
+        this.presets=await api('/api/subtitle-presets');this.clip.subtitle_preset=result.id;this.templateCategory='Custom';this.renderInspector();
+      });
       host.querySelectorAll('[data-inspector]').forEach(node => node.addEventListener('click', () => { this.inspectorTab = node.dataset.inspector; this.renderInspector(); }));
       host.querySelectorAll('[data-category]').forEach(node => node.addEventListener('click', () => { this.templateCategory = node.dataset.category; this.renderInspector(); }));
       host.querySelectorAll('[data-position]').forEach(node => node.addEventListener('click', () => { if (selected) { [selected.x, selected.y] = node.dataset.position.split(',').map(Number); this.renderInspector(); } }));
@@ -392,8 +445,14 @@ const StudioTimeline = (() => {
       const clipStart = host.querySelector("#tlClipStart");
       const clipEnd = host.querySelector("#tlClipEnd");
       const updateTrim = () => {
+        const oldStart = this.clip.start;
         this.clip.start = Math.max(0, Number(clipStart.value) || 0);
-        this.clip.end = Math.max(this.clip.start + 0.2, Number(clipEnd.value) || 0);
+        this.clip.end = Math.min(state.project.duration, Math.max(this.clip.start + 0.2, Number(clipEnd.value) || 0));
+        this.clip.start = Math.min(this.clip.start, this.clip.end - .2);
+        const delta = this.clip.start - oldStart, duration = this.clip.end - this.clip.start;
+        const shift = rows => (rows || []).filter(c => c.end > delta && c.start < delta + duration).map(c => ({...c,start:Math.max(0,c.start-delta),end:Math.min(duration,c.end-delta),...(c.words ? {words:shift(c.words)} : {})}));
+        this.clip.captions = shift(this.clip.captions);
+        const text = host.querySelector('#tlCaptions'); if (text) text.value = captionsToText(this.clip.captions);
         const base = this.items("video")[0];
         if (base) { base.srcStart = this.clip.start; base.start = 0; base.end = this.clip.end - this.clip.start; }
         this.renderTracks();
@@ -496,13 +555,13 @@ const StudioTimeline = (() => {
         this.clip.captions = result.captions || [];
         this.clip.subtitle_position = "bottom";
         this.renderInspector();
-        toast(this.clip.captions.length ? "Subtitle siap. Pilih tipografi lalu Pratinjau atau Render." : "Tidak ada ucapan terdeteksi.");
+        toast(this.clip.captions.length ? "Subtitle siap. Pratinjau diperbarui otomatis." : "Tidak ada ucapan terdeteksi.");
       } catch (error) { toast(error.message, "error"); }
       finally { this.busy = false; }
     },
 
     /** Simpan timeline + field turunan (crop/kanvas/trim) ke proyek. */
-    async save() {
+    async save(silent = false) {
       const videoItem = this.items("video")[0];
       const payload = {
         timeline: this.timeline,
@@ -521,29 +580,37 @@ const StudioTimeline = (() => {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
-      state.project = await api(`/api/projects/${state.project.id}`);
-      this.clip = state.project.clips.find((c) => c.index === this.clip.index) || this.clip;
-      toast(t("toast.saved"));
-      renderProjectDetail();
+      if (!silent) {
+        state.project = await api(`/api/projects/${state.project.id}`);
+        toast(t("toast.saved"));
+        renderProjectDetail();
+      }
     },
 
     async preview() {
-      if (this.busy) return;
-      this.el.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
-      this.el.querySelector('#tlStage').innerHTML = '<div class="editor-stage-inner"><div class="spinner"></div><p>Menyusun pratinjau…</p></div>';
-      this.busy = true;
+      if (!this.el || this.el.hidden) return;
+      if (this.busy || this.previewBusy) { this.schedulePreview(); return; }
+      this.previewBusy = true;
+      const generation = this.generation, fingerprint = this.fingerprint();
+      const status = () => this.el.querySelector('#tlPreviewStatus');
+      if (status()) status().textContent = 'Memperbarui video…';
       try {
-        await this.save();
+        await this.save(true);
         const job = await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/preview`, { method: "POST" });
         const result = await waitJob(job.id);
-        if (result && result.mp4) {
+        if (generation !== this.generation || this.el.hidden) return;
+        if (fingerprint !== this.fingerprint()) { this.schedulePreview(); return; }
+        if (result?.mp4) {
+          const player = this.el.querySelector('video');
+          const position = Math.max(0, (player?.currentTime || 0) - Number(player?.dataset.sourceStart || 0));
+          const playing = player && !player.paused;
           this.previewPath = result.mp4;
-          if (!this.el.hidden) this.renderStage();
+          this.renderStage(Math.min(position, this.clip.end - this.clip.start - .05), playing);
         }
       } catch (error) {
-        toast(error.message, "error");
+        if (generation === this.generation && !this.el.hidden && status()) status().textContent = 'Perubahan belum tampil: ' + error.message;
       } finally {
-        this.busy = false;
+        this.previewBusy = false;
       }
     },
 

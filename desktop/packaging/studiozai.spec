@@ -53,7 +53,7 @@ hiddenimports = [
 ]
 
 # Binary-heavy packages that PyInstaller cannot infer on its own.
-for package in ("ctranslate2", "faster_whisper", "av", "tokenizers", "onnxruntime", "piper", "yt_dlp"):
+for package in ("ctranslate2", "faster_whisper", "av", "tokenizers", "onnxruntime", "piper", "yt_dlp", "sherpa_onnx", "sherpa_onnx_core"):
     try:
         pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
     except Exception:  # package not installed in this build environment

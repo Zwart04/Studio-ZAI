@@ -278,10 +278,11 @@ input:focus,select:focus,textarea:focus {
   background:var(--bg)}
 .editor-stage-inner {
   text-align:center;
-  max-width:450px}
+  width:100%; max-width:100%; height:100%; display:grid; place-content:center; padding:20px}
 .editor-stage-inner .thumb {
   width:100%;
-  max-height:190px;
+  max-height:calc(100% - 40px);
+  aspect-ratio:16/9;
   object-fit:contain}
 .editor-side {
   max-height:none;
@@ -528,7 +529,7 @@ main {
 .editor-stage-inner {
   padding:9px}
 .editor-stage-inner .thumb {
-  display:none}
+  display:block; max-height:100px}
 .editor-stage-inner p {
   margin:0;
   font-size:11px}
@@ -674,3 +675,29 @@ input:not([type=checkbox]),select,textarea {
   color:var(--preset-color);
   text-shadow:1px 1px 1px var(--preset-outline),-1px -1px 1px var(--preset-outline);
   text-wrap:balance}
+
+/* Native dialog semantics with the existing neutral design tokens. */
+.studio-dialog { color:var(--text); background:var(--surface); border:1px solid var(--surface-3); border-radius:20px; padding:24px; width:min(520px,calc(100vw - 32px)); max-height:85vh; overflow:auto; }
+.studio-dialog::backdrop { background:#0009; backdrop-filter:blur(5px); }
+.studio-dialog label { display:block; margin:12px 0; }
+.studio-dialog input[type=checkbox] { width:auto; min-height:auto; }
+.studio-dialog input[type=color] { height:44px; width:100%; }
+#sourceAction { margin:8px 0 20px; }
+body:has(#page-home.active) #jobbar { display:none; }
+
+.studio-shortcuts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0 28px; }
+.clip-options { margin-top:20px; padding-top:18px; border-top:1px solid var(--separator); }
+.clip-options summary { cursor:pointer; font-weight:600; min-height:32px; }
+.clip-options summary span { font-weight:400; font-size:13px; color:var(--text-dim); margin-left:12px; }
+.studio-shortcuts button { text-align:left; background:var(--surface); padding:18px; border:1px solid var(--separator); border-radius:16px; }
+.studio-shortcuts strong,.studio-shortcuts span { display:block; }
+.studio-shortcuts span { margin-top:6px; color:var(--text-dim); font-size:13px; font-weight:400; }
+.image-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+.image-gallery img { width:100%; aspect-ratio:1; object-fit:contain; border-radius:12px; margin-bottom:12px; }
+.ai-profile summary { cursor:pointer; font-weight:600; padding:4px 0; }
+.ai-profile[open] summary { margin-bottom:16px; }
+#aiSettings { margin-bottom:32px; }
+@media(max-width:600px) { .studio-shortcuts { grid-template-columns:1fr; } .studio-shortcuts button { padding:14px 18px; } }
+
+.editor-stage { position:relative; }
+.preview-status { position:absolute; bottom:54px; left:16px; right:16px; pointer-events:none; font-size:12px; color:var(--text-dim); text-align:center; text-shadow:0 1px 3px #000; }

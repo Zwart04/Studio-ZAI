@@ -1,8 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:record/record.dart';
+import '../services/cloud_ai.dart';
+import 'cloud_settings_screen.dart';
 
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
@@ -25,9 +29,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
   String _language = 'id';
   String? _lastFile;
   bool _cloning = false;
+  bool _online = false, _generating = false, _recording = false;
+  String _voice = 'marin';
+  final _recorder = AudioRecorder();
+  Timer? _timer;
 
   @override
   void dispose() {
+    _timer?.cancel();
+    _recorder.dispose();
     _text.dispose();
     _sample.dispose();
     _sampleText.dispose();
@@ -41,11 +51,28 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (path != null) setState(() => _sample.text = path);
   }
 
+  Future<void> _record() async {
+    try {
+      if (_recording) {
+        _timer?.cancel();
+        final path = await _recorder.stop();
+        if (mounted) setState(() { _recording = false; if (path != null) _sample.text = path; });
+        return;
+      }
+      if (!await _recorder.hasPermission()) throw Exception('Izin mikrofon diperlukan untuk merekam.');
+      final dir = Directory('${widget.state.dataDir.path}/voices')..createSync(recursive: true);
+      await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 24000, numChannels: 1), path: '${dir.path}/sample-${DateTime.now().millisecondsSinceEpoch}.wav');
+      if (!mounted) { await _recorder.stop(); return; }
+      setState(() => _recording = true);
+      _timer = Timer(const Duration(seconds: 30), () { if (_recording) _record(); });
+    } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
     final ttsModels = state.catalog.where((m) => m.kind == 'tts').toList();
-    final installed = ttsModels.where((m) => m.installed).toList();
+    final installed = ttsModels.where((m) => m.installed && m.id.startsWith(_language == 'id' ? 'piper-id_' : 'piper-en_')).toList();
     _modelId = installed.any((m) => m.id == _modelId)
         ? _modelId
         : (installed.isEmpty ? '' : installed.first.id);
@@ -63,6 +90,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              DropdownButtonFormField<bool>(initialValue: _online, decoration: const InputDecoration(labelText: 'Mesin suara'), items: const [DropdownMenuItem(value: false, child: Text('Lokal · Piper')), DropdownMenuItem(value: true, child: Text('Online · 13 karakter suara'))], onChanged: (value) => setState(() => _online = value ?? false)),
+              if (_online) ...[
+                const SizedBox(height: Tokens.space3),
+                DropdownButtonFormField<String>(initialValue: _voice, decoration: const InputDecoration(labelText: 'Karakter suara'), items: CloudAI.voices.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (value) => setState(() => _voice = value ?? 'marin')),
+                TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const CloudSettingsScreen())), child: const Text('Atur API key · teks dikirim ke penyedia')),
+              ],
+              const SizedBox(height: Tokens.space3),
               TextField(controller: _text, maxLines: 4, decoration: InputDecoration(labelText: state.translate('voice.text'))),
               const SizedBox(height: Tokens.space3),
               Row(children: [
@@ -86,7 +120,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                           initialValue: _modelId,
                           decoration: InputDecoration(labelText: state.translate('voice.model')),
                           items: installed
-                              .map((m) => DropdownMenuItem(value: m.id, child: Text(m.id.split('_').first, overflow: TextOverflow.ellipsis)))
+                                  .map((m) => DropdownMenuItem(value: m.id, child: Text(m.id.replaceFirst('piper-', '').replaceAll('-medium', ''), overflow: TextOverflow.ellipsis)))
                               .toList(),
                           onChanged: (value) => setState(() => _modelId = value ?? ''),
                         ),
@@ -94,21 +128,22 @@ class _VoiceScreenState extends State<VoiceScreen> {
               ]),
               const SizedBox(height: Tokens.space3),
               FilledButton(
-                onPressed: installed.isEmpty || state.jobState == JobState.running
+                onPressed: (!_online && installed.isEmpty) || _generating || state.jobState == JobState.running
                     ? null
                     : () async {
                         // Messenger diambil SEBELUM await supaya `context` tidak
                         // dipakai lagi setelah jeda async.
                         final messenger = ScaffoldMessenger.of(context);
                         try {
-                          final file = await state.quickVoice(_text.text, _modelId, _language);
+                          setState(() => _generating = true);
+                          final file = _online ? await CloudAI.speech(_text.text, _voice, _language, state.dataDir) : await state.quickVoice(_text.text, _modelId, _language);
                           if (!mounted) return;
                           setState(() => _lastFile = file.path);
                         } catch (error) {
                           messenger.showSnackBar(SnackBar(content: Text('$error')));
-                        }
+                        } finally { if (mounted) setState(() => _generating = false); }
                       },
-                child: Text(state.translate('voice.generate')),
+                child: Text(_generating ? 'Membuat suara…' : state.translate('voice.generate')),
               ),
               if (state.jobState == JobState.running) ...[
                 const SizedBox(height: Tokens.space3),
@@ -152,6 +187,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
                 icon: const Icon(Icons.audiotrack, size: 18),
                 label: Text(state.translate('voice.pickSample')),
               ),
+              OutlinedButton.icon(onPressed: _record, icon: Icon(_recording ? Icons.stop : Icons.mic_none), label: Text(_recording ? 'Selesai · maks. 30 detik' : 'Rekam mikrofon')),
+              const Text('ZipVoice meniru karakter suara untuk teks English / Mandarin. Untuk narasi Indonesia, gunakan Piper Indonesia atau suara online.', style: TextStyle(color: Tokens.textDim, fontSize: 12)),
               const SizedBox(height: Tokens.space2),
               TextField(
                 controller: _sampleText,

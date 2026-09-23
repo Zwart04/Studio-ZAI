@@ -104,7 +104,8 @@ class JobManager:
                 job.report(100.0, "selesai", "")
             except JobCancelled:
                 job.status = "cancelled"
-                job.report(job.progress, "dibatalkan", "")
+                job.stage = "dibatalkan"
+                job.events.append(JobEvent(job.progress, "dibatalkan", ""))
             except Exception as exc:  # noqa: BLE001 - surface any pipeline failure to the UI
                 job.status = "error"
                 job.error = f"{type(exc).__name__}: {exc}"

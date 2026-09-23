@@ -24,7 +24,69 @@ def tts_models() -> list[dict[str, Any]]:
 
 
 def clone_models() -> list[dict[str, Any]]:
-    return models.manager.models_by_kind("clone")
+    return [m for m in models.manager.models_by_kind("clone") if not m.get("experimental")]
+
+
+def zipvoice_available() -> bool:
+    try:
+        import sherpa_onnx  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _zipvoice(text: str, sample: str | Path, reference_text: str, out_path: Path,
+              progress_cb: ProgressCb | None) -> Path:
+    import wave
+
+    import numpy as np
+    import sherpa_onnx
+
+    directory = models.manager.model_dir("zipvoice-zh-en")
+    def find(name: str) -> str:
+        path = next(directory.rglob(name), None)
+        if path is None:
+            raise ValueError("Model ZipVoice belum lengkap. Unduh ulang di halaman Model.")
+        return str(path)
+    if not reference_text.strip():
+        raise ValueError("Isi teks yang persis diucapkan di rekaman contoh.")
+    if progress_cb:
+        progress_cb(10, "memuat ZipVoice CPU")
+    tts = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
+        zipvoice=sherpa_onnx.OfflineTtsZipvoiceModelConfig(
+            tokens=find("tokens.txt"), encoder=find("encoder.int8.onnx"), decoder=find("decoder.int8.onnx"),
+            data_dir=find("espeak-ng-data"), lexicon=find("lexicon.txt"), vocoder=find("vocos_24khz.onnx")),
+        num_threads=2, provider="cpu")))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out_path.with_suffix(".reference.wav")
+    try:
+        converted = ffmpeg.run_ffmpeg(["-i", str(sample), "-t", "30", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(temporary)])
+        if not converted.ok:
+            raise ValueError("Rekaman contoh tidak dapat dibaca.")
+        with wave.open(str(temporary), "rb") as wav:
+            samples = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+        if len(samples) < 16000:
+            raise ValueError("Rekaman contoh terlalu pendek; gunakan 6–30 detik.")
+        generation = sherpa_onnx.GenerationConfig()
+        generation.reference_audio = samples
+        generation.reference_sample_rate = 16000
+        generation.reference_text = reference_text
+        generation.num_steps = 4
+        if progress_cb:
+            progress_cb(30, "meniru karakter suara; tunggu sampai audio selesai")
+        audio = tts.generate(text, generation)
+        if not len(audio.samples):
+            raise RuntimeError("Model tidak menghasilkan suara.")
+        with wave.open(str(out_path), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(audio.sample_rate)
+            wav.writeframes((np.clip(audio.samples, -1, 1) * 32767).astype(np.int16).tobytes())
+    finally:
+        temporary.unlink(missing_ok=True)
+    if progress_cb:
+        progress_cb(100, "suara selesai")
+    return out_path
 
 
 def default_voice(lang: str = "id") -> str:
@@ -145,12 +207,17 @@ def clone_speak(
     language: str = "id",
     model_id: str = "chatterbox-base",
     progress_cb: ProgressCb | None = None,
+    reference_text: str = "",
 ) -> Path:
     """Zero-shot cloning: reference sample (>= 6s) plus text -> wav (PerTh watermarked)."""
     if not text.strip():
         raise ValueError("teks kosong")
     if not sample:
         raise ValueError("butuh contoh suara (sample) untuk kloning")
+    if model_id == "zipvoice-zh-en":
+        if language not in {"en", "zh"}:
+            raise ValueError("ZipVoice mendukung English/Mandarin. Gunakan Piper atau suara online untuk Indonesia.")
+        return _zipvoice(text, sample, reference_text, Path(out_path), progress_cb)
     model, device = _load_chatterbox(model_id, language)
     if progress_cb:
         progress_cb(20.0, f"mengkloning suara ({device})")

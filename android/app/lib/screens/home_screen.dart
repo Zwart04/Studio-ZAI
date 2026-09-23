@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import 'images_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.state, required this.onOpenClips});
@@ -22,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _audioLanguage = '';
   String _canvas = 'portrait';
   bool _useTranscript = true;
+  bool _useAi = false;
 
   @override
   void dispose() {
@@ -53,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
         count: _count,
         language: _language,
         useTranscript: _useTranscript,
+        useAi: _useAi,
         audioLanguage: _audioLanguage.isEmpty ? null : _audioLanguage,
         canvas: _canvas,
       );
@@ -73,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Row(
           children: [
-            Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.contain),
+            ColorFiltered(colorFilter: const ColorFilter.matrix([-1,0,0,0,255,0,-1,0,0,255,0,0,-1,0,255,0,0,0,1,0]), child: Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.contain)),
             const SizedBox(width: Tokens.space3),
             Expanded(
               child: Text(state.translate('home.title'),
@@ -83,11 +86,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: Tokens.space2),
         Text(state.translate('home.lead'), style: const TextStyle(color: Tokens.textDim)),
+        const SizedBox(height: Tokens.space3),
+        OutlinedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => ImagesScreen(state: state))), icon: const Icon(Icons.image_outlined), label: const Text('Studio gambar')),
         const SizedBox(height: Tokens.space4),
         SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Pilih momen dengan AI'), subtitle: const Text('Opsional · atur penyedia di Pengaturan. Transkrip dikirim ke penyedia pilihanmu.'), value: _useAi, onChanged: (v) => setState(() { _useAi = v; if (v) _useTranscript = true; })),
               TextField(
                 controller: _sourceController,
                 decoration: InputDecoration(
@@ -181,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Text('${device.model} · ${device.androidVersion}'),
                     const SizedBox(height: Tokens.space1),
-                    Text('RAM ${device.ramGb} GB · Disk ${device.diskFreeGb.toStringAsFixed(1)} GB',
+                    Text('RAM ${device.ramGb.toStringAsFixed(1)} GB · Disk ${device.diskFreeGb.toStringAsFixed(1)} GB',
                         style: const TextStyle(color: Tokens.textDim, fontSize: 13)),
                     const SizedBox(height: Tokens.space2),
                     Wrap(
