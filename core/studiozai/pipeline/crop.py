@@ -114,9 +114,13 @@ def canvas_size(shape: str, src_w: int, src_h: int) -> tuple[int, int]:
     return target_size(src_w, src_h)
 
 
-def plan(mode: str = "center", src_w: int = 1920, src_h: int = 1080, out_size: tuple[int, int] | None = None) -> CropPlan:
+def plan(mode: str = "center", src_w: int = 1920, src_h: int = 1080, out_size: tuple[int, int] | None = None, framing: dict | None = None) -> CropPlan:
     """Build the ffmpeg plan for the requested framing mode."""
     mode = (mode or "center").lower()
+    if mode == "manual":
+        from .framing import chain
+        out_w, out_h = out_size or target_size(src_w, src_h)
+        return CropPlan("manual", out_w, out_h, simple_chain=chain(framing or {}, src_w, src_h, out_w, out_h))
     # "fit" dan "none" sama-sama menampilkan seluruh frame (letterbox), jadi tidak
     # ada teks di tepi yang terpotong. Dulu "none" men-stretch gambar hingga
     # gepeng, sekarang konsisten dengan "fit".

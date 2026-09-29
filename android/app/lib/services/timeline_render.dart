@@ -40,7 +40,7 @@ class TimelineRender {
     final canvas = base?.canvas ?? 'portrait';
     final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
     final filter =
-        MediaTools.cropFilter(crop, sourceWidth, sourceHeight, canvas: canvas);
+        MediaTools.cropFilter(crop, sourceWidth, sourceHeight, canvas: canvas, framing: base?.framing ?? {});
     final complex = filter.contains(';');
 
     final buffer = StringBuffer()

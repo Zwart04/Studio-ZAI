@@ -2,9 +2,13 @@
 
 <p align="center">A simple video studio for Windows and Android. Find moments in long videos, edit them directly, and make captions, voiceovers, and images with local models.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.8.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/FEATURES.md">Platform features</a> · <a href="docs/MODELS.md">Models & licenses</a></p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.9.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/FEATURES.md">Platform features</a> · <a href="docs/MODELS.md">Models & licenses</a></p>
 
 ![Studio ZAI editor with a playable video, captions, and timeline](docs/screenshots/04-editor.jpg)
+
+## New in 1.9
+
+Windows and Android now include local podcast detection, review before rendering, word-level caption styling, manual/keyframed crop and face tracking, on-device translation with saved language versions, and a cross-project gallery with three-format batch export. [Feature coverage and limitations](docs/CREATOR.md) · [Release verification](docs/RELEASE-1.9.0.md).
 
 ## A studio for video, voice, and images
 
@@ -14,16 +18,16 @@
 
 **Local images.** SDXS-512 generates 512×512 images on Windows and ARM64 Android after a separate 683 MB model download. Prompts stay on device in local mode. Cloud image generation remains optional.
 
-The installed models work without an API key. Downloading a model or a video URL needs internet, while editing imported files and running local models can be offline. Optional OpenAI, Anthropic, DeepSeek, and compatible endpoints support AI tasks where configured.
+The installed models work without an API key. Downloading a model or a video URL needs internet, while editing imported files and running local models can be offline. Optional Groq, Gemini, OpenAI, Anthropic, DeepSeek, and compatible endpoints support AI tasks where configured.
 
 ## Download
 
 | Platform | Package | Notes |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-windows-x64.zip) | Extract the whole folder and run **StudioZAI.exe**. FFmpeg and AI runtimes are bundled; model weights download separately. |
-| Android 8+ | [One universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-android.apk) | Local image inference requires ARM64. |
+| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/StudioZAI-1.9.0-windows-x64.zip) | Extract the whole folder and run **StudioZAI.exe**. FFmpeg and AI runtimes are bundled; model weights download separately. |
+| Android 8+ | [One universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/StudioZAI-1.9.0-android.apk) | Local image inference requires ARM64. |
 
-[Release validation](docs/RELEASE-1.8.0.md) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/SHA256SUMS.txt) · [Build guide](docs/BUILD.md)
+[Release validation](docs/RELEASE-1.9.0.md) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/SHA256SUMS.txt) · [Build guide](docs/BUILD.md)
 
 ## Get started
 
@@ -53,7 +57,7 @@ Clip selection was checked against a [real 80.5-minute speaker review](https://y
 git clone https://github.com/Zwart04/Studio-ZAI.git
 cd Studio-ZAI
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,desktop,dev]"
+.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,face,translation,desktop,dev]"
 .venv/Scripts/python.exe -m studiozai serve
 .venv/Scripts/python.exe -m pytest core/tests
 ```

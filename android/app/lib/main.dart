@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'i18n/strings.dart';
 import 'screens/clips_screen.dart';
+import 'screens/gallery_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/models_screen.dart';
 import 'screens/settings_screen.dart';
@@ -50,7 +51,9 @@ class _StudioZaiAppState extends State<StudioZaiApp> {
               ? const Scaffold(body: Center(child: CircularProgressIndicator()))
               : ListenableBuilder(
                   listenable: _state,
-                  builder: (context, _) => _state.setupComplete ? RootShell(state: _state) : SetupScreen(state: _state),
+                  builder: (context, _) => _state.setupComplete
+                      ? RootShell(state: _state)
+                      : SetupScreen(state: _state),
                 )),
     );
   }
@@ -64,7 +67,31 @@ class _LogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Grayscale version of the brand logo so it blends with the dark UI.
-    return ColorFiltered(colorFilter: const ColorFilter.matrix([-1,0,0,0,255,0,-1,0,0,255,0,0,-1,0,255,0,0,0,1,0]), child: Image.asset('assets/images/logo.png', width: size, height: size, fit: BoxFit.contain));
+    return ColorFiltered(
+        colorFilter: const ColorFilter.matrix([
+          -1,
+          0,
+          0,
+          0,
+          255,
+          0,
+          -1,
+          0,
+          0,
+          255,
+          0,
+          0,
+          -1,
+          0,
+          255,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]),
+        child: Image.asset('assets/images/logo.png',
+            width: size, height: size, fit: BoxFit.contain));
   }
 }
 
@@ -88,7 +115,9 @@ class _ErrorView extends StatelessWidget {
               const SizedBox(height: Tokens.space3),
               const Text('Gagal memulai Studio ZAI'),
               const SizedBox(height: Tokens.space2),
-              Text('$error', textAlign: TextAlign.center, style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
+              Text('$error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Tokens.textDim, fontSize: 12)),
             ],
           ),
         ),
@@ -118,6 +147,7 @@ class _RootShellState extends State<RootShell> {
       VoiceScreen(state: state),
       ModelsScreen(state: state),
       SettingsScreen(state: state),
+      GalleryScreen(state: state),
     ];
 
     return Scaffold(
@@ -148,11 +178,23 @@ class _RootShellState extends State<RootShell> {
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.auto_awesome_motion), label: state.translate('nav.home')),
-          NavigationDestination(icon: const Icon(Icons.movie_outlined), label: state.translate('nav.clips')),
-          NavigationDestination(icon: const Icon(Icons.mic_none), label: state.translate('nav.voice')),
-          NavigationDestination(icon: const Icon(Icons.memory), label: state.translate('nav.models')),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), label: state.translate('nav.settings')),
+          NavigationDestination(
+              icon: const Icon(Icons.auto_awesome_motion),
+              label: state.translate('nav.home')),
+          NavigationDestination(
+              icon: const Icon(Icons.movie_outlined),
+              label: state.translate('nav.clips')),
+          NavigationDestination(
+              icon: const Icon(Icons.mic_none),
+              label: state.translate('nav.voice')),
+          NavigationDestination(
+              icon: const Icon(Icons.memory),
+              label: state.translate('nav.models')),
+          NavigationDestination(
+              icon: const Icon(Icons.settings_outlined),
+              label: state.translate('nav.settings')),
+          const NavigationDestination(
+              icon: Icon(Icons.video_library_outlined), label: 'Galeri'),
         ],
       ),
     );

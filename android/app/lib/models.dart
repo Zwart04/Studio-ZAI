@@ -95,6 +95,8 @@ class Clip {
     this.originalVolume = 0.25,
     this.voiceVolume = 1.0,
     this.captions = const [],
+    this.captionVariants = const {},
+    this.captionLanguage = '',
     this.files = const {},
     this.status = 'draft',
     this.narration = '',
@@ -115,6 +117,8 @@ class Clip {
   double originalVolume;
   double voiceVolume;
   List<Map<String, dynamic>> captions;
+  Map<String, List<Map<String, dynamic>>> captionVariants;
+  String captionLanguage;
   Map<String, String> files;
   String status;
   String narration;
@@ -140,6 +144,8 @@ class Clip {
         'originalVolume': originalVolume,
         'voiceVolume': voiceVolume,
         'captions': captions,
+        'captionVariants': captionVariants,
+        'captionLanguage': captionLanguage,
         'files': files,
         'status': status,
         'narration': narration,
@@ -163,6 +169,10 @@ class Clip {
         captions: List<Map<String, dynamic>>.from(
             (json['captions'] as List? ?? const [])
                 .map((e) => Map<String, dynamic>.from(e as Map))),
+        captionVariants: (json['captionVariants'] as Map? ?? {}).map((k, v) =>
+            MapEntry('$k',
+                (v as List).map((r) => Map<String, dynamic>.from(r)).toList())),
+        captionLanguage: json['captionLanguage'] as String? ?? '',
         files: Map<String, String>.from(json['files'] as Map? ?? const {}),
         status: json['status'] as String? ?? 'draft',
         narration: json['narration'] as String? ?? '',

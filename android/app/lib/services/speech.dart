@@ -99,16 +99,18 @@ Future<Object?> _runSpeechWorker(List<Object?> request,
 }
 
 class TranscriptSegment {
-  TranscriptSegment(this.start, this.end, this.text);
+  TranscriptSegment(this.start, this.end, this.text, [this.words = const []]);
 
   final double start;
   final double end;
   final String text;
+  final List<Map<String, dynamic>> words;
 
   Map<String, dynamic> toJson() => {
         'start': double.parse(start.toStringAsFixed(3)),
         'end': double.parse(end.toStringAsFixed(3)),
         'text': text,
+        'words': words,
       };
 
   static TranscriptSegment fromJson(Map<String, dynamic> json) =>
@@ -116,6 +118,9 @@ class TranscriptSegment {
         (json['start'] as num).toDouble(),
         (json['end'] as num).toDouble(),
         json['text'] as String? ?? '',
+        (json['words'] as List? ?? [])
+            .map((w) => Map<String, dynamic>.from(w))
+            .toList(),
       );
 }
 
@@ -195,6 +200,7 @@ class SpeechService {
             decoder: decoder.path,
             language: language,
             task: 'transcribe',
+            enableTokenTimestamps: true,
           ),
           tokens: tokens.path,
           modelType: 'whisper',
@@ -244,19 +250,22 @@ class SpeechService {
       void drain() {
         while (!vad.isEmpty()) {
           final speech = vad.front();
-          String text = '';
+          late sherpa.OfflineRecognizerResult decoded;
           try {
-            text = _decode(recognizer, speech.samples);
+            decoded = _decode(recognizer, speech.samples);
           } finally {
             try {
               vad.pop();
             } catch (_) {}
           }
+          final text = decoded.text;
           if (text.trim().isNotEmpty) {
             segments.add(TranscriptSegment(
               speech.start / 16000.0,
               (speech.start + speech.samples.length) / 16000.0,
               text.trim(),
+              _timedWords(decoded, speech.start / 16000.0,
+                  speech.samples.length / 16000.0),
             ));
           }
         }
@@ -280,10 +289,12 @@ class SpeechService {
     } else {
       var offset = 0.0;
       for (final samples in readWavChunks(wavPath, sampleCount: 20 * 16000)) {
-        final text = _decode(recognizer, samples);
+        final decoded = _decode(recognizer, samples);
+        final text = decoded.text;
         final end = offset + samples.length / 16000.0;
         if (text.trim().isNotEmpty) {
-          segments.add(TranscriptSegment(offset, end, text.trim()));
+          segments.add(TranscriptSegment(offset, end, text.trim(),
+              _timedWords(decoded, offset, end - offset)));
         }
         offset = end;
         onProgress?.call(end);
@@ -292,13 +303,44 @@ class SpeechService {
     return segments;
   }
 
-  String _decode(sherpa.OfflineRecognizer recognizer, Float32List samples) {
+  static List<Map<String, dynamic>> _timedWords(
+      sherpa.OfflineRecognizerResult result, double offset, double duration) {
+    if (result.tokens.length != result.timestamps.length ||
+        result.tokens.isEmpty) {
+      return [];
+    }
+    final words = <Map<String, dynamic>>[];
+    for (var i = 0; i < result.tokens.length; i++) {
+      final token = result.tokens[i].replaceAll('▁', ' ');
+      if (token.trim().isEmpty || token.startsWith('<|')) continue;
+      final start = offset + result.timestamps[i].clamp(0, duration);
+      final end = offset +
+          (i + 1 < result.timestamps.length
+                  ? result.timestamps[i + 1]
+                  : duration)
+              .clamp(0, duration);
+      if (words.isEmpty || token.startsWith(' ')) {
+        words.add({'word': token.trim(), 'start': start, 'end': end});
+      } else {
+        words.last['word'] = '${words.last['word']}$token';
+        words.last['end'] = end;
+      }
+    }
+    String compact(String s) => s.replaceAll(RegExp(r'\s+'), '');
+    if (compact(words.map((w) => w['word']).join()) != compact(result.text)) {
+      return [];
+    }
+    return words.where((w) => w['end'] > w['start']).toList();
+  }
+
+  sherpa.OfflineRecognizerResult _decode(
+      sherpa.OfflineRecognizer recognizer, Float32List samples) {
     final stream = recognizer.createStream();
     try {
       stream.acceptWaveform(samples: samples, sampleRate: 16000);
       recognizer.decode(stream);
       final result = recognizer.getResult(stream);
-      return result.text;
+      return result;
     } finally {
       try {
         stream.free();

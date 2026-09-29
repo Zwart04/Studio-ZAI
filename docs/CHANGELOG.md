@@ -1,3 +1,17 @@
+# v1.9.0 — 29 September 2026
+
+- Windows dan Android: mode podcast lokal dengan alasan skor, target jumlah otomatis, draf untuk review sebelum render, dan judul/hook editable.
+- Caption per kata, timing, font, ukuran, warna, tebal, posisi X/Y, serta animasi pop/fade/rise/zoom/type. Android membaca timestamp token Whisper ketika tersedia.
+- Crop manual yang dapat diseret, zoom, keyframe, dan pelacakan posisi wajah lokal. Trim/split ikut menyesuaikan kata dan keyframe.
+- Terjemahan lokal dengan unduhan model, versi subtitle per bahasa, serta ekspor subtitle terpisah tanpa render ulang video.
+- Galeri lintas proyek, pencarian/filter/skor, preview, akses editor, dan batch multi-format 9:16/1:1/16:9 di kedua platform.
+- Groq dan Gemini ditambahkan; input transkrip panjang dipecah sebelum ranking AI dan hasil tumpang tindih dibuang.
+- Upload berkas dan drag/drop pada Beranda browser desktop diperbaiki. Output per format disimpan terpisah.
+
+[Panduan fitur dan batas kemampuan](CREATOR.md) · [Validasi](RELEASE-1.9.0.md).
+
+---
+
 # v1.8.0 — 23 September 2026
 
 - Editor desktop kini menempatkan pemutar dan panel pengaturan di atas timeline dengan penggaris/playhead, drag blok/tepi, dan impor berkas ke track. Tombol dialog mengikuti gaya aplikasi.

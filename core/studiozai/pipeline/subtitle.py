@@ -224,6 +224,7 @@ class Caption:
     end: float
     text: str
     words: list[dict[str, Any]] = field(default_factory=list)
+    style: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -231,6 +232,7 @@ class Caption:
             "end": round(self.end, 3),
             "text": self.text,
             "words": self.words,
+            "style": self.style,
         }
 
 
@@ -458,11 +460,11 @@ def to_ass(
     events: list[str] = []
     if position != "off":
         for caption in captions:
-            anim = style.get("anim", "")
+            from .caption_style import text as styled_text
             events.append(
                 f"Dialogue: 0,{ass_timestamp(caption.start)},"
                 f"{ass_timestamp(max(caption.end, caption.start + 0.2))},Default,,0,0,0,,"
-                f"{anim}{_karaoke_text(caption, style)}"
+                f"{styled_text(caption, style, width, height)}"
             )
     events.extend(text_item_events(text_items or [], width, height))
     return "\n".join(header + events) + "\n"

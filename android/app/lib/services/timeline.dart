@@ -22,6 +22,7 @@ class TimelineItem {
     this.gain = 1.0,
     this.crop = 'center',
     this.canvas = 'portrait',
+    this.framing = const {},
   });
 
   String id;
@@ -38,6 +39,7 @@ class TimelineItem {
   double gain;
   String crop;
   String canvas;
+  Map<String, dynamic> framing;
 
   double get duration => (end - start).clamp(0, double.infinity).toDouble();
 
@@ -56,6 +58,7 @@ class TimelineItem {
         gain: gain,
         crop: crop,
         canvas: canvas,
+        framing: Map<String, dynamic>.from(framing),
       );
 
   Map<String, dynamic> toJson() => {
@@ -73,6 +76,7 @@ class TimelineItem {
         'gain': gain,
         'crop': crop,
         'canvas': canvas,
+        'framing': framing,
       };
 
   static TimelineItem fromJson(Map<String, dynamic> json) => TimelineItem(
@@ -90,11 +94,13 @@ class TimelineItem {
         gain: (json['gain'] as num?)?.toDouble() ?? 1.0,
         crop: json['crop'] as String? ?? 'center',
         canvas: json['canvas'] as String? ?? 'portrait',
+        framing: Map<String, dynamic>.from(json['framing'] as Map? ?? {}),
       );
 }
 
 class TimelineTrack {
-  TimelineTrack({required this.id, required this.kind, List<TimelineItem>? items})
+  TimelineTrack(
+      {required this.id, required this.kind, List<TimelineItem>? items})
       : items = items ?? <TimelineItem>[];
 
   String id;
@@ -111,13 +117,15 @@ class TimelineTrack {
         id: json['id'] as String? ?? 'track',
         kind: json['kind'] as String? ?? 'media',
         items: (json['items'] as List? ?? const [])
-            .map((entry) => TimelineItem.fromJson(Map<String, dynamic>.from(entry as Map)))
+            .map((entry) =>
+                TimelineItem.fromJson(Map<String, dynamic>.from(entry as Map)))
             .toList(),
       );
 }
 
 class Timeline {
-  Timeline({List<TimelineTrack>? tracks, this.version = 1}) : tracks = tracks ?? <TimelineTrack>[];
+  Timeline({List<TimelineTrack>? tracks, this.version = 1})
+      : tracks = tracks ?? <TimelineTrack>[];
 
   int version;
   List<TimelineTrack> tracks;
@@ -148,7 +156,8 @@ class Timeline {
   static Timeline fromJson(Map<String, dynamic> json) => Timeline(
         version: (json['version'] as num?)?.toInt() ?? 1,
         tracks: (json['tracks'] as List? ?? const [])
-            .map((entry) => TimelineTrack.fromJson(Map<String, dynamic>.from(entry as Map)))
+            .map((entry) =>
+                TimelineTrack.fromJson(Map<String, dynamic>.from(entry as Map)))
             .toList(),
       );
 

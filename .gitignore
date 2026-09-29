@@ -43,3 +43,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Kotlin local build cache
+android/app/android/.kotlin/

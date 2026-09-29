@@ -863,7 +863,7 @@ def analyze_media(
 # --------------------------------------------------------------------------- optional LLM
 
 
-def rank_with_llm(
+def _rank_chunk(
     transcript: dict[str, Any],
     count: int = 5,
     base_url: str = "http://127.0.0.1:11434/v1",
@@ -882,9 +882,10 @@ def rank_with_llm(
     prompt = (
         f"Kamu editor shorts. Pilih maksimal {count} momen paling menarik dari transkrip "
         "ber-nomor berikut. Balas HANYA JSON array dengan objek "
-        '{"start":<detik>,"end":<detik>,"title":"<judul singkat>"}. '
-        "Tiap klip harus dimulai saat topik/produk diperkenalkan dan berakhir "
-        "setelah gagasan atau ulasan produk selesai, sebelum produk berikutnya. "
+        '{"start":<detik>,"end":<detik>,"title":"<hook singkat>","score":<0..1>,"reason":"<alasan>"}. '
+        "Pilih tanya-jawab lengkap, cerita, hook, atau poin utama yang mandiri. "
+        "Sertakan konteks pertanyaan dan akhir jawaban. Hindari iklan dan pengulangan. "
+        "Durasi maksimal 180 detik. "
         "Pilih durasi sesuai isi, jangan memotong kalimat atau mulai di tengah ulasan. "
         f"Utamakan momen yang mandiri dan jelas untuk media sosial.\n\n{numbered}"
     )
@@ -934,18 +935,51 @@ def rank_with_llm(
         except (KeyError, TypeError, ValueError):
             continue
         max_end = max((float(s.get("end", 0)) for s in segments), default=0)
-        if not math.isfinite(begin) or not math.isfinite(finish) or begin < 0 or finish - begin < 3 or finish > max_end + 1:
+        if not math.isfinite(begin) or not math.isfinite(finish) or begin < float(segments[0].get("start", 0)) or not 3 <= finish - begin <= 180 or finish > max_end + 1:
             continue
+        try:
+            score = float(item.get("score", .8))
+        except (TypeError, ValueError):
+            score = .8
         results.append(
             {
                 "start": begin,
                 "end": finish,
-                "score": 1.0,
-                "reason": "dipilih AI",
+                "score": max(0, min(1, score)) if math.isfinite(score) else .8,
+                "reason": str(item.get("reason") or "dipilih AI")[:300],
                 "title": str(item.get("title") or "").strip(),
             }
         )
     return results[:count]
+
+
+def rank_with_llm(transcript: dict[str, Any], count: int = 5, **kwargs) -> list[dict[str, Any]]:
+    """Bound input size for long podcasts, then deduplicate overlapping results."""
+    segments = _valid_segments(transcript)
+    if not segments:
+        return []
+    count = count if count > 0 else max(3, min(10, math.ceil(segments[-1]["end"] / 300)))
+    chunks, chunk, length = [], [], 0
+    for row in segments:
+        size = len(str(row.get("text", ""))) + 40
+        if chunk and length + size > 18000:
+            chunks.append(chunk)
+            chunk, length = [chunk[-1]], len(str(chunk[-1].get("text", ""))) + 40
+        chunk.append(row)
+        length += size
+    if chunk:
+        chunks.append(chunk)
+    rows = []
+    for chunk in chunks:
+        rows.extend(_rank_chunk({"segments": chunk}, count=count, **kwargs))
+    chosen = []
+    for row in sorted(rows, key=lambda r: (-r["score"], r["start"])):
+        if any(min(row["end"], r["end"]) - max(row["start"], r["start"]) > .5 for r in chosen):
+            continue
+        chosen.append(row)
+        if len(chosen) >= count:
+            break
+    return sorted(chosen, key=lambda r: r["start"])
 
 
 def to_candidates(rows: Iterable[dict[str, Any]], words: Sequence[dict[str, Any]] = ()) -> list[ClipCandidate]:

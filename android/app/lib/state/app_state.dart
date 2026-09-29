@@ -13,10 +13,10 @@ import '../services/media_tools.dart';
 import '../services/model_manager.dart';
 import '../services/model_registry.dart';
 import '../services/pipeline.dart';
+import '../services/creator_tools.dart';
 import '../services/speech.dart';
 import '../services/timeline.dart';
 import '../services/subtitle_builder.dart';
-import '../services/cloud_ai.dart';
 import '../services/clip_edits.dart';
 
 enum JobState { idle, running, done, error }
@@ -233,12 +233,14 @@ class AppState extends ChangeNotifier {
     required String language,
     required bool useTranscript,
     bool useAi = false,
+    bool reviewFirst = true,
+    String analysisMode = 'auto',
     String? audioLanguage,
     String canvas = 'portrait',
     String audioMode = 'original',
   }) async {
-    if (count < 1 || count > 20) {
-      throw ArgumentError.value(count, 'count', 'Pilih 1–20 klip.');
+    if (count < 0) {
+      throw ArgumentError.value(count, 'count', 'Jumlah tidak boleh negatif.');
     }
     if (audioMode != 'original') {
       throw ArgumentError.value(audioMode, 'audioMode',
@@ -332,42 +334,28 @@ class AppState extends ChangeNotifier {
             'Analisis audio gagal (${_shortError(error)}); memakai rentang video sumber.');
         candidates = Pipeline.pickClipsWithoutAudio(project.duration, count);
       }
+      if (analysisMode == 'podcast' && segments.isNotEmpty) {
+        final rows =
+            CreatorTools.podcast(project.transcript, project.duration, count);
+        if (rows.isNotEmpty) {
+          candidates = rows
+              .map((r) => ClipCandidate(r['start'], r['end'],
+                  (r['score'] as num).toDouble(), r['reason'], r['title']))
+              .toList();
+        }
+      }
       if (useAi) {
         if (segments.isEmpty) {
           warnings.add('AI online dilewati karena transkrip tidak tersedia.');
         } else {
           try {
             _report(62, 'AI sedang memilih momen dari transkrip');
-            final compact = segments
-                .map((s) =>
-                    '${s.start.toStringAsFixed(1)}-${s.end.toStringAsFixed(1)} ${s.text}')
-                .join('\n');
-            final result = await CloudAI.text(
-                'Select up to $count complete, non-overlapping review topics from this transcript. '
-                'Start before a product introduction and end after its conclusion. '
-                'Choose natural lengths for each topic within 0–${project.duration} seconds. '
-                'Return only a JSON array of objects with numeric start, end and a short reason.\n$compact');
-            final first = result.indexOf('['), last = result.lastIndexOf(']');
-            if (first < 0 || last < first) {
-              throw const FormatException(
-                  'Respons AI tidak berisi rentang klip.');
-            }
-            final rows = jsonDecode(result.substring(first, last + 1)) as List;
-            final selected = rows
-                .whereType<Map>()
-                .where((r) => r['start'] is num && r['end'] is num)
-                .where((r) =>
-                    r['start'] >= 0 &&
-                    r['end'] <= project.duration &&
-                    r['end'] - r['start'] >= 3)
-                .take(count)
-                .map((r) => ClipCandidate((r['start'] as num).toDouble(),
-                    (r['end'] as num).toDouble(), 1, '${r['reason'] ?? 'AI'}'))
+            final rows = await CreatorTools.rankAi(
+                project.transcript, project.duration, count);
+            candidates = rows
+                .map((r) => ClipCandidate(
+                    r['start'], r['end'], r['score'], r['reason'], r['title']))
                 .toList();
-            if (selected.isEmpty) {
-              throw const FormatException('AI tidak memilih klip yang valid.');
-            }
-            candidates = selected;
           } catch (error) {
             warnings.add(
                 'AI online tidak tersedia (${_shortError(error)}); memakai pilihan lokal.');
@@ -385,7 +373,9 @@ class AppState extends ChangeNotifier {
           index: i,
           start: candidate.start,
           end: candidate.end,
-          title: '${project.title} · Klip ${i + 1}',
+          title: candidate.title.isEmpty
+              ? '${project.title} · Klip ${i + 1}'
+              : candidate.title,
           score: candidate.score,
           reason: candidate.reason,
           crop: defaultCrop,
@@ -401,6 +391,15 @@ class AppState extends ChangeNotifier {
       // never leave a downloaded video looking like an empty project.
       project.processingWarning = warnings.join(' ');
       await saveProject(project);
+      if (reviewFirst) {
+        currentProject = project;
+        setJob(JobState.done,
+            progress: 100,
+            stage: 'Momen siap ditinjau',
+            message:
+                '${project.clips.length} klip · edit judul dan pilih format sebelum render');
+        return project;
+      }
       var rendered = 0;
       for (final clip in project.clips) {
         try {
@@ -535,7 +534,9 @@ class AppState extends ChangeNotifier {
         return 0;
       }
       clip.captions = captions;
-      await saveProject(project);
+      clip.captionLanguage = project.language;
+      clip.captionVariants[project.language] = captions;
+      await saveClip(clip);
       setJob(JobState.done, progress: 100, stage: 'subtitle siap');
       return captions.length;
     } catch (error) {
@@ -548,6 +549,42 @@ class AppState extends ChangeNotifier {
           wav.deleteSync();
         } catch (_) {}
       }
+    }
+  }
+
+  Future<void> batchRender(
+      List<(Project, Clip)> entries, List<String> formats) async {
+    if (jobState == JobState.running) {
+      throw Exception('Tunggu proses yang sedang berjalan.');
+    }
+    if (entries.isEmpty ||
+        formats.isEmpty ||
+        formats.any((f) => !['portrait', 'square', 'landscape'].contains(f))) {
+      throw ArgumentError('Pilih klip dan format.');
+    }
+    final total = entries.length * formats.length;
+    var done = 0;
+    setJob(JobState.running, progress: 0, stage: 'Ekspor batch');
+    try {
+      for (final entry in entries) {
+        final project = entry.$1, clip = entry.$2;
+        final pipeline = Pipeline(
+            models: models, speech: speech, projectDir: projectDir(project));
+        for (final format in formats) {
+          await pipeline.renderClip(project, clip,
+              (p, m) => _report(100 * (done + p / 100) / total, '$m · $format'),
+              canvasOverride: format);
+          done++;
+          if (currentProject?.id == project.id) {
+            currentProject = project;
+          }
+          await saveProject(project);
+        }
+      }
+      setJob(JobState.done, progress: 100, stage: '$done video siap');
+    } catch (e) {
+      setJob(JobState.error, stage: 'Ekspor gagal', message: '$e');
+      rethrow;
     }
   }
 
@@ -600,6 +637,30 @@ class AppState extends ChangeNotifier {
   Future<void> saveClip(Clip clip) async {
     final project = currentProject;
     if (project == null) return;
+    final saved = File('${projectsDir.path}/${project.id}.json');
+    if (saved.existsSync()) {
+      final previous = Project.fromJson(jsonDecode(saved.readAsStringSync()))
+          .clips
+          .where((c) => c.index == clip.index)
+          .firstOrNull;
+      String signature(Clip c) {
+        final data = c.toJson()
+          ..remove('files')
+          ..remove('status')
+          ..remove('title');
+        return jsonEncode(data);
+      }
+
+      if (previous != null && signature(previous) != signature(clip)) {
+        clip.files = Map<String, String>.from(clip.files)
+          ..removeWhere((k, v) =>
+              k == 'mp4' ||
+              k == 'thumb' ||
+              k.startsWith('mp4_') ||
+              k.startsWith('thumb_'));
+        clip.status = 'draft';
+      }
+    }
     await saveProject(project);
   }
 

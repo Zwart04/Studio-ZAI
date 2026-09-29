@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import 'images_screen.dart';
+import 'cloud_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.state, required this.onOpenClips});
@@ -18,7 +19,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _sourceController = TextEditingController();
-  int _count = 5;
+  int _count = 0;
+  String _analysisMode = 'auto';
+  bool _reviewFirst = true;
   String _language = 'id';
   String _audioLanguage = '';
   String _canvas = 'portrait';
@@ -53,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
         language: _language,
         useTranscript: _useTranscript,
         useAi: _useAi,
+        analysisMode: _analysisMode,
+        reviewFirst: _reviewFirst,
         audioLanguage: _audioLanguage.isEmpty ? null : _audioLanguage,
         canvas: _canvas,
       );
@@ -156,6 +161,32 @@ class _HomeScreenState extends State<HomeScreen> {
             )),
         const SizedBox(height: Tokens.space5),
         SectionCard(
+            title: 'Deteksi momen',
+            child: Column(children: [
+              DropdownButtonFormField<String>(
+                  initialValue: _analysisMode,
+                  decoration: const InputDecoration(labelText: 'Jenis konten'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'auto', child: Text('Otomatis / ulasan')),
+                    DropdownMenuItem(
+                        value: 'podcast',
+                        child: Text('Podcast · tanya jawab & cerita'))
+                  ],
+                  onChanged: (v) => setState(() => _analysisMode = v!)),
+              SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Tinjau sebelum render'),
+                  value: _reviewFirst,
+                  onChanged: (v) => setState(() => _reviewFirst = v)),
+              TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const CloudSettingsScreen())),
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Penyedia AI · lokal / Groq / Gemini')),
+            ])),
+        const SizedBox(height: 16),
+        SectionCard(
             title: 'Hasil klip',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,9 +201,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     initialValue: _count,
                     decoration: InputDecoration(
                         labelText: state.translate('home.count')),
-                    items: const [3, 5, 8, 12]
+                    items: const [0, 3, 5, 8, 12, 20]
                         .map((value) => DropdownMenuItem(
-                            value: value, child: Text('$value')))
+                            value: value,
+                            child: Text(value == 0 ? 'Otomatis' : '$value')))
                         .toList(),
                     onChanged: (value) => setState(() => _count = value ?? 5),
                   ),

@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import 'editor_screen.dart';
+import 'gallery_screen.dart';
 import '../widgets/source_editor.dart';
 
 class ClipsScreen extends StatelessWidget {
@@ -64,6 +65,7 @@ class ClipsScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
+        FilledButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(appBar:AppBar(title:const Text('Ekspor batch')),body:GalleryScreen(state:state,project:project)))),icon:const Icon(Icons.video_library),label:const Text('Pilih momen & ekspor banyak format')),
         OutlinedButton.icon(
             onPressed: state.jobState == JobState.running
                 ? null

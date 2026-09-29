@@ -1,5 +1,15 @@
 const I18N = {
   id: {
+    "nav.gallery": "Galeri klip", "gallery.lead": "Semua klip dari proyekmu, siap diputar, diedit, dan diunduh kembali.",
+    "gallery.empty": "Belum ada klip. Mulai dari video panjang di Beranda.", "gallery.draft": "Belum dirender",
+    "gallery.search": "Cari judul klip atau proyek", "gallery.all": "Semua klip", "gallery.ready": "Sudah dirender",
+    "gallery.latest": "Terbaru", "gallery.score": "Skor tertinggi", "gallery.noMatch": "Tidak ada klip yang cocok.",
+    "gallery.status": "Status", "gallery.order": "Urutkan", "gallery.missing": "Klip ini sudah dihapus. Muat ulang galeri.",
+    "clips.score": "Skor momen", "clips.original": "Utama", "clips.download": "Unduh", "clips.select": "Pilih untuk ekspor",
+    "batch.title": "Ekspor banyak klip", "batch.help": "Pilih klip dan format. Setiap hasil disimpan terpisah dan tersedia di galeri.",
+    "batch.all": "Pilih semua", "batch.none": "Kosongkan pilihan", "batch.render": "Render pilihan", "batch.required": "Pilih minimal satu klip dan satu format.",
+    "batch.limit": "Pilih maksimal 20 klip per batch.", "batch.summary": "{clips} klip × {formats} format = {total} video",
+    "batch.busy": "Tunggu proses aktif selesai sebelum memulai render berikutnya.", "batch.done": "{total} video berhasil dibuat. Unduh dari kartu klip atau Galeri klip.",
     "common.processing": "Memproses",
     "editor.style": "Tipografi subtitle", "editor.trimHint": "Framing mengikuti rasio kanvas pilihanmu.", "editor.timelineHint": "Pilih blok untuk mengedit. Geser tepi untuk durasi. Video diperbarui otomatis.",
     "nav.home": "Beranda", "nav.projects": "Proyek", "nav.voice": "Suara", "nav.models": "Model", "nav.settings": "Pengaturan",
@@ -45,6 +55,16 @@ const I18N = {
     "toast.done": "Selesai", "toast.error": "Terjadi kesalahan", "toast.saved": "Tersimpan",
   },
   en: {
+    "nav.gallery": "Clip gallery", "gallery.lead": "All your project clips, ready to play, edit, and download again.",
+    "gallery.empty": "No clips yet. Start with a long video on Home.", "gallery.draft": "Not rendered yet",
+    "gallery.search": "Search clip or project title", "gallery.all": "All clips", "gallery.ready": "Rendered",
+    "gallery.latest": "Latest", "gallery.score": "Highest score", "gallery.noMatch": "No matching clips.",
+    "gallery.status": "Status", "gallery.order": "Sort by", "gallery.missing": "This clip was deleted. Refresh the gallery.",
+    "clips.score": "Moment score", "clips.original": "Main", "clips.download": "Download", "clips.select": "Select for export",
+    "batch.title": "Export multiple clips", "batch.help": "Choose clips and formats. Each output is saved separately and appears in the gallery.",
+    "batch.all": "Select all", "batch.none": "Clear selection", "batch.render": "Render selection", "batch.required": "Select at least one clip and one format.",
+    "batch.limit": "Select up to 20 clips per batch.", "batch.summary": "{clips} clips × {formats} formats = {total} videos",
+    "batch.busy": "Wait for the active job to finish before starting another render.", "batch.done": "{total} videos created. Download them from the clip cards or Clip gallery.",
     "common.processing": "Processing",
     "editor.style": "Subtitle typography", "editor.trimHint": "Framing follows the selected canvas ratio.", "editor.timelineHint": "Select a block to edit. Drag its edge to trim. Video updates automatically.",
     "nav.home": "Home", "nav.projects": "Projects", "nav.voice": "Voice", "nav.models": "Models", "nav.settings": "Settings",
@@ -204,6 +224,7 @@ function hideProcessing() {
 function trackJob(job) {
   if (!job || !job.id) return;
   state.jobId = job.id;
+  updateBatchSummary();
   const startBtn = $("#startBtn");
   if (startBtn) { startBtn.disabled = true; startBtn.textContent = t("common.processing") + "…"; }
   const jobbar = $("#jobbar");
@@ -256,7 +277,10 @@ function trackJob(job) {
       state.jobId = null;
       hideProcessing();
       if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
+      updateBatchSummary();
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
+      else if (data.status === "cancelled") toast(t("common.cancel"));
+      else if (data.result?.exports) toast(t("batch.done").replace("{total}", data.result.exports.length));
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
       if (data.result?.image && window.renderImages) { setPage("images"); renderImages(); }
@@ -270,6 +294,7 @@ function trackJob(job) {
     hideProcessing();
     if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
     state.jobId = null;
+    updateBatchSummary();
   };
 }
 
@@ -283,11 +308,13 @@ function playAudio(path) {
 /* ------------------------------------------------------------------ nav */
 
 function setPage(name) {
+  $$("#galleryGrid video").forEach((video) => video.pause());
   if (name !== 'voice') window.stopStudioRecording?.();
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
   $$("#nav button").forEach((button) => button.classList.toggle("active", button.dataset.page === name));
   if (name === "home") renderHomeProjects();
   if (name === "projects") renderProjects();
+  if (name === "gallery") renderGallery();
   if (name === "models") renderModels();
   if (name === "settings") { renderSettings(); if (window.renderAiSettings) renderAiSettings(); }
   if (name === "images" && window.renderImages) renderImages();
@@ -422,7 +449,10 @@ async function startClipping() {
       method: "POST",
       body: JSON.stringify({
         source,
-        count: Number($("#count").value) || 5,
+        count: Number($("#count").value),
+        analysis_mode: $("#analysisMode").value,
+        review_first: $("#reviewFirst").checked,
+        formats: [...document.querySelectorAll("[name=outputFormat]:checked")].map(x => x.value),
         min_len: 0,
         max_len: 0,
         use_transcript: $("#useTranscript").checked,
@@ -489,6 +519,102 @@ function projectCard(project) {
   </article>`;
 }
 
+const exportFormats = [["mp4", ""], ["mp4_portrait", "9:16"], ["mp4_square", "1:1"], ["mp4_landscape", "16:9"]];
+let galleryClips = [];
+let galleryRequest = 0;
+let batchProjectId = null;
+let batchSelection = new Set();
+let batchSubmitting = false;
+
+function clipDownloadLinks(files = {}) {
+  return exportFormats.filter(([key]) => files[key]).map(([key, label]) =>
+    `<a class="download-link" href="${mediaUrl(files[key])}" download>${t("clips.download")} ${label || t("clips.original")}</a>`
+  ).join("");
+}
+
+function clipPreviewPath(files = {}) {
+  return exportFormats.map(([key]) => files[key]).find(Boolean);
+}
+
+function clipThumbnailPath(files = {}) {
+  const key = exportFormats.find(([name]) => files[name])?.[0] || "mp4";
+  return files[key.replace("mp4", "thumb")] || files.thumb;
+}
+
+async function renderGallery() {
+  const request = ++galleryRequest;
+  try {
+    const clips = await api("/api/gallery");
+    if (request !== galleryRequest) return;
+    galleryClips = clips;
+    paintGallery();
+  } catch (error) {
+    if (request === galleryRequest) $("#galleryGrid").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function paintGallery() {
+  const grid = $("#galleryGrid");
+  grid.querySelectorAll("video").forEach((video) => video.pause());
+  const query = $("#gallerySearch").value.trim().toLocaleLowerCase();
+  const readyOnly = $("#galleryStatus").value === "ready";
+  const clips = galleryClips.filter((clip) =>
+    (!readyOnly || clipPreviewPath(clip.files)) && `${clip.title} ${clip.project_title}`.toLocaleLowerCase().includes(query)
+  );
+  clips.sort($("#gallerySort").value === "score"
+    ? (a, b) => Number(b.score || 0) - Number(a.score || 0)
+    : (a, b) => b.updated - a.updated || a.index - b.index);
+  grid.innerHTML = clips.length ? clips.map((clip) => {
+    const files = clip.files || {};
+    const preview = clipPreviewPath(files);
+    const poster = clipThumbnailPath(files);
+    const media = preview
+      ? `<video controls playsinline preload="none" ${poster ? `poster="${mediaUrl(poster)}"` : ""} src="${mediaUrl(preview)}" aria-label="${escapeHtml(clip.title)}"></video>`
+      : `<div class="gallery-draft">${t("gallery.draft")}</div>`;
+    return `<article class="clip gallery-clip">${media}
+      <div class="meta"><span class="score">${escapeHtml(clip.project_title)}</span><strong>${escapeHtml(clip.title)}</strong>
+      <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · ${t("clips.score")} ${Number(clip.score || 0).toFixed(2)}</span></div>
+      <div class="gallery-actions"><button class="mini" data-gallery-open="${escapeHtml(clip.project_id)}" data-storage="${escapeHtml(clip.storage_id)}">${t("common.edit")}</button>${clipDownloadLinks(files)}</div></article>`;
+  }).join("") : `<div class="empty">${t(galleryClips.length ? "gallery.noMatch" : "gallery.empty")}</div>`;
+  grid.querySelectorAll("[data-gallery-open]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      await openProject(button.dataset.galleryOpen);
+      const clip = state.project.clips.find((item) => item.storage_id === button.dataset.storage);
+      if (!clip) return toast(t("gallery.missing"), "error");
+      openEditor(clip.index);
+    }
+    catch (error) { toast(error.message, "error"); }
+  }));
+  grid.querySelectorAll("video").forEach((video) => video.addEventListener("play", () => {
+    grid.querySelectorAll("video").forEach((other) => { if (other !== video) other.pause(); });
+  }));
+}
+
+function updateBatchSummary() {
+  const clips = $$("#clipGrid [data-batch-clip]:checked").length;
+  const formats = $$("#batchPanel .batch-formats input:checked").length;
+  $("#batchSummary").textContent = t("batch.summary").replace("{clips}", clips).replace("{formats}", formats).replace("{total}", clips * formats);
+  $("#batchRenderBtn").disabled = !clips || !formats || clips > 20 || Boolean(state.jobId) || batchSubmitting;
+}
+
+async function renderSelectedClips() {
+  if (!state.project) return;
+  if (state.jobId || batchSubmitting) return toast(t("batch.busy"));
+  const clips = $$("#clipGrid [data-batch-clip]:checked").map((input) => Number(input.dataset.batchClip));
+  const formats = $$("#batchPanel .batch-formats input:checked").map((input) => input.value);
+  if (!clips.length || !formats.length) return toast(t("batch.required"), "error");
+  if (clips.length > 20) return toast(t("batch.limit"), "error");
+  batchSubmitting = true;
+  updateBatchSummary();
+  try {
+    const job = await api(`/api/projects/${state.project.id}/batch-render`, {
+      method: "POST", body: JSON.stringify({ clips, formats }),
+    });
+    trackJob(job);
+  } catch (error) { toast(error.message, "error"); }
+  finally { batchSubmitting = false; updateBatchSummary(); }
+}
+
 /* ------------------------------------------------------------------ projects */
 
 async function renderProjects() {
@@ -539,6 +665,11 @@ async function openProject(projectId) {
 function renderProjectDetail() {
   const project = state.project;
   if (!project) return;
+  if (batchProjectId !== project.id) {
+    batchProjectId = project.id;
+    batchSelection = new Set(project.clips.slice(0, 20).map((clip) => clip.storage_id));
+  }
+  $("#batchPanel").hidden = !project.clips.length;
   $("#projectList").innerHTML = "";
   $("#projectDetail").style.display = "block";
   $("#detailTitle").textContent = project.title;
@@ -557,17 +688,20 @@ function renderProjectDetail() {
     return;
   }
   grid.innerHTML = project.clips.map((clip) => {
-    const thumb = clip.files && clip.files.thumb
-      ? `<img class="thumb" src="${mediaUrl(clip.files.thumb)}" alt="" loading="lazy" />`
+    const poster = clipThumbnailPath(clip.files);
+    const thumb = poster
+      ? `<img class="thumb" src="${mediaUrl(poster)}" alt="" loading="lazy" />`
       : `<div class="thumb skeleton"></div>`;
-    const ready = Boolean(clip.files && clip.files.mp4);
+    const ready = Boolean(clipPreviewPath(clip.files));
     const status = ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`;
     return `<article class="clip">
       <button type="button" class="clip-open" data-edit="${clip.index}" aria-label="Buka ${escapeHtml(clip.title || 'klip')} di editor">${thumb}<span class="clip-open-hint">Putar &amp; edit</span></button>
       <div class="meta">
+        <label class="clip-select"><input type="checkbox" data-batch-clip="${clip.index}" data-storage="${clip.storage_id}" ${batchSelection.has(clip.storage_id) ? "checked" : ""} />${t("clips.select")}</label>
         <strong>${escapeHtml(clip.title || "Klip " + (clip.index + 1))}</strong>
         <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · skor ${(clip.score || 0).toFixed(2)}</span>
         <span>${status} <span class="badge">${clip.crop}</span></span>
+        <div class="gallery-actions">${clipDownloadLinks(clip.files)}</div>
       </div>
       <div class="actions">
         <button class="icon-btn" data-edit="${clip.index}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>${t("common.edit")}</button>
@@ -577,6 +711,12 @@ function renderProjectDetail() {
     </article>`;
   }).join("");
 
+  updateBatchSummary();
+  grid.querySelectorAll("[data-batch-clip]").forEach((input) => input.addEventListener("change", () => {
+    if (input.checked) batchSelection.add(input.dataset.storage);
+    else batchSelection.delete(input.dataset.storage);
+    updateBatchSummary();
+  }));
   grid.querySelectorAll("[data-edit]").forEach((node) => node.addEventListener("click", () => openEditor(Number(node.dataset.edit))));
   grid.querySelectorAll("[data-render]").forEach((node) =>
     node.addEventListener("click", async () => {
@@ -1170,6 +1310,7 @@ async function refreshAll() {
     renderProjects();
   }
   if ($("#page-models").classList.contains("active")) renderModels();
+  if ($("#page-gallery").classList.contains("active")) renderGallery();
 }
 
 function pickFile(target) {
@@ -1182,7 +1323,7 @@ function pickFile(target) {
   input.type = "file";
   input.accept = "video/*,audio/*";
   input.onchange = () => {
-    if (input.files[0]) { $(target).value = input.files[0].name; onSourceChanged(); }
+    if (input.files[0]) CreatorEditor.upload(input.files[0], target).catch(error => toast(error.message, "error"));
   };
   input.click();
 }
@@ -1229,6 +1370,26 @@ async function boot() {
   $("#cloneModel").addEventListener("change", renderVoice);
   $("#ttsVoice").addEventListener("change", renderVoice);
   $("#refreshProjects").addEventListener("click", () => { state.project = null; renderProjects(); });
+  $("#refreshGallery").addEventListener("click", renderGallery);
+  $("#gallerySearch").addEventListener("input", paintGallery);
+  $("#galleryStatus").addEventListener("change", paintGallery);
+  $("#gallerySort").addEventListener("change", paintGallery);
+  $("#batchPanel").addEventListener("change", updateBatchSummary);
+  $("#selectAllClips").addEventListener("click", () => {
+    $$("#clipGrid [data-batch-clip]").forEach((input, position) => {
+      input.checked = position < 20;
+      if (input.checked) batchSelection.add(input.dataset.storage);
+      else batchSelection.delete(input.dataset.storage);
+    });
+    if ((state.project?.clips.length || 0) > 20) toast(t("batch.limit"));
+    updateBatchSummary();
+  });
+  $("#clearClipSelection").addEventListener("click", () => {
+    batchSelection.clear();
+    $$("#clipGrid [data-batch-clip]").forEach((input) => { input.checked = false; });
+    updateBatchSummary();
+  });
+  $("#batchRenderBtn").addEventListener("click", renderSelectedClips);
   $("#backBtn").addEventListener("click", () => { state.project = null; renderProjects(); });
   $("#exportBtn").addEventListener("click", async () => {
     if (!state.project) return;

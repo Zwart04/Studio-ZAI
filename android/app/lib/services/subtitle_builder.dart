@@ -1,4 +1,5 @@
 import 'text_presets.dart';
+import 'creator_tools.dart';
 // Subtitle builders: SRT and ASS (burned-in), ported from
 // core/studiozai/pipeline/subtitle.py.
 //
@@ -8,18 +9,21 @@ import 'text_presets.dart';
 // desktop tanpa perlu filter drawtext.
 
 class Caption {
-  Caption(this.start, this.end, this.text, [this.words = const []]);
+  Caption(this.start, this.end, this.text,
+      [this.words = const [], this.style = const {}]);
 
   double start;
   double end;
   String text;
   List<Map<String, dynamic>> words;
+  Map<String, dynamic> style;
 
   Map<String, dynamic> toJson() => {
         'start': double.parse(start.toStringAsFixed(3)),
         'end': double.parse(end.toStringAsFixed(3)),
         'text': text,
         'words': words,
+        'style': style,
       };
 
   static Caption fromJson(Map<String, dynamic> json) => Caption(
@@ -28,6 +32,7 @@ class Caption {
         json['text'] as String? ?? '',
         List<Map<String, dynamic>>.from((json['words'] as List? ?? const [])
             .map((e) => Map<String, dynamic>.from(e as Map))),
+        Map<String, dynamic>.from(json['style'] as Map? ?? {}),
       );
 }
 
@@ -136,6 +141,14 @@ class SubtitleBuilder {
   }) {
     final captions = <Caption>[];
     for (final segment in segments) {
+      final words = (segment['words'] as List? ?? [])
+          .map((w) => Map<String, dynamic>.from(w))
+          .toList();
+      if (words.isNotEmpty) {
+        captions
+            .addAll(groupWords(words, maxWords: maxWords, maxChars: maxChars));
+        continue;
+      }
       final text = (segment['text'] as String? ?? '').trim();
       if (text.isEmpty) continue;
       final start = (segment['start'] as num).toDouble();
@@ -215,17 +228,6 @@ class SubtitleBuilder {
         '$marginH,$marginH,$marginV,1';
   }
 
-  static String _karaoke(Caption caption, Map<String, dynamic> style) {
-    if (style['karaoke'] != true || caption.words.isEmpty) {
-      return _escape(caption.text);
-    }
-    return caption.words.map((w) {
-      final duration =
-          ((w['end'] as num).toDouble() - (w['start'] as num).toDouble()) * 100;
-      return '{\\k${duration.round().clamp(1, 100000)}}${_escape(w['word'] as String)}';
-    }).join(' ');
-  }
-
   /// Berkas ASS lengkap: caption + item track teks (template).
   static String toAss(
     List<Caption> captions, {
@@ -271,10 +273,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
 
     final events = <String>[];
     for (final caption in position == 'off' ? <Caption>[] : captions) {
-      final anim = style['anim'] as String? ?? '';
       events.add('Dialogue: 0,${_assTime(caption.start)},'
           '${_assTime(caption.end > caption.start ? caption.end : caption.start + 0.2)},'
-          'Default,,0,0,0,,$anim${_karaoke(caption, style)}');
+          'Default,,0,0,0,,${CreatorTools.captionText(caption.toJson(), style, width, height)}');
     }
     for (final item in textItems) {
       final text = (item['text'] as String? ?? '').trim();

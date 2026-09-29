@@ -2,9 +2,13 @@
 
 <p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.8.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.9.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
 
 ![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/04-editor.jpg)
+
+## Baru di 1.9
+
+Deteksi podcast lokal, review momen sebelum render, caption per kata, crop/keyframe dan pelacakan wajah, terjemahan lokal dengan versi bahasa tersimpan, serta galeri dan batch tiga rasio di Windows dan Android. [Panduan lengkap dan batas fitur](docs/CREATOR.md) · [Pengujian rilis](docs/RELEASE-1.9.0.md).
 
 ## Buat video dari ide sampai siap ekspor
 
@@ -16,16 +20,16 @@
 
 **Editor dengan timeline.** Video langsung dapat diputar, panel pengaturan ada di samping, dan timeline ada di bawah. Geser blok untuk memindahkan teks/media, tarik tepinya untuk mengubah durasi, atau letakkan berkas ke track. Trim, split, ukuran asli/9:16/1:1/16:9, musik, dan subtitle ada di layar yang sama. Buat subtitle AI untuk satu klip tanpa perlu menranskripsi ulang seluruh video panjang; terapkan salah satu dari 24 gaya atau simpan tipografi buatanmu.
 
-**Lokal lebih dulu.** File lokal, editor, transkripsi, subtitle, suara, dan gambar lokal berjalan tanpa API key setelah model dipasang. Model tidak dibundel dalam APK/EXE agar paket awal tetap lebih kecil. Unduhan model dan video dari tautan tentu membutuhkan internet. OpenAI, Anthropic, DeepSeek, dan endpoint kompatibel tersedia sebagai pilihan untuk tugas AI yang mendukungnya.
+**Lokal lebih dulu.** File lokal, editor, transkripsi, subtitle, suara, dan gambar lokal berjalan tanpa API key setelah model dipasang. Model tidak dibundel dalam APK/EXE agar paket awal tetap lebih kecil. Unduhan model dan video dari tautan tentu membutuhkan internet. Groq, Gemini, OpenAI, Anthropic, DeepSeek, dan endpoint kompatibel tersedia sebagai pilihan untuk tugas AI yang mendukungnya.
 
 ## Unduh
 
 | Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
-| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/StudioZAI-1.8.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/StudioZAI-1.9.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/StudioZAI-1.9.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan pengujian v1.8.0](docs/RELEASE-1.8.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.8.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
+[Catatan pengujian v1.9.0](docs/RELEASE-1.9.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.9.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 
@@ -56,11 +60,13 @@ Alur pemilihan klip diuji dengan [video review speaker nyata 80,5 menit](https:/
 
 ## Kembangkan
 
+**Galeri klip lintas proyek** dan **ekspor batch 9:16 / 1:1 / 16:9** tersedia dalam paket Windows dan Android v1.9.0. [Panduan penggunaan](docs/CLIP_GALLERY.md).
+
 ```powershell
 git clone https://github.com/Zwart04/Studio-ZAI.git
 cd Studio-ZAI
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,desktop,dev]"
+.venv/Scripts/python.exe -m pip install -e "core[media,asr,tts,face,translation,desktop,dev]"
 .venv/Scripts/python.exe -m studiozai serve
 ```
 

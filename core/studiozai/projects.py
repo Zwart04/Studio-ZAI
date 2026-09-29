@@ -40,6 +40,8 @@ class Clip:
     voice_id: str = ""
     voice_clone_sample: str = ""
     captions: list[dict[str, Any]] = field(default_factory=list)
+    caption_variants: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    caption_language: str = ""
     files: dict[str, str] = field(default_factory=dict)
     status: str = "draft"
     # Editor timeline multi-track (video/media/teks/audio). None = proyek lama,
@@ -55,6 +57,12 @@ class Clip:
         data = asdict(self)
         data["duration"] = self.duration
         return data
+
+    def invalidate_renders(self) -> None:
+        for key in ("mp4", "thumb", "mp4_portrait", "mp4_square", "mp4_landscape",
+                    "thumb_portrait", "thumb_square", "thumb_landscape"):
+            self.files.pop(key, None)
+        self.status = "draft"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Clip:
@@ -192,6 +200,12 @@ class Project:
     def update_clip(self, index: int, values: dict[str, Any]) -> Clip:
         self.snapshot()
         clip = self.clip(index)
+        if any(
+            key not in {"title", "index", "files", "storage_id"}
+            and hasattr(clip, key) and getattr(clip, key) != value
+            for key, value in values.items()
+        ):
+            clip.invalidate_renders()
         for key, value in values.items():
             if hasattr(clip, key) and key not in {"index", "files", "storage_id"}:
                 setattr(clip, key, value)
@@ -241,12 +255,17 @@ class Project:
         for part in (clip, right):
             offset = part.start - original["start"]
             part.captions = trim_captions(original["captions"], offset, offset + part.duration)
+            part.caption_variants = {lang: trim_captions(rows, offset, offset + part.duration)
+                                     for lang, rows in original["caption_variants"].items()}
             if original["timeline"]:
                 part.timeline = copy.deepcopy(original["timeline"])
                 for track in part.timeline.get("tracks", []):
                     if track.get("kind") == "video":
                         for item in track.get("items", []):
                             item.update(start=0, end=part.duration, srcStart=part.start)
+                            if item.get("framing"):
+                                from .pipeline.framing import slice_framing
+                                item["framing"] = slice_framing(item["framing"], offset, part.duration)
                     else:
                         track["items"] = trim_captions(track.get("items", []), offset, offset + part.duration)
         position = self.clips.index(clip)

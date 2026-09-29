@@ -347,7 +347,7 @@ const StudioTimeline = (() => {
       const secondsPerPx = this.duration() / lane.getBoundingClientRect().width;
       const startX = event.clientX;
       const timelineDuration = this.duration();
-      const origin = { start: item.start, end: item.end, srcStart: item.srcStart || 0, captions: JSON.parse(JSON.stringify(this.clip.captions || [])) };
+      const origin = { start: item.start, end: item.end, srcStart: item.srcStart || 0, captions: JSON.parse(JSON.stringify(this.clip.captions || [])), framing: JSON.parse(JSON.stringify(item.framing || {})), variants: JSON.parse(JSON.stringify(this.clip.caption_variants || {})) };
       this.seek(origin.start);
 
       const onMove = (moveEvent) => {
@@ -370,6 +370,8 @@ const StudioTimeline = (() => {
           this.clip.start=item.srcStart;this.clip.end=item.srcStart+item.end;
           const shift=rows=>rows.filter(c=>c.end>delta && c.start<delta+item.end).map(c=>({...c,start:Math.max(0,c.start-delta),end:Math.min(item.end,c.end-delta),...(c.words?{words:shift(c.words)}:{})}));
           this.clip.captions=shift(origin.captions);
+          this.clip.caption_variants=Object.fromEntries(Object.entries(origin.variants).map(([lang,rows])=>[lang,shift(rows)]));
+          item.framing=CreatorEditor.shiftFraming(origin.framing,delta,item.end);
         }
         this.renderTracks();
         this.renderInspector();
@@ -515,16 +517,16 @@ const StudioTimeline = (() => {
       const options = (values, value) => values.map(([id,label]) => `<option value="${id}" ${id === value ? 'selected' : ''}>${label}</option>`).join('');
       host.innerHTML = `<div class="inspector-tabs">${[['clip','Klip'],['subtitles','Subtitle'],['element','Elemen']].map(([id,label]) => `<button data-inspector="${id}" class="${this.inspectorTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
         <section class="inspector-section" ${this.inspectorTab !== 'clip' ? 'hidden' : ''}>
-          <h3>Video & audio</h3><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
+          <h3>Video & audio</h3><label>Judul / hook<input id="tlHook" value="${escapeHtml(clip.title || '')}"></label><button class="ghost" data-creator="crop">Atur crop & keyframe</button><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
           <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
-          <label>Penyesuaian gambar<select id="tlCrop">${options([['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
+          <label>Penyesuaian gambar<select id="tlCrop">${options([['manual','Manual · keyframe'],['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
           <p class="field-help">Fit mempertahankan seluruh gambar. Ukuran asli mengikuti rasio video sumber.</p>
           <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlClipStart" value="${clip.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlClipEnd" value="${clip.end}"></label></div>
           <label>Audio<select id="tlAudio">${options([['original','Suara asli video'],['voice','Ganti dengan narasi'],['mix','Campur suara & narasi']],clip.audio_mode)}</select></label>
           <label>Naskah narasi<textarea id="tlNarration" rows="3" placeholder="Tulis kalimat untuk sulih suara…"></textarea></label><button class="ghost" data-tl-clip="tts">Buat suara dari teks</button>
         </section>
         <section class="inspector-section" ${this.inspectorTab !== 'subtitles' ? 'hidden' : ''}>
-          <h3>Gaya subtitle</h3><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Perubahan diperbarui otomatis pada video.</p>
+          <h3>Gaya subtitle</h3><button class="ghost" data-creator="words">Editor per kata & terjemahan</button><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Perubahan diperbarui otomatis pada video.</p>
           <button class="caption-generate" data-tl="captions">Buat subtitle otomatis</button>
           <label>Posisi subtitle<select id="tlSubtitlePosition">${options([['bottom','Bawah'],['middle','Tengah'],['top','Atas'],['off','Tanpa subtitle tambahan']],clip.subtitle_position || 'bottom')}</select></label>
           <p class="field-help">Subtitle yang sudah menyatu dengan gambar sumber tidak bisa dihapus. Pilih tanpa subtitle tambahan atau pindahkan posisi agar tidak bertumpuk.</p>
@@ -547,6 +549,9 @@ const StudioTimeline = (() => {
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
       const selected = this.selectedItem();
+      host.querySelector('#tlHook')?.addEventListener('input', e => { this.clip.title = e.target.value; });
+      host.querySelector('[data-creator="words"]')?.addEventListener('click', () => CreatorEditor.words(this));
+      host.querySelector('[data-creator="crop"]')?.addEventListener('click', () => CreatorEditor.crop(this));
       host.querySelector('#tlSubtitlePosition')?.addEventListener('change',event=>{this.clip.subtitle_position=event.target.value;});
       host.querySelector('[data-tl="split"]')?.addEventListener('click',async()=>{
         try {
@@ -575,9 +580,10 @@ const StudioTimeline = (() => {
         const delta = this.clip.start - oldStart, duration = this.clip.end - this.clip.start;
         const shift = rows => (rows || []).filter(c => c.end > delta && c.start < delta + duration).map(c => ({...c,start:Math.max(0,c.start-delta),end:Math.min(duration,c.end-delta),...(c.words ? {words:shift(c.words)} : {})}));
         this.clip.captions = shift(this.clip.captions);
+        this.clip.caption_variants=Object.fromEntries(Object.entries(this.clip.caption_variants||{}).map(([lang,rows])=>[lang,shift(rows)]));
         const text = host.querySelector('#tlCaptions'); if (text) text.value = captionsToText(this.clip.captions);
         const base = this.items("video")[0];
-        if (base) { base.srcStart = this.clip.start; base.start = 0; base.end = this.clip.end - this.clip.start; }
+        if (base) { base.framing = CreatorEditor.shiftFraming(base.framing,delta,duration); base.srcStart = this.clip.start; base.start = 0; base.end = this.clip.end - this.clip.start; }
         this.renderTracks();
       };
       if (clipStart) clipStart.addEventListener("change", updateTrim);
@@ -601,7 +607,10 @@ const StudioTimeline = (() => {
 
       const captions = host.querySelector("#tlCaptions");
       if (captions) captions.addEventListener("input", () => {
-        this.clip.captions = textToCaptions(captions.value);
+        this.clip.captions = textToCaptions(captions.value).map((row, i) => {
+          const old = this.clip.captions[i];
+          return old && old.text === row.text && old.start === row.start && old.end === row.end ? old : row;
+        });
       });
 
       const narration = host.querySelector("#tlNarration");
@@ -706,6 +715,9 @@ const StudioTimeline = (() => {
         subtitle_position: this.clip.subtitle_position,
         audio_mode: this.clip.audio_mode,
         captions: this.clip.captions,
+        caption_variants: this.clip.caption_variants || {},
+        caption_language: this.clip.caption_language || '',
+        title: this.clip.title,
         start: this.clip.start,
         end: this.clip.end,
       };

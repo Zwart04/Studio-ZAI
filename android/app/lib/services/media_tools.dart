@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'creator_tools.dart';
 import 'dart:typed_data';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -121,11 +122,12 @@ class MediaTools {
   }
 
   static String cropFilter(String mode, int width, int height,
-      {String canvas = 'portrait'}) {
+      {String canvas = 'portrait', Map<String,dynamic> framing = const {}}) {
     final size = canvasSize(canvas, width, height);
     final outW = size[0];
     final outH = size[1];
     final target = outW / outH;
+    if(mode == 'manual') return CreatorTools.cropFilter(framing,width,height,outW,outH);
 
     // "fit"/"none": tampilkan SELURUH frame (letterbox). Ini yang dipakai kalau
     // video sumber punya teks penting di tepi — crop 9:16 akan memotongnya.

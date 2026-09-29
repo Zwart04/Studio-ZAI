@@ -14,7 +14,7 @@ class CloudSettingsScreen extends StatelessWidget {
           _ProviderForm(
               kind: 'ai',
               title: 'AI teks · pemilih momen',
-              providers: ['openai', 'anthropic', 'deepseek', 'compatible']),
+              providers: ['groq', 'gemini', 'openai', 'anthropic', 'deepseek', 'compatible']),
           _ProviderForm(
               kind: 'image',
               title: 'Gambar',

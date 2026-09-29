@@ -122,7 +122,7 @@ def render_timeline(
     crop_mode = str(base.get("crop", "center"))
     canvas = str(base.get("canvas", "portrait"))
     out_w, out_h = crop_mod.canvas_size(canvas, src_size[0], src_size[1])
-    plan = crop_mod.plan(crop_mode, src_size[0], src_size[1], out_size=(out_w, out_h))
+    plan = crop_mod.plan(crop_mode, src_size[0], src_size[1], out_size=(out_w, out_h), framing=base.get("framing"))
 
     inputs: list[str] = ["-ss", f"{offset:.3f}", "-t", f"{duration:.3f}", "-i", str(source)]
     filters: list[str] = []

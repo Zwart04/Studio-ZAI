@@ -15,6 +15,8 @@ PROVIDERS = {
     "sdxs_local": {"label": "Di perangkat · SDXS-512", "url": "", "image": True},
     "openai": {"label": "OpenAI", "url": "https://api.openai.com/v1", "text": True, "image": True, "speech": True},
     "anthropic": {"label": "Anthropic", "url": "https://api.anthropic.com/v1", "text": True},
+    "groq": {"label": "Groq", "url": "https://api.groq.com/openai/v1", "text": True},
+    "gemini": {"label": "Google Gemini", "url": "https://generativelanguage.googleapis.com/v1beta/openai", "text": True},
     "deepseek": {"label": "DeepSeek", "url": "https://api.deepseek.com", "text": True},
     "compatible": {"label": "API kompatibel / Ollama", "url": "http://127.0.0.1:11434/v1", "text": True},
     "sd_local": {"label": "Stable Diffusion lokal", "url": "http://127.0.0.1:1234/v1", "image": True},

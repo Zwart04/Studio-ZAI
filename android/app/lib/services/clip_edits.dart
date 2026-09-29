@@ -1,5 +1,6 @@
 import '../models.dart';
 import 'timeline.dart';
+import 'creator_tools.dart';
 
 /// Slice an edited clip without changing its saved source or subtitle style.
 Clip sliceClip(Clip original, double start, double end, int index) {
@@ -13,15 +14,9 @@ Clip sliceClip(Clip original, double start, double end, int index) {
   clip.end = end;
   clip.status = 'draft';
   clip.files = {};
-  clip.captions = original.captions
-      .where((c) =>
-          (c['end'] as num) > offset && (c['start'] as num) < offset + length)
-      .map((c) => {
-            ...c,
-            'start': ((c['start'] as num) - offset).clamp(0.0, length),
-            'end': ((c['end'] as num) - offset).clamp(0.0, length)
-          })
-      .toList();
+  clip.captions = CreatorTools.trimRows(original.captions, offset, length);
+  clip.captionVariants = original.captionVariants.map((lang, rows) =>
+      MapEntry(lang, CreatorTools.trimRows(rows, offset, length)));
   if (original.timeline != null) {
     final timeline = Timeline.fromJson(original.timeline!);
     for (final track in timeline.tracks) {
@@ -30,6 +25,7 @@ Clip sliceClip(Clip original, double start, double end, int index) {
           item.start = 0;
           item.end = length;
           item.srcStart = start;
+          item.framing = CreatorTools.trimFraming(item.framing, offset, length);
         }
       } else {
         track.items = track.items

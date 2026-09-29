@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../models.dart';
+import 'creator_tools.dart';
 import 'media_tools.dart';
 import 'wav_chunks.dart';
 import 'model_manager.dart';
@@ -13,12 +14,14 @@ import 'timeline.dart';
 import 'timeline_render.dart';
 
 class ClipCandidate {
-  ClipCandidate(this.start, this.end, this.score, this.reason);
+  ClipCandidate(this.start, this.end, this.score, this.reason,
+      [this.title = '']);
 
   final double start;
   final double end;
   final double score;
   final String reason;
+  final String title;
 
   double get duration => end - start;
 }
@@ -198,6 +201,7 @@ class Pipeline {
     double minLength = 8,
     double maxLength = 330,
   }) {
+    count = CreatorTools.autoCount(duration, count);
     final rms = envelope ?? rmsEnvelope(samples, sampleRate);
     final silences = silenceIntervals(samples, sampleRate, envelope: rms);
     final windows = _speechWindows(segments, duration, maxLength);
@@ -309,8 +313,17 @@ class Pipeline {
       if (segment.end <= start || segment.start >= end) continue;
       rows.add({
         'start': math.max(0.0, segment.start - start),
-        'end': math.max(0.2, segment.end - start),
+        'end': math.min(end - start, segment.end - start),
         'text': segment.text,
+        'words': segment.words
+            .where(
+                (w) => (w['end'] as num) > start && (w['start'] as num) < end)
+            .map((w) => {
+                  ...w,
+                  'start': ((w['start'] as num) - start).clamp(0, end - start),
+                  'end': ((w['end'] as num) - start).clamp(0, end - start)
+                })
+            .toList(),
       });
     }
     return SubtitleBuilder.captionsFromSegments(rows);
@@ -368,20 +381,29 @@ class Pipeline {
     return MediaTools.canvasSize(canvas, width, height);
   }
 
-  Future<Clip> renderClip(Project project, Clip clip,
-      void Function(double, String) onProgress) async {
+  Future<Clip> renderClip(
+      Project project, Clip clip, void Function(double, String) onProgress,
+      {String? canvasOverride}) async {
     if (clip.audioMode != 'original' &&
         (clip.files['voice'] == null ||
             !File(clip.files['voice']!).existsSync())) {
       throw Exception(
           'Buat narasi TTS terlebih dahulu sebelum memilih audio TTS.');
     }
-    final directory = clipDir(clip.index);
+    final directory = canvasOverride == null
+        ? clipDir(clip.index)
+        : (Directory(
+            '${clipDir(clip.index).path}/exports/${DateTime.now().microsecondsSinceEpoch}_$canvasOverride')
+          ..createSync(recursive: true));
     final resolution = await MediaTools.resolution(project.source);
     final sourceWidth = resolution['width'] ?? 0;
     final sourceHeight = resolution['height'] ?? 0;
     final timeline = timelineFor(project, clip);
-    final useTimeline = clip.timeline != null && clip.timeline!.isNotEmpty;
+    if (canvasOverride != null) {
+      timeline.trackOf('video')!.items.first.canvas = canvasOverride;
+    }
+    final useTimeline = canvasOverride != null ||
+        clip.timeline != null && clip.timeline!.isNotEmpty;
 
     final size = _canvasOf(timeline, clip, sourceWidth, sourceHeight);
     final textItems = timeline.trackOf('text')?.items ?? const <TimelineItem>[];
@@ -422,9 +444,13 @@ class Pipeline {
     await MediaTools.thumbnail(output, thumb, clip.duration / 2);
     clip.files = {
       ...clip.files,
-      'mp4': output,
-      'thumb': thumb,
-      if (assPath != null) 'ass': assPath
+      canvasOverride == null ? 'mp4' : 'mp4_$canvasOverride': output,
+      canvasOverride == null ? 'thumb' : 'thumb_$canvasOverride': thumb,
+      if (assPath != null) ...{
+        canvasOverride == null ? 'ass' : 'ass_$canvasOverride': assPath,
+        canvasOverride == null ? 'srt' : 'srt_$canvasOverride':
+            assPath.replaceFirst(RegExp(r'\.ass$'), '.srt'),
+      }
     };
     clip.status = 'rendered';
     onProgress(100, 'klip ${clip.index + 1} selesai');

@@ -10,6 +10,8 @@ class CloudAI {
   static const providers = {
     'openai': 'https://api.openai.com/v1',
     'anthropic': 'https://api.anthropic.com/v1',
+    'groq': 'https://api.groq.com/openai/v1',
+    'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
     'deepseek': 'https://api.deepseek.com',
     'compatible': 'http://127.0.0.1:11434/v1',
     'sd_local': 'http://127.0.0.1:1234/v1',

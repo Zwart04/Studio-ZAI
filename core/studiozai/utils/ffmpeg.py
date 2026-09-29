@@ -122,19 +122,30 @@ def run_ffmpeg(
     )
     stderr_lines: list[str] = []
     assert proc_handle.stderr is not None
-    for line in proc_handle.stderr:
-        stderr_lines.append(line)
-        if progress_cb and total_duration:
-            match = TIME_RE.search(line)
-            if match:
-                h, m, s, frac = match.groups()
-                seconds = int(h) * 3600 + int(m) * 60 + int(s) + float(f"0.{frac or 0}")
-                progress_cb(min(99.0, max(0.0, seconds / total_duration * 100)))
     try:
-        proc_handle.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
+        for line in proc_handle.stderr:
+            stderr_lines.append(line)
+            if progress_cb and total_duration:
+                match = TIME_RE.search(line)
+                if match:
+                    h, m, s, frac = match.groups()
+                    seconds = int(h) * 3600 + int(m) * 60 + int(s) + float(f"0.{frac or 0}")
+                    progress_cb(min(99.0, max(0.0, seconds / total_duration * 100)))
+        try:
+            proc_handle.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc_handle.kill()
+            proc_handle.wait()
+    except BaseException:
+        # Cancellation raised by a progress callback must also stop the encoder.
         proc_handle.kill()
-    proc.forget(proc_handle)
+        proc_handle.wait()
+        raise
+    finally:
+        proc.forget(proc_handle)
+        proc_handle.stderr.close()
+        if proc_handle.stdout:
+            proc_handle.stdout.close()
     if progress_cb and proc_handle.returncode == 0:
         progress_cb(100.0)
     return RunResult(proc_handle.returncode, "", "".join(stderr_lines[-200:]), cmd)

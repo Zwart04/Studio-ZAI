@@ -33,3 +33,5 @@ flutter build apk --release --split-per-abi
 | `app/src/main/AndroidManifest.xml` | Izin internet + baca media, nama aplikasi "Studio ZAI" |
 
 > Jika `flutter create` memakai `android/` yang sudah ada, langkah 1 bisa dilewati — cukup pastikan `MainActivity.kt` dan `AndroidManifest.xml` sudah tergantikan, lalu `flutter clean && flutter pub get`.
+
+Creator tools menggunakan `com.google.mlkit:translate:17.0.3` di `android/app/build.gradle.kts`. Jika membuat ulang Gradle, tambahkan `dependencies { implementation("com.google.mlkit:translate:17.0.3") }`. Salin juga `CreatorTools.kt`; model terjemahan diunduh saat pertama digunakan.

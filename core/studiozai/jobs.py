@@ -95,9 +95,10 @@ class JobManager:
 
     def _run(self, job: Job, fn: Callable[[Job], dict[str, Any] | None]) -> None:
         with self._slots:
-            job.status = "running"
-            job.report(1.0, "mulai")
             try:
+                job.check_cancel()
+                job.status = "running"
+                job.report(1.0, "mulai")
                 result = fn(job) or {}
                 job.result = result
                 job.status = "done"

@@ -5,6 +5,7 @@ import subprocess
 import time
 import urllib.request
 import uuid
+from studiozai import __version__
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +61,7 @@ if __name__ == '__main__':
                 time.sleep(.5)
         else:
             raise TimeoutError('Packaged server did not start')
-        assert health['version'] == '1.8.0', health
+        assert health['version'] == __version__, health
         voices = request('/api/voices')
         assert voices['available']['piper'] and voices['available']['zipvoice'], voices
         assert 'anthropic' in request('/api/ai/providers')['providers']
@@ -71,7 +72,7 @@ if __name__ == '__main__':
                 'provider': 'sdxs_local',
             }))['image']
             assert Path(generated).read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
-        with urllib.request.urlopen(BASE + '/timeline.js?v=1.8.0') as response:
+        with urllib.request.urlopen(BASE + '/timeline.js?v=' + __version__) as response:
             script = response.read().decode()
             assert 'schedulePreview()' in script and 'data-tl="preview"' not in script
         source = next((ROOT / 'build/readme-demo-v18-release/projects').glob('*/source/studio-session.mp4'))

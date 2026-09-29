@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import __version__, ai, config, credentials, jobs, models, projects, service, typography
 from .pipeline import download as download_pipeline
@@ -28,7 +28,10 @@ class NewProject(BaseModel):
 
 class ProcessRequest(BaseModel):
     source: str
-    count: int = 5
+    count: int = Field(default=0, ge=0)
+    analysis_mode: Literal["auto", "podcast"] = "auto"
+    review_first: bool = True
+    formats: list[Literal["portrait", "square", "landscape"]] = Field(default_factory=list)
     min_len: float = 0.0
     max_len: float = 0.0
     use_transcript: bool = True
@@ -47,6 +50,64 @@ class LinkInfoRequest(BaseModel):
     url: str
 
 
+class TranslateRequest(BaseModel):
+    captions: list[dict[str, Any]]
+    source: str = "id"
+    target: str = "en"
+
+
+class TrackFaceRequest(BaseModel):
+    start: float
+    end: float
+    x: float = .5
+
+
+@app.post("/api/source-upload")
+async def upload_source(request: Request) -> dict[str, str]:
+    import uuid
+    from urllib.parse import unquote
+    name = sanitize_filename(unquote(request.headers.get("x-filename", "video.mp4")), "video.mp4")
+    directory = config.data_dir() / "imports"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{uuid.uuid4().hex[:12]}-{name}"
+    try:
+        with path.open("wb") as output:
+            async for chunk in request.stream():
+                output.write(chunk)
+        if path.stat().st_size == 0:
+            raise HTTPException(400, "Berkas kosong")
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return {"path": str(path)}
+
+
+@app.post("/api/projects/{project_id}/translate")
+def translate_captions(project_id: str, payload: TranslateRequest) -> dict[str, Any]:
+    from .pipeline import translation
+    project = _project(project_id)
+    if payload.source not in translation.LANGUAGES or payload.target not in translation.LANGUAGES:
+        raise HTTPException(400, "Bahasa tidak didukung")
+    def run(job):
+        rows = translation.translate_captions(payload.captions, payload.source, payload.target,
+            lambda p, m: job.report(p, "terjemahan", m))
+        files = subtitle.write_subtitles([subtitle.Caption(**r) for r in rows],
+            project.root / "translations" / job.id, payload.target)
+        return {"captions": rows, "files": files}
+    return jobs.MANAGER.submit("translation", f"Terjemahan {payload.source} → {payload.target}", run).as_dict()
+
+
+@app.post("/api/projects/{project_id}/track-face")
+def track_face(project_id: str, payload: TrackFaceRequest) -> dict[str, Any]:
+    from .pipeline.framing import follow_face
+    project = _project(project_id)
+    if not 0 <= payload.start < payload.end <= project.duration or project.media_path() is None:
+        raise HTTPException(400, "Rentang video tidak valid")
+    return jobs.MANAGER.submit("framing", "Mengikuti wajah", lambda job: follow_face(
+        str(project.media_path()), payload.start, payload.end, payload.x,
+        lambda p, m: job.report(p, "crop", m))).as_dict()
+
+
 class ClipUpdate(BaseModel):
     start: float | None = None
     end: float | None = None
@@ -59,6 +120,8 @@ class ClipUpdate(BaseModel):
     original_volume: float | None = None
     voice_volume: float | None = None
     captions: list[dict[str, Any]] | None = None
+    caption_variants: dict[str, list[dict[str, Any]]] | None = None
+    caption_language: str | None = None
     # Editor timeline multi-track (video/media/teks/audio).
     timeline: dict[str, Any] | None = None
 
@@ -71,6 +134,11 @@ class ManualClip(BaseModel):
     start: float
     end: float
     canvas: str = "original"
+
+
+class BatchRenderRequest(BaseModel):
+    clips: list[int]
+    formats: list[str]
 
 
 class TtsRequest(BaseModel):
@@ -284,6 +352,33 @@ def list_projects() -> list[dict[str, Any]]:
     ]
 
 
+@app.get("/api/gallery")
+def clip_gallery() -> list[dict[str, Any]]:
+    """Browse saved clips across projects without loading their full timelines."""
+    gallery: list[dict[str, Any]] = []
+    for project in projects.list_projects():
+        for clip in project.clips:
+            available = {
+                key: path for key, path in clip.files.items()
+                if key in {"mp4", "mp4_portrait", "mp4_square", "mp4_landscape",
+                           "thumb", "thumb_portrait", "thumb_square", "thumb_landscape"}
+                and Path(path).is_file()
+            }
+            gallery.append({
+                "project_id": project.id,
+                "project_title": project.title,
+                "index": clip.index,
+                "storage_id": clip.storage_id,
+                "title": clip.title or f"Klip {clip.index + 1}",
+                "start": clip.start,
+                "end": clip.end,
+                "score": clip.score,
+                "updated": project.updated,
+                "files": available,
+            })
+    return sorted(gallery, key=lambda item: item["updated"], reverse=True)
+
+
 @app.post("/api/projects")
 def create_project(payload: NewProject) -> dict[str, Any]:
     project = projects.Project.create(payload.title, payload.source, language=payload.lang)
@@ -380,6 +475,7 @@ def _process_task(project_id: str, payload: ProcessRequest):
             max_len=payload.max_len,
             use_llm=payload.use_llm,
             use_transcript=payload.use_transcript,
+            analysis_mode=payload.analysis_mode,
             job=job,
         )
         for clip in list(project.clips):
@@ -399,7 +495,12 @@ def _process_task(project_id: str, payload: ProcessRequest):
                     except Exception as exc:  # noqa: BLE001 - narasi opsional, tetap render klipnya
                         job.report(60.0, "sulih suara gagal", str(exc)[:140])
             project.save()
-            service.render_clip(project, clip, job=job)
+            if not payload.review_first:
+                if payload.formats:
+                    for fmt in dict.fromkeys(payload.formats):
+                        service.render_clip(project, clip, job=job, canvas_override=fmt)
+                else:
+                    service.render_clip(project, clip, job=job)
         return {"clips": len(project.clips), "project": projects.load_project(project_id).as_dict()}
 
     return run
@@ -467,6 +568,82 @@ def render_clip(project_id: str, index: int) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     job = jobs.MANAGER.submit("render", f"Render klip {index + 1}", _render_task(project_id, index))
     return job.as_dict()
+
+
+@app.post("/api/projects/{project_id}/batch-render")
+def batch_render(project_id: str, payload: BatchRenderRequest) -> dict[str, Any]:
+    project = _project(project_id)
+    clip_ids = list(dict.fromkeys(payload.clips))
+    formats = list(dict.fromkeys(payload.formats))
+    if not clip_ids or not formats or len(formats) > 3:
+        raise HTTPException(400, "Pilih minimal satu klip dan satu format")
+    if any(fmt not in {"portrait", "square", "landscape"} for fmt in formats):
+        raise HTTPException(400, "Format kanvas tidak valid")
+    try:
+        for index in clip_ids:
+            project.clip(index)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if project.media_path() is None:
+        raise HTTPException(400, "Video sumber tidak ditemukan")
+
+    # Capture storage IDs and edits now: queued work must not silently switch to
+    # a different clip if another clip is removed or reordered before it starts.
+    selected = [project.clip(index) for index in clip_ids]
+
+    def render_state(clip: projects.Clip) -> dict[str, Any]:
+        values = {key: value for key, value in clip.as_dict().items()
+                  if key not in {"index", "files", "status", "title"}}
+        values["voice_file"] = clip.files.get("voice")
+        if values["voice_file"]:
+            try:
+                stat = Path(values["voice_file"]).stat()
+                values["voice_revision"] = (stat.st_mtime_ns, stat.st_size)
+            except OSError:
+                values["voice_revision"] = None
+        return values
+
+    expected = {clip.storage_id: render_state(clip) for clip in selected}
+
+    def run(job: jobs.Job) -> dict[str, Any]:
+        total = len(clip_ids) * len(formats)
+        exports: list[dict[str, Any]] = []
+
+        class Progress:
+            def __init__(self, position: int, index: int, fmt: str):
+                self.position = position
+                label = {"portrait": "9:16", "square": "1:1", "landscape": "16:9"}[fmt]
+                self.label = f"{position + 1}/{total} · Klip {index + 1} · {label}"
+
+            def report(self, progress: float, stage: str = "", message: str = "") -> None:
+                fraction = max(0.0, min(1.0, (progress - 60) / 40))
+                job.report(5 + 90 * (self.position + fraction) / total, "render batch", self.label)
+
+        for position, (clip, fmt) in enumerate(
+            (clip, fmt) for clip in selected for fmt in formats
+        ):
+            job.check_cancel()
+            current = projects.load_project(project_id)
+            latest = next((item for item in current.clips if item.storage_id == clip.storage_id), None)
+            if latest is None or render_state(latest) != expected[clip.storage_id]:
+                raise RuntimeError("Klip berubah saat menunggu. Pilih kembali klip lalu ulangi ekspor.")
+            files = service.render_clip(
+                project, clip, job=Progress(position, clip.index, fmt),
+                canvas_override=fmt, persist=False,
+            )
+            job.check_cancel()
+            current = projects.load_project(project_id)
+            latest = next((item for item in current.clips if item.storage_id == clip.storage_id), None)
+            if latest is None or render_state(latest) != expected[clip.storage_id]:
+                raise RuntimeError("Klip berubah saat dirender. Ulangi ekspor untuk memakai edit terbaru.")
+            latest.files[f"mp4_{fmt}"] = files[f"mp4_{fmt}"]
+            if files.get(f"thumb_{fmt}"):
+                latest.files[f"thumb_{fmt}"] = files[f"thumb_{fmt}"]
+            current.save()
+            exports.append({"index": latest.index, "format": fmt, "path": files[f"mp4_{fmt}"]})
+        return {"exports": exports, "project": project_id}
+
+    return jobs.MANAGER.submit("batch-render", "Render beberapa format", run).as_dict()
 
 
 def _render_task(project_id: str, index: int):

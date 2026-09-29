@@ -1,4 +1,6 @@
-# Fitur Studio ZAI 1.8
+# Fitur Studio ZAI 1.9
+
+[Creator: podcast, kata, crop, terjemahan, galeri dan batch di Windows/Android](CREATOR.md).
 
 | Fitur | Windows | Android |
 |---|---|---|
@@ -30,4 +32,4 @@ Caption hasil render tidak ditimpa track pemutar kedua. Teks yang sudah menyatu 
 
 Sumber unduhan disimpan di proyek. Hapus proyek membuang sumber dan hasil miliknya; file asal eksternal dipertahankan. Cache hanya data sementara.
 
-HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.8.0.md).
+HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.9.0.md).

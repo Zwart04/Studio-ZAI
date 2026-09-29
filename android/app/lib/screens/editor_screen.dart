@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../services/subtitle_builder.dart';
+import '../services/creator_tools.dart';
 import '../services/timeline.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
@@ -17,6 +18,7 @@ import '../widgets/preview_player.dart';
 import '../widgets/timeline_view.dart';
 import '../widgets/typography_editor.dart';
 import 'models_screen.dart';
+import 'creator_screen.dart';
 
 /// Editor klip: pratinjau + timeline multi-track (video/media/teks/audio).
 class EditorScreen extends StatefulWidget {
@@ -45,6 +47,7 @@ class _EditorScreenState extends State<EditorScreen> {
   String _fingerprint() => jsonEncode([
         _timeline.toJson(),
         _captions.text,
+        widget.clip.captions,
         widget.clip.subtitlePreset,
         widget.clip.subtitlePosition,
         widget.clip.audioMode
@@ -98,7 +101,17 @@ class _EditorScreenState extends State<EditorScreen> {
       .join('\n');
 
   List<Map<String, dynamic>> _textToCaptions(String value) {
-    return SubtitleBuilder.parseEditorDraft(value);
+    return SubtitleBuilder.parseEditorDraft(value).asMap().entries.map((e) {
+      final old = e.key < widget.clip.captions.length
+          ? widget.clip.captions[e.key]
+          : null;
+      return old != null &&
+              old['text'] == e.value['text'] &&
+              old['start'] == e.value['start'] &&
+              old['end'] == e.value['end']
+          ? old
+          : e.value;
+    }).toList();
   }
 
   TimelineItem? get _selected {
@@ -221,6 +234,38 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _selectedId = null);
   }
 
+  Future<void> _creator() async {
+    if (_previewBusy) return;
+    _previewTimer?.cancel();
+    _changeTimer?.cancel();
+    try {
+      await _save();
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => CreatorScreen(
+              clip: widget.clip,
+              timeline: _timeline,
+              project: widget.state.currentProject!,
+              directory:
+                  widget.state.projectDir(widget.state.currentProject!))));
+      if (!mounted) return;
+      _captions.text = _captionsToText(widget.clip);
+      await _save();
+      setState(() {});
+    } finally {
+      if (mounted) {
+        _schedulePreview();
+        _changeTimer = Timer.periodic(const Duration(milliseconds: 350), (_) {
+          final next = _fingerprint();
+          if (next != _lastFingerprint) {
+            _lastFingerprint = next;
+            _schedulePreview();
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
     final clip = widget.clip;
     if (_captions.text != _captionsToText(clip)) {
@@ -236,17 +281,11 @@ class _EditorScreenState extends State<EditorScreen> {
       final rangeChanged =
           delta.abs() > 0.000001 || (clip.duration - length).abs() > 0.000001;
       if (rangeChanged) {
-        clip.captions = clip.captions
-            .where((c) =>
-                (c['end'] as num) > delta &&
-                (c['start'] as num) < delta + length)
-            .map((c) => {
-                  ...c,
-                  'start':
-                      ((c['start'] as num).toDouble() - delta).clamp(0, length),
-                  'end': ((c['end'] as num).toDouble() - delta).clamp(0, length)
-                })
-            .toList();
+        clip.captions = CreatorTools.trimRows(clip.captions, delta, length);
+        clip.captionVariants = clip.captionVariants.map((lang, rows) =>
+            MapEntry(lang, CreatorTools.trimRows(rows, delta, length)));
+        videoItems.first.framing =
+            CreatorTools.trimFraming(videoItems.first.framing, delta, length);
         _captions.text = _captionsToText(clip);
       }
       clip.start = videoItems.first.srcStart;
@@ -403,6 +442,10 @@ class _EditorScreenState extends State<EditorScreen> {
       appBar: AppBar(
         title: Text(state.translate('editor.title')),
         actions: [
+          IconButton(
+              tooltip: 'Caption per kata, terjemahan & crop',
+              onPressed: state.jobState == JobState.running ? null : _creator,
+              icon: const Icon(Icons.auto_fix_high)),
           IconButton(
               tooltip: 'Pisahkan klip',
               onPressed: state.jobState == JobState.running ? null : _split,
@@ -718,6 +761,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   children: [
                     for (final option in const [
                       ['center', 'Center crop'],
+                      ['manual', 'Manual / keyframe'],
                       ['blur', 'Blur BG'],
                       ['fit', 'Fit (tidak memotong)'],
                       ['none', 'Letterbox'],

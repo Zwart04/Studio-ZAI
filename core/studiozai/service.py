@@ -241,10 +241,14 @@ def generate_clips(
     use_llm: bool = False,
     use_transcript: bool = True,
     job: Job | None = None,
+    analysis_mode: str = "auto",
 ) -> list[projects.Clip]:
     media = project.media_path()
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
+    if count <= 0:
+        import math
+        count = max(3, min(10, math.ceil(project.duration / 300)))
     _floor, _ceiling = highlight.clip_count_targets(project.duration or 0, count)
 
     transcript = project.transcript if use_transcript and project.transcript.get("segments") else None
@@ -267,16 +271,27 @@ def generate_clips(
         progress_cb=lambda p, m: _report(job, 78 + p * 0.12, "menganalisis", m),
     )
 
+    if transcript and analysis_mode == "podcast":
+        from .pipeline.podcast import moments
+        rows = moments(transcript, project.duration, count, min_len, max_len)
+        if rows:
+            candidates = highlight.to_candidates(rows)
+
     settings = config.load_settings()
     if use_llm and transcript:
-        llm_rows = highlight.rank_with_llm(
-            transcript,
-            count=count,
-            base_url=settings.get("llm_base_url") or "http://127.0.0.1:11434/v1",
-            model=settings.get("llm_model") or "qwen2.5:7b",
-            api_key=credentials.read().get("llm_api_key") or settings.get("llm_api_key") or None,
-            provider=settings.get("ai_provider") or None,
-        )
+        try:
+            llm_rows = highlight.rank_with_llm(
+                transcript,
+                count=count,
+                base_url=settings.get("llm_base_url") or "http://127.0.0.1:11434/v1",
+                model=settings.get("llm_model") or "qwen2.5:7b",
+                api_key=credentials.read().get("llm_api_key") or settings.get("llm_api_key") or None,
+                provider=settings.get("ai_provider") or None,
+            )
+        except (RuntimeError, ValueError, OSError) as exc:
+            llm_rows = []
+            project.notes = f"AI tidak tersedia; memakai deteksi lokal: {str(exc)[:200]}"
+            _report(job, 89, "pilihan lokal", project.notes)
         if llm_rows:
             words = [w for s in transcript.get("segments", []) for w in s.get("words") or []]
             candidates = highlight.to_candidates(llm_rows, words)
@@ -304,7 +319,12 @@ def generate_clips(
 def refresh_captions(project: projects.Project, clip: projects.Clip) -> list[dict[str, Any]]:
     if not project.transcript:
         return clip.captions
-    clip.captions = captions_for_range(project.transcript, clip.start, clip.end)
+    captions = captions_for_range(project.transcript, clip.start, clip.end)
+    if captions != clip.captions:
+        clip.invalidate_renders()
+    clip.captions = captions
+    clip.caption_language = project.language
+    clip.caption_variants[project.language] = captions
     return clip.captions
 
 
@@ -356,7 +376,12 @@ def generate_captions_for_clip(
             lang=project.language,
             progress_cb=lambda p, m: _report(job, 15 + p * 0.75, "subtitle", m),
         )
-    clip.captions = captions_for_range(transcript, 0.0, clip.duration)
+    captions = captions_for_range(transcript, 0.0, clip.duration)
+    if captions != clip.captions:
+        clip.invalidate_renders()
+    clip.captions = captions
+    clip.caption_language = project.language
+    clip.caption_variants[project.language] = captions
     _report(job, 95, "subtitle", f"{len(clip.captions)} baris subtitle dibuat")
     return clip.captions
 
@@ -364,17 +389,38 @@ def generate_captions_for_clip(
 # --------------------------------------------------------------------------- render
 
 
-def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None = None) -> dict[str, str]:
+def render_clip(
+    project: projects.Project,
+    clip: projects.Clip,
+    job: Job | None = None,
+    *,
+    canvas_override: str | None = None,
+    persist: bool = True,
+) -> dict[str, str]:
+    if canvas_override is not None and canvas_override not in {"portrait", "square", "landscape"}:
+        raise ValueError("Format kanvas tidak valid")
     media = project.media_path()
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
     directory = project.clip_dir(clip.index)
+    if canvas_override:
+        import uuid
+
+        directory = directory / "exports" / uuid.uuid4().hex[:12]
+        directory.mkdir(parents=True, exist_ok=True)
 
     captions = clip.captions or refresh_captions(project, clip)
     files: dict[str, str] = {}
     src_w = project.width or 1920
     src_h = project.height or 1080
     timeline = getattr(clip, "timeline", None) or None
+    if canvas_override and timeline:
+        import copy
+
+        timeline = copy.deepcopy(timeline)
+        video_items = timeline_mod.track(timeline, "video")
+        if video_items:
+            video_items[0]["canvas"] = canvas_override
 
     # Kanvas & framing diambil dari item video pada timeline (kalau ada),
     # kalau tidak dari field klip seperti biasa.
@@ -383,7 +429,9 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
         items = timeline_mod.track(timeline, "video")
         base_item = items[0] if items else {}
     canvas = crop_mod.canvas_size(
-        str(base_item.get("canvas") or getattr(clip, "canvas", "portrait")), src_w, src_h
+        canvas_override or str(base_item.get("canvas") or getattr(clip, "canvas", "portrait")),
+        src_w,
+        src_h,
     )
     text_items = timeline_mod.track(timeline, "text") if timeline else []
 
@@ -393,7 +441,7 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
             subtitle.write_subtitles(
                 captions_objs,
                 directory,
-                "subs",
+                f"subs_{canvas_override}" if canvas_override else "subs",
                 preset=clip.subtitle_preset,
                 position=getattr(clip, "subtitle_position", "bottom"),
                 play_res=(canvas[0], canvas[1]),
@@ -408,12 +456,19 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
         target = clip.duration
         try:
             voice_path = str(
-                voice.fit_duration(voice_path, target, directory / "voice_fit.wav")
+                voice.fit_duration(
+                    voice_path,
+                    target,
+                    directory / (f"voice_fit_{canvas_override}.wav" if canvas_override else "voice_fit.wav"),
+                )
             )
         except (RuntimeError, ValueError):
             pass
 
-    out_path = directory / f"clip_{clip.index:03d}.mp4"
+    out_path = directory / (
+        f"clip_{clip.index:03d}_{canvas_override}.mp4"
+        if canvas_override else f"clip_{clip.index:03d}.mp4"
+    )
     _report(job, 60, "merender", f"klip {clip.index + 1}")
     if timeline:
         # Volume audio asli: penuh saat "original", dikecilkan saat dicampur,
@@ -448,12 +503,20 @@ def render_clip(project: projects.Project, clip: projects.Clip, job: Job | None 
             voice_volume=clip.voice_volume,
             progress_cb=lambda p, m: _report(job, 60 + p * 0.35, "merender", m),
         )
-    thumb = render.thumbnail(out_path, directory / "thumb.jpg", at=min(1.0, clip.duration / 2))
-    files["mp4"] = str(out_path)
-    files["thumb"] = str(thumb)
-    clip.files = {**clip.files, **files}
-    clip.status = "rendered"
-    project.save()
+    if canvas_override:
+        thumb = render.thumbnail(out_path, directory / "thumb.jpg", at=min(1.0, clip.duration / 2))
+        files[f"mp4_{canvas_override}"] = str(out_path)
+        files[f"thumb_{canvas_override}"] = str(thumb)
+        clip.files[f"mp4_{canvas_override}"] = str(out_path)
+        clip.files[f"thumb_{canvas_override}"] = str(thumb)
+    else:
+        thumb = render.thumbnail(out_path, directory / "thumb.jpg", at=min(1.0, clip.duration / 2))
+        files["mp4"] = str(out_path)
+        files["thumb"] = str(thumb)
+        clip.files = {**clip.files, **files}
+        clip.status = "rendered"
+    if persist:
+        project.save()
     _report(job, 100, "selesai", f"klip {clip.index + 1} selesai")
     return files
 
@@ -588,6 +651,7 @@ def make_voice(
     )
     if for_clip is not None:
         clip = project.clip(for_clip)
+        clip.invalidate_renders()
         clip.files["voice"] = str(path)
         clip.audio_mode = "mix"
         project.save()
@@ -619,6 +683,7 @@ def make_clone(
     )
     if for_clip is not None:
         clip = project.clip(for_clip)
+        clip.invalidate_renders()
         clip.files["voice"] = str(path)
         clip.voice_clone_sample = str(sample)
         clip.audio_mode = "mix"
