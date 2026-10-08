@@ -1,74 +1,31 @@
-# SECURITY — Studio ZAI
-### Privasi & Keamanan
+# Privasi dan keamanan Studio ZAI 1.11
 
-> **EN TL;DR** — 100% local by default: no telemetry, no uploads. Network is used only to download the source video (user action) and model files (one-time, from official hosts). Secrets stay in local config; the local server binds to 127.0.0.1 only. Voice cloning requires explicit consent and outputs are watermarked (PerTh).
+## Jaringan
+Editor dan model lokal memproses media pada perangkat. Unduh video/model memerlukan jaringan. Studio ZAI tidak menambahkan telemetri sendiri. SDK ML Kit Android untuk wajah/terjemahan dapat mengirim informasi perangkat/aplikasi, identifier instalasi dan diagnostik pemakaian melalui HTTPS, sesuai [disclosure Google](https://developers.google.com/ml-kit/android-data-disclosure). Karena itu aplikasi tidak diklaim bebas dari seluruh telemetri dependensi.
 
----
+AI online opsional: deteksi model mengirim API key ke provider untuk meminta katalog; analisis momen mengirim transkrip; gambar online mengirim prompt; suara online mengirim teks. Pengguna memilih provider dan menjalankan fitur tersebut. Provider mempunyai aturan penyimpanan/kuota sendiri. Sampel ZipVoice diproses lokal. Model terjemahan diunduh saat diperlukan.
 
-## 1. Model Ancaman (ringkas)
+## Kunci dan konfigurasi
+- Windows menyimpan API key dengan DPAPI akun Windows pada folder data pengguna, di luar repo dan ekspor proyek. Penulisan kredensial dilakukan atomik. Source Linux/macOS memakai berkas privat berizin 600; bukan vault terenkripsi.
+- Android memakai secure storage/Keystore; bukan SharedPreferences biasa. Backup aplikasi dimatikan.
+- Respons pengaturan hanya menampilkan penanda ***, bukan isi key. Key untuk deteksi tidak disimpan sebelum tombol Simpan ditekan.
+- Mengganti provider/alamat API menghapus key lama kecuali key baru diberikan. Deteksi menolak penggunaan key tersimpan pada tujuan lain.
+- Provider resmi dibatasi ke host HTTPS resmi. Endpoint sendiri memakai compatible. Key tidak dikirim melalui HTTP remote; redirect API ditolak, termasuk pada koneksi LLM lama.
+- .env, cookies, kredensial, keystore, dan konfigurasi lokal diabaikan Git. Jangan memaksa git add -f untuk berkas tersebut.
 
-| Aset | Ancaman | Mitigasi |
-|---|---|---|
-| Video & hasil klip user | Kebocoran ke pihak ketiga | Tidak ada upload; semua file lokal |
-| Suara user (sampel cloning) | Penyalahgunaan identitas | Konfirmasi izin, watermark PerTh, tidak dikirim keluar |
-| Konfigurasi (cookies.txt, API key LLM) | Terbaca pihak lain | Simpan di folder data user dengan izin file ketat; tidak pernah dicatat ke log |
-| Server lokal | Diakses dari jaringan | Bind `127.0.0.1` saja; tanpa autentikasi longgar apa pun |
+## Server dan media
+Server desktop mengikat 127.0.0.1. Middleware menolak host asing, Origin berbeda, dan permintaan browser cross-site. Ini bukan autentikasi untuk server publik; jangan mengekspos server lokal ke internet.
 
-## 2. Prinsip
+/api/media hanya melayani jenis video/audio/gambar/subtitle/ZIP di folder data pengguna. Path di luar folder data dan konfigurasi, key, log, JSON atau database ditolak. ZIP klip hanya berisi MP4 yang dipilih, tanpa konfigurasi/cookies/JSON proyek.
 
-1. **Offline-first** — tidak ada telemetri, analytics, crash reporter, atau auto-update yang memanggil rumah.
-2. **Jaringan hanya untuk:**
-   - unduh video sumber (perintah eksplisit user, via yt-dlp);
-   - unduh model dari host resmi (HuggingFace/rilis), dengan verifikasi sha256;
-   - panggilan LLM opsional **hanya jika** user mengisi endpoint sendiri (mis. Ollama lokal).
-3. **Least privilege** — server lokal hanya loopback; Android meminta izin sesedikit mungkin (storage/notifikasi saat dibutuhkan).
+UI paket Windows dibatasi ke aset web; folder data pengguna tidak disalin. Android menyertakan aset aplikasi, bukan konfigurasi perangkat.
 
-## 3. Penanganan Rahasia
+## Pemeriksaan rilis
+[Audit rilis](../tools/audit_release_privacy.py) memeriksa nama berkas privat dan pola token umum pada source terlacak, blob riwayat Git, dan arsip rilis. Nilai temuan tidak dicetak. Fingerprint token publik bawaan extractor yt-dlp dibandingkan dengan source upstream resmi; token lain tetap dilaporkan. Tidak ditemukannya pola bukan jaminan untuk semua jenis rahasia atau akses malware pada perangkat.
 
-- `cookies.txt` & API key disimpan di `%LOCALAPPDATA%\StudioZAI\` / `~/.local/share/studiozai/` dengan izin `600` (Linux/macOS) atau setara (Windows).
-- Nilai sensitif **diredaksi** dari log (`***`), tidak pernah dikirim ke UI kecuali masked.
-- Dokumentasikan di UI: "cookie setara akses login — jangan bagikan file config."
+Tes regresi mencakup penyimpanan/redaksi key, penggantian tujuan API, katalog model, host/Origin, dan media privat. Provider diuji dengan fixture tanpa key/kuota pengguna. [Hasil rilis](RELEASE-1.11.0.md).
 
-## 4. Voice Cloning — Etika & Kepatuhan
+## Lisensi dan laporan
+Kode baru memakai [Studio ZAI Noncommercial](../LICENSE): publik boleh menggunakan dan membagikan; menjual aplikasi atau layanan berbasis aplikasi memerlukan izin Zwart04. Pengguna boleh memonetisasi hasil. Izin MIT pada salinan lama tidak dicabut. Komponen pihak ketiga mempertahankan lisensi masing-masing.
 
-- **Konfirmasi izin wajib** (sekali) sebelum fitur aktif: hanya suara sendiri / berizin.
-- Semua audio Chatterbox **ber-watermark PerTh** secara default (MIT, bawaan model) — tahan kompresi MP3/Opus & editing ringan.
-- Library deteksi PerTh open source memungkinkan verifikasi downstream.
-- UI menampilkan peringatan saat mengkloning suara tokoh publik? Tidak — kebijakan: tolak jika teks prompt mengandung klaim impersonasi tokoh nyata (daftar sederhana + pesan edukasi).
-- Catatan regulasi: EU AI Act Art. 50 & TAKE IT DOWN Act mendorong provenance marking — fitur watermark justru membantu kepatuhan kreator.
-
-## 5. Keamanan Media & File
-
-- Nama file hasil selalu disanitasi (blok `..`, karakter path berbahaya) — mencegah path traversal.
-- Command ffmpeg dijalankan dengan argumen array (tanpa `shell=True`) — mencegah command injection.
-- Unduhan model: hanya HTTPS + verifikasi sha256 di registry; gagal verifikasi → file dihapus.
-- Ekstraksi subtitle dari sumber eksternal tidak dieksekusi sebagai kode; hanya teks.
-
-## 6. Pelaporan Kerentanan
-
-Buka *security advisory* privat/issue di repo `Zwart04/Studio-ZAI`, atau email pemilik repo. Sertakan: versi, platform, langkah reproduksi. Perbaikan akan masuk patch release dengan catatan CHANGELOG.
-
-## 7. Checklist Rilis
-
-- [ ] Tidak ada endpoint jaringan baru selain yang didokumentasikan §2.
-- [ ] Semua panggilan subprocess memakai argumen array.
-- [ ] File rahasia berizin ketat + redaksi log teruji.
-- [ ] Konfirmasi izin cloning tampil di web & Android.
-- [ ] Model registry HTTPS + sha256 lengkap.
-
-## 8. Penguatan 1.3.3 (hasil audit)
-
-Audit menyeluruh pada 2026-09-22 menemukan dan menutup hal berikut. Semua ada tes regresinya di `core/tests/test_security.py` (20 tes).
-
-| Temuan | Dampak | Perbaikan |
-|---|---|---|
-| `project_id` dari URL dipakai langsung sebagai nama folder | `DELETE /api/projects/..` bisa menghapus **seluruh folder data** (model, suara, proyek) | `_project_root()` memvalidasi id dengan `^[A-Za-z0-9_-]{1,64}$` dan memastikan hasil `resolve()` tepat di dalam `projects/` |
-| Ekstraksi arsip model tanpa filter (`tarfile.extractall`) | Arsip berbahaya dari internet bisa menulis file di luar folder tujuan | `_validate_members()` menolak path absolut/`..`/keluar tujuan, menolak symlink/hardlink, dan memakai `filter="data"` di Python 3.12+ |
-| Server lokal bisa disalahgunakan dari LAN | Orang lain di jaringan bisa memicu render/unduhan | Bind default `127.0.0.1` (desktop launcher & `serve --host`), tanpa `CORSMiddleware` |
-| `/api/media` menerima path bebas | Membaca berkas sembarang di disk | Hanya berkas yang `resolve()`-nya di dalam folder data (403 jika di luar) |
-| Android: backup cloud & transfer perangkat aktif | Proyek, model, dan rekaman suara ikut tercadangkan ke Google | `android:allowBackup="false"`, `data_extraction_rules` mengecualikan domain root |
-| Android: lalu lintas HTTP polos diizinkan | Unduhan bisa dibajak/downgrade ke HTTP | `network_security_config` menolak cleartext, semua unduhan HTTPS |
-
-Hasil audit lain: tidak ada rahasia ter-hardcode di repo, tidak ada berkas sensitif (keystore/`key.properties`/`cookies.txt`) yang ter-commit, APK **tidak** `debuggable`, dan Windows Defender tidak menemukan ancaman pada EXE/APK hasil build.
-
-> Catatan: APK rilis ditandatangani dengan **debug key** agar bisa langsung di-*sideload*. Untuk distribusi luas, buat keystore rilis sendiri (lihat `docs/BUILD.md`) — debug key tidak boleh dipakai untuk update publik.
+Laporkan masalah melalui security advisory privat di repo Zwart04/Studio-ZAI. Sertakan versi dan langkah reproduksi tanpa API key atau .env.

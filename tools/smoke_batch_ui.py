@@ -6,6 +6,7 @@ Screenshots and generated media are left under build/batch-smoke-<id>.
 from __future__ import annotations
 
 import json
+import zipfile
 import socket
 import threading
 import time
@@ -25,6 +26,8 @@ OUT = ROOT / "build" / f"batch-smoke-{uuid.uuid4().hex[:8]}"
 def main():
     OUT.mkdir(parents=True)
     config._base_dir = lambda: OUT
+    # Provider catalog fixture only: no user keys or live cloud inference.
+    server.ai.request = lambda *args, **kwargs: {"data": [{"id":"fixture-flash-2"}, {"id":"fixture-pro-2"}, {"id":"text-embedding"}]}
     config.save_settings({"setup_version": 2, "setup_done": True, "lang": "id"})
     project = projects.Project.create("Demo pengujian - video sintetis")
     project.source_dir.mkdir()
@@ -85,6 +88,12 @@ def main():
                 page.wait_for_timeout(250)
             assert job.get('status') == 'done', job
             expect(page.locator('#clipGrid .download-link')).to_have_count(6, timeout=10000)
+            with page.expect_download(timeout=30000) as downloaded:
+                page.locator('#batchZipBtn').click()
+            archive = downloaded.value
+            archive.save_as(OUT / 'selected-clips.zip')
+            with zipfile.ZipFile(OUT / 'selected-clips.zip') as bundle:
+                assert len(bundle.namelist()) == 6 and bundle.testzip() is None
             actual = projects.load_project(project.id)
             expected_sizes = {'portrait': (1080, 1920), 'square': (1080, 1080), 'landscape': (1920, 1080)}
             for clip in actual.clips:
@@ -204,6 +213,18 @@ def main():
             upload = page.request.post(f'http://127.0.0.1:{port}/api/source-upload',
                 headers={'x-filename': 'test-video.mp4', 'Content-Type': 'application/octet-stream'}, data=source.read_bytes())
             assert upload.ok and Path(upload.json()['path']).read_bytes() == source.read_bytes()
+            page.locator('#nav [data-page="settings"]').click()
+            card=page.locator('.ai-profile[data-kind="ai"]')
+            card.locator('[data-ai="ai_provider"]').select_option('groq')
+            card.locator('[data-ai="ai_api_key"]').fill('fixture-only')
+            card.locator('[data-model="ai"]').focus()
+            expect(card.locator('[data-model="ai"]')).to_have_value('fixture-flash-2')
+            expect(card.locator('[data-model-status]')).to_contain_text('2 model terdeteksi')
+            page.locator('#saveAiSettings').click()
+            expect(page.locator('[data-ai="ai_api_key"]')).to_have_value('')
+            assert server.get_settings()['ai_api_key']=='***'
+            assert 'fixture-only' not in (OUT/'credentials.json').read_text()
+            page.screenshot(path=str(OUT/'provider-model-picker.png'),full_page=True)
             assert not errors, errors
             browser.close()
         print(json.dumps({'status': 'passed', 'exports': 6, 'sizes': expected_sizes, 'screenshots': str(OUT)}, indent=2))

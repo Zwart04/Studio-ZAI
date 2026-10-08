@@ -6,6 +6,8 @@ Buka Pengaturan → AI opsional (Android: AI lokal & online) hanya jika ingin me
 |---|---|---|
 | Teks / pemilihan momen | OpenAI | https://api.openai.com/v1 |
 | Teks / pemilihan momen | Anthropic | https://api.anthropic.com/v1 |
+| Teks / pemilihan momen | Groq | https://api.groq.com/openai/v1 |
+| Teks / pemilihan momen | Gemini | https://generativelanguage.googleapis.com/v1beta/openai |
 | Teks / pemilihan momen | DeepSeek | https://api.deepseek.com |
 | Teks lokal / kompatibel | Ollama / chat completions | http://127.0.0.1:11434/v1 |
 | Gambar online | OpenAI | https://api.openai.com/v1 |
@@ -13,7 +15,7 @@ Buka Pengaturan → AI opsional (Android: AI lokal & online) hanya jika ingin me
 | Gambar lokal lanjutan | Server stable-diffusion.cpp milikmu | http://127.0.0.1:1234/v1 |
 | Suara online | OpenAI | https://api.openai.com/v1 |
 
-Model teks diisi sendiri sesuai akses akun. Gambar OpenAI memakai gpt-image-1-mini secara bawaan (1024 × 1024, kualitas rendah); suara memakai gpt-4o-mini-tts. Ini pilihan hemat yang didukung, bukan klaim model terbaru. API dapat berbayar; langganan ChatGPT/Claude aplikasi tidak menyediakan API key atau kredit API.
+Pilih provider, masukkan API key, lalu tekan **Deteksi & sarankan model**. Daftar berasal dari akun provider; model nonaktif dan model untuk tugas lain disaring. Model kosong/otomatis memakai saran saat analisis berjalan. Nama model tetap dapat diisi manual. Saran memakai jenis/nama model, bukan jaminan harga, kuota, atau kualitas. Gambar OpenAI memakai gpt-image-1-mini secara bawaan (1024 × 1024, kualitas rendah); suara memakai gpt-4o-mini-tts. Ini pilihan hemat yang didukung, bukan klaim model terbaru. API dapat berbayar; langganan ChatGPT/Claude aplikasi tidak menyediakan API key atau kredit API.
 
 ## Gambar lokal
 
@@ -30,3 +32,5 @@ Windows memakai DPAPI akun pengguna untuk kunci; Android memakai secure storage.
 Tes integrasi memakai server fixture untuk protokol provider, respons PNG/WAV, dan penanganan error. SDXS-512 sudah diuji menghasilkan PNG sungguhan pada mesin Windows pengembangan; pengujian inferensi pada ponsel fisik masih diperlukan. API berbayar live serta server difusi eksternal belum diuji pada rilis ini.
 
 Referensi: [OpenAI images](https://developers.openai.com/api/docs/guides/image-generation), [OpenAI TTS](https://developers.openai.com/api/docs/guides/text-to-speech), [Anthropic API](https://platform.claude.com/docs/en/api/overview), [DeepSeek API](https://api-docs.deepseek.com/).
+
+Deteksi model tidak mengunggah video/transkrip. Key yang belum disimpan hanya dipakai untuk deteksi. Host provider resmi wajib HTTPS; alamat lain memakai compatible. Key tersimpan tidak dipakai ulang setelah provider/alamat berubah. Redirect API diblokir. Daftar dicache dalam memori lima menit, terpisah per provider/alamat/key.

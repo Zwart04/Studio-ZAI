@@ -1,21 +1,36 @@
-MIT License
+Studio ZAI Noncommercial License 1.0
 
-Copyright (c) 2026 Zwart04
+Copyright (c) 2026 Zwart04. All rights reserved except as granted below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Permission. You may use, study, copy, modify and redistribute Studio ZAI
+   source code and executable releases free of charge, including to make
+   monetized content. You may not charge for the software or its service. Keep this license and copyright notice with all copies and
+   identify modifications. Derivative copies of the Studio ZAI code must
+   remain under these same terms.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Commercial restriction. You may not sell, rent, sublicense for payment,
+   include Studio ZAI in a paid software product, or operate it as a paid
+   clipping, editing, hosting or other service. Charging for the software or
+   providing it as a paid service requires written permission from Zwart04. Videos and
+   other outputs you create remain yours; this license does not restrict
+   selling or monetizing your own outputs, subject to third-party rights.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Third-party components. This license covers only code and assets owned
+   by Zwart04. Dependencies, fonts, model weights and other third-party
+   components retain their own licenses and notices; their permissions
+   and obligations are not replaced by this license.
+
+4. Earlier releases. This license applies to versions first distributed
+   with this notice. It does not change permissions granted for copies
+   previously distributed under the MIT License or another license.
+
+5. No warranty. The software is provided "AS IS", without warranty of any
+   kind. To the extent permitted by law, the copyright holder is not liable
+   for any claim, damage or other liability arising from use of the software.
+
+6. Termination. Permission under this license ends if its conditions are
+   violated. Rights under third-party licenses are governed by those licenses.
+
+This is a custom source-available, noncommercial license, not an OSI-approved
+open-source license. Commercial permission: contact Zwart04 through
+https://github.com/Zwart04/Studio-ZAI.

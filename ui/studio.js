@@ -57,21 +57,47 @@
 
   const settings=document.createElement('div');settings.id='aiSettings';
   $('#page-settings > h1').after(settings);
-  window.renderAiSettings=async()=>{
-    const [{providers},saved]=await Promise.all([api('/api/ai/providers'),api('/api/settings')]);
-    settings.innerHTML='<h2>AI opsional</h2><p class="field-help">Editor dan model suara lokal tetap bisa dipakai tanpa akun. Isi API key layananmu untuk fitur online. Langganan ChatGPT bukan API key. Di Windows, kunci disimpan dengan proteksi akun Windows.</p>'+[
-      ['ai','Teks & pemilihan momen','text','Contoh: model teks yang tersedia di akunmu'],
-      ['image','Pembuatan gambar online','image','Contoh: gpt-image-1-mini'],
-      ['speech','Suara online','speech','gpt-4o-mini-tts']
-    ].map(([kind,label,capability,hint])=>`<details class="card ai-profile"><summary>${label}</summary><div class="grid-2"><label>Penyedia<select data-ai="${kind}_provider"><option value="">Belum diatur</option>${Object.entries(providers).filter(([,p])=>p[capability]).map(([id,p])=>`<option value="${id}">${p.label}</option>`).join('')}</select></label><label>Model<input data-ai="${kind}_model" placeholder="${hint}"></label><label>Alamat API<input data-ai="${kind}_base_url" placeholder="Diisi sesuai penyedia"></label><label>API key<input data-ai="${kind}_api_key" type="password" autocomplete="off" placeholder="${saved[kind+'_api_key'] ? 'Tersimpan · kosongkan untuk mempertahankan' : 'API key milikmu'}"></label></div><button class="mini" data-clear-key="${kind}">Hapus kunci tersimpan</button></details>`).join('')+'<button id="saveAiSettings" class="primary">Simpan pengaturan AI</button>';
-    settings.querySelectorAll('[data-ai]').forEach(input=>{
-      if(!input.dataset.ai.endsWith('_api_key'))input.value=saved[input.dataset.ai] || '';
-      if(input.tagName==='SELECT')input.onchange=()=>{const kind=input.dataset.ai.replace('_provider','');settings.querySelector(`[data-ai="${kind}_base_url"]`).value=providers[input.value]?.url || '';};
+  window.renderAiSettings = async () => {
+    const [{providers}, saved] = await Promise.all([api('/api/ai/providers'), api('/api/settings')]);
+    settings.innerHTML = '<h2>AI online · timestamp & momen</h2><p class="field-help">Pilih provider, masukkan API key, lalu model yang tersedia dideteksi dan disarankan. Deteksi hanya meminta daftar model. Saat analisis online diaktifkan, transkrip dikirim ke provider pilihanmu. API key tetap disimpan dengan proteksi akun Windows.</p>' + [
+      ['ai','Timestamp & pemilihan momen','text'], ['image','Gambar','image'], ['speech','Suara online','speech']
+    ].map(([kind,label,capability]) => `<details class="card ai-profile" data-kind="${kind}" ${kind==='ai'?'open':''}><summary>${label}</summary>
+      <div class="grid-2"><label>Provider<select data-ai="${kind}_provider"><option value="">Pilih provider</option>${Object.entries(providers).filter(([,p])=>p[capability]).map(([id,p])=>`<option value="${id}">${escapeHtml(p.label)}</option>`).join('')}</select></label>
+      <label>API key<input data-ai="${kind}_api_key" type="password" autocomplete="off" spellcheck="false" placeholder="${saved[kind+'_api_key']?'Tersimpan · kosongkan untuk mempertahankan':'API key milikmu'}"></label></div>
+      <div class="row"><button data-detect="${kind}" class="ghost">Deteksi & sarankan model</button><button class="mini" data-clear-key="${kind}">Hapus kunci</button></div>
+      <label>Model<select data-model="${kind}"><option value="auto">Otomatis · saran provider</option><option value="custom">Isi model manual</option></select></label>
+      <input data-ai="${kind}_model" hidden placeholder="ID model dari provider">
+      <label data-url-wrap="${kind}" hidden>Alamat API<input data-ai="${kind}_base_url" placeholder="Alamat server kompatibel"></label>
+      <p data-model-status="${kind}" class="field-help" role="status"></p></details>`).join('') + '<button id="saveAiSettings" class="primary">Simpan pengaturan AI</button>';
+    settings.querySelectorAll('.ai-profile').forEach(card => {
+      const kind=card.dataset.kind, field=name=>card.querySelector(`[data-ai="${kind}_${name}"]`), select=card.querySelector('[data-model]'), status=card.querySelector('[data-model-status]'), button=card.querySelector('[data-detect]');
+      let revision=0;
+      field('provider').value=saved[kind+'_provider']||'';
+      field('base_url').value=saved[kind+'_base_url']||providers[field('provider').value]?.url||'';
+      field('model').value=saved[kind+'_model']||'auto';
+      if(field('model').value!=='auto') { select.add(new Option(field('model').value+' · tersimpan',field('model').value),1);select.value=field('model').value;field('model').hidden=true; }
+      function refreshUrl() {card.querySelector('[data-url-wrap]').hidden=!['compatible','sd_local'].includes(field('provider').value);button.hidden=field('provider').value==='sdxs_local';}
+      refreshUrl();
+      field('provider').onchange=()=>{revision++;field('base_url').value=providers[field('provider').value]?.url||'';field('api_key').value='';field('api_key').dataset.clear='yes';field('api_key').placeholder='Masukkan API key provider ini';field('model').value='auto';field('model').hidden=true;select.innerHTML='<option value="auto">Otomatis · saran provider</option><option value="custom">Isi model manual</option>';status.textContent='';refreshUrl();};
+      field('api_key').oninput=()=>revision++;
+      field('base_url').oninput=()=>revision++;
+      select.onchange=()=>{field('model').hidden=select.value!=='custom';if(select.value!=='custom')field('model').value=select.value;};
+      async function detect() {
+        const current=++revision;button.disabled=true;status.textContent='Memuat model dari provider…';
+        try {
+          const result=await api('/api/ai/models',{method:'POST',body:JSON.stringify({kind,provider:field('provider').value,base_url:field('base_url').value,api_key:field('api_key').value,use_saved_key:!field('api_key').value&&field('api_key').dataset.clear!=='yes'})});
+          if(current!==revision||!card.isConnected)return;
+          select.innerHTML='<option value="auto">Otomatis · saran provider</option>'+result.models.map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml(m.label)}${m.id===result.recommended?' · disarankan':''}</option>`).join('')+'<option value="custom">Isi model manual</option>';
+          select.value=result.recommended;field('model').value=result.recommended;field('model').hidden=true;status.textContent=`${result.models.length} model terdeteksi. ${result.note}`;
+        } catch(error) {if(current===revision)status.textContent=error.message;} finally {if(card.isConnected)button.disabled=false;}
+      }
+      button.onclick=detect;
+      field('api_key').onblur=()=>{if(field('api_key').value.trim()&&field('provider').value)detect();};
+      card.querySelector('[data-clear-key]').onclick=()=>{revision++;field('api_key').value='';field('api_key').dataset.clear='yes';field('api_key').placeholder='Akan dihapus saat disimpan';status.textContent='';};
     });
-    settings.querySelectorAll('[data-clear-key]').forEach(b=>b.onclick=()=>{const field=settings.querySelector(`[data-ai="${b.dataset.clearKey}_api_key"]`);field.value='';field.dataset.clear='yes';field.placeholder='Akan dihapus saat disimpan';});
     $('#saveAiSettings').onclick=async()=>{
-      const values={};settings.querySelectorAll('[data-ai]').forEach(input=>{const key=input.dataset.ai;values[key]=key.endsWith('_api_key')&&!input.value&&input.dataset.clear!=='yes' ? saved[key] || '' : input.value;});
-      try{state.settings=await api('/api/settings',{method:'POST',body:JSON.stringify({values})});await renderAiSettings();toast('Pengaturan AI tersimpan.');}catch(e){toast(e.message,'error');}
+      const values={};settings.querySelectorAll('[data-ai]').forEach(input=>{const key=input.dataset.ai;values[key]=key.endsWith('_api_key')&&!input.value&&input.dataset.clear!=='yes'?saved[key]||'':input.value.trim();});
+      try {state.settings=await api('/api/settings',{method:'POST',body:JSON.stringify({values})});await renderAiSettings();toast('Pengaturan AI tersimpan.');} catch(error){toast(error.message,'error');}
     };
   };
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,22 @@ from .pipeline import subtitle, voice
 from .utils.text import clock, sanitize_filename
 
 app = FastAPI(title="Studio ZAI", version=__version__)
+
+
+@app.middleware("http")
+async def local_origin_only(request: Request, call_next):
+    from urllib.parse import urlparse
+    host = urlparse("http://" + request.headers.get("host", "")).hostname
+    if host and host not in {"localhost", "127.0.0.1", "::1", "testserver"}:
+        return JSONResponse({"detail": "Server hanya untuk perangkat lokal"}, status_code=403)
+    origin = request.headers.get("origin")
+    if origin:
+        parsed = urlparse(origin)
+        if parsed.scheme not in {"http", "https"} or parsed.netloc != request.headers.get("host"):
+            return JSONResponse({"detail": "Asal permintaan tidak diizinkan"}, status_code=403)
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return JSONResponse({"detail": "Permintaan lintas situs tidak diizinkan"}, status_code=403)
+    return await call_next(request)
 
 
 class NewProject(BaseModel):
@@ -60,6 +76,7 @@ class TrackFaceRequest(BaseModel):
     start: float
     end: float
     x: float = .5
+    y: float = .4
 
 
 @app.post("/api/source-upload")
@@ -105,7 +122,7 @@ def track_face(project_id: str, payload: TrackFaceRequest) -> dict[str, Any]:
         raise HTTPException(400, "Rentang video tidak valid")
     return jobs.MANAGER.submit("framing", "Mengikuti wajah", lambda job: follow_face(
         str(project.media_path()), payload.start, payload.end, payload.x,
-        lambda p, m: job.report(p, "crop", m))).as_dict()
+        lambda p, m: job.report(p, "crop", m), y=payload.y)).as_dict()
 
 
 class ClipUpdate(BaseModel):
@@ -220,6 +237,29 @@ def post_settings(payload: SettingsUpdate) -> dict[str, Any]:
 @app.get("/api/ai/providers")
 def ai_providers() -> dict[str, Any]:
     return {"providers": ai.PROVIDERS, "voices": ai.VOICES}
+
+
+class ModelDiscovery(BaseModel):
+    provider: str
+    kind: Literal["ai", "image", "speech"] = "ai"
+    base_url: str = ""
+    api_key: str = Field(default="", repr=False)
+    use_saved_key: bool = False
+
+
+@app.post("/api/ai/models")
+def online_models(payload: ModelDiscovery) -> dict[str, Any]:
+    key = payload.api_key
+    if not key and payload.use_saved_key:
+        saved = config.load_settings()
+        official_base = ai.PROVIDERS.get(payload.provider, {}).get("url", "")
+        if saved.get(f"{payload.kind}_provider") != payload.provider or (saved.get(f"{payload.kind}_base_url") or official_base).rstrip("/") != (payload.base_url or official_base).rstrip("/"):
+            raise HTTPException(400, "Masukkan kunci untuk provider/alamat yang baru")
+        key = credentials.read().get(f"{payload.kind}_api_key", "")
+    try:
+        return ai.discover_models(payload.provider, payload.base_url, key, payload.kind)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @app.post("/api/ai/text")
@@ -646,6 +686,43 @@ def batch_render(project_id: str, payload: BatchRenderRequest) -> dict[str, Any]
     return jobs.MANAGER.submit("batch-render", "Render beberapa format", run).as_dict()
 
 
+@app.post("/api/projects/{project_id}/clips-zip")
+def clips_zip(project_id: str, payload: BatchRenderRequest) -> dict[str, Any]:
+    import uuid
+    import zipfile
+    project = _project(project_id)
+    if not payload.clips or not payload.formats or any(f not in {"portrait", "square", "landscape"} for f in payload.formats):
+        raise HTTPException(400, "Pilih klip dan format yang sudah dirender")
+    files = []
+    for index in dict.fromkeys(payload.clips):
+        try:
+            clip = project.clip(index)
+        except KeyError as exc:
+            raise HTTPException(404, "Klip tidak ditemukan") from exc
+        for fmt in dict.fromkeys(payload.formats):
+            path = Path(clip.files.get(f"mp4_{fmt}", ""))
+            if not path.is_file() or project.root.resolve() not in path.resolve().parents:
+                raise HTTPException(400, f"Klip {index + 1} · {fmt} belum dirender. Render pilihan dahulu.")
+            files.append((path, f"{index + 1:03d}-{sanitize_filename(clip.title)}-{fmt}.mp4"))
+
+    def run(job):
+        directory = project.root / "exports"
+        directory.mkdir(exist_ok=True)
+        target = directory / f"clips-{uuid.uuid4().hex[:12]}.zip"
+        temporary = target.with_suffix(".partial")
+        try:
+            with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as bundle:
+                for i, (path, name) in enumerate(files):
+                    job.check_cancel()
+                    bundle.write(path, name)
+                    job.report((i + 1) * 100 / len(files), "ZIP", name)
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return {"zip": str(target), "count": len(files)}
+    return jobs.MANAGER.submit("zip", "Mengemas klip", run).as_dict()
+
+
 def _render_task(project_id: str, index: int):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
@@ -980,6 +1057,8 @@ def media(path: str) -> FileResponse:
     roots = [config.data_dir().resolve()]
     if not any(root in resolved.parents or resolved == root for root in roots):
         raise HTTPException(status_code=403, detail="akses di luar folder data")
+    if resolved.name.lower().startswith((".env", "credentials", "settings", "cookies", "instance", "launcher")) or resolved.suffix.lower() not in {".mp4", ".mkv", ".mov", ".webm", ".avi", ".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".srt", ".vtt", ".ass", ".zip"}:
+        raise HTTPException(403, "Berkas konfigurasi dan kredensial tidak dapat dibagikan")
     return FileResponse(resolved)
 
 

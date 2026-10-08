@@ -65,4 +65,7 @@ flutter {
     source = "../.."
 }
 
-dependencies { implementation("com.google.mlkit:translate:17.0.3") }
+dependencies {
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+}

@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../services/clip_archive.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models.dart';
@@ -18,6 +19,45 @@ class _GalleryScreenState extends State<GalleryScreen> {
   final selected = <String>{}, formats = <String>{'portrait'};
   String query = '';
   bool ranked = true, onlyReady = false;
+  bool zipping = false;
+
+  Future<void> zipSelected() async {
+    setState(() => zipping = true);
+    try {
+      final files = <String, String>{};
+      for (final entry in all.where((e) => selected.contains(keyOf(e)))) {
+        for (final fmt in formats) {
+          final path = entry.$2.files['mp4_$fmt'];
+          if (path == null || !File(path).existsSync()) {
+            throw Exception('Render semua klip dan format pilihan dahulu.');
+          }
+          final root = widget.state.projectDir(entry.$1).absolute.path;
+          if (!File(path)
+              .resolveSymbolicLinksSync()
+              .startsWith('$root${Platform.pathSeparator}')) {
+            throw Exception('Berkas ekspor di luar proyek.');
+          }
+          files[path] = '${entry.$1.id}-${entry.$2.index + 1}-$fmt.mp4';
+        }
+      }
+      if (files.isEmpty) throw Exception('Pilih klip dan format.');
+      final directory = Directory('${widget.state.dataDir.path}/exports')
+        ..createSync(recursive: true);
+      final output =
+          '${directory.path}/clips-${DateTime.now().microsecondsSinceEpoch}.zip';
+      await ClipArchive.create(files, output);
+      await SharePlus.instance
+          .share(ShareParams(files: [XFile(output)], text: 'Klip Studio ZAI'));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) setState(() => zipping = false);
+    }
+  }
+
   String keyOf((Project, Clip) e) => '${e.$1.id}/${e.$2.index}';
   List<(Project, Clip)> get all => [
         for (final p in widget.project == null
@@ -59,7 +99,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             ? b.$2.score.compareTo(a.$2.score)
             : (b.$1.createdAt ?? DateTime(1970))
                 .compareTo(a.$1.createdAt ?? DateTime(1970)));
-        final busy = widget.state.jobState == JobState.running;
+        final busy = widget.state.jobState == JobState.running || zipping;
         return ListView(padding: const EdgeInsets.all(16), children: [
           Text(
               widget.project == null
@@ -118,7 +158,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     busy || selected.isEmpty || formats.isEmpty ? null : batch,
                 icon: const Icon(Icons.movie_creation_outlined),
                 label: Text(
-                    'Render ${all.where((e) => selected.contains(keyOf(e))).length * formats.length} video'))
+                    'Render ${all.where((e) => selected.contains(keyOf(e))).length * formats.length} video')),
+            OutlinedButton.icon(
+                onPressed: busy || selected.isEmpty || formats.isEmpty
+                    ? null
+                    : zipSelected,
+                icon: const Icon(Icons.folder_zip_outlined),
+                label: Text(zipping ? 'Mengemas…' : 'Bagikan ZIP pilihan'))
           ]),
           if (busy) ...[
             LinearProgressIndicator(value: widget.state.jobProgress / 100),

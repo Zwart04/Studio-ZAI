@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "studiozai"
-version = "1.10.0"
+version = "1.11.0"
 description = "Studio ZAI - cross-platform auto clip, subtitle and voiceover studio (local-first)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "LicenseRef-StudioZAI-Noncommercial" }
 authors = [{ name = "Zwart04" }]
 dependencies = [
   "numpy>=1.26",

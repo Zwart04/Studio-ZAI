@@ -66,13 +66,18 @@ def slice_framing(data: dict, offset: float, duration: float) -> dict:
         {"time": duration, **last}]}
 
 
-def follow_face(path: str, start: float, end: float, x: float = .5, progress=None) -> dict:
+def follow_face(path: str, start: float, end: float, x: float = .5, progress=None, y: float = .4) -> dict:
     """Track the face nearest the previous center. No speaker identity inference."""
+    import sys
+    from pathlib import Path
+
     import cv2
-    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    model = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[3])) / "vendor" / "face_detection_yunet_2023mar.onnx"
+    neural = cv2.FaceDetectorYN.create(str(model), "", (320, 320), .85, .3, 5000) if model.is_file() else None
+    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml") if neural is None else None
     capture = cv2.VideoCapture(path)
     frames = []
-    previous = (x, .4)
+    previous = (number(x, .5, 0, 1), number(y, .4, 0, 1))
     duration = max(.1, end - start)
     interval = max(.75, duration / 180)
     try:
@@ -83,19 +88,38 @@ def follow_face(path: str, start: float, end: float, x: float = .5, progress=Non
             capture.set(cv2.CAP_PROP_POS_MSEC, (start + t) * 1000)
             ok, frame = capture.read()
             if ok:
-                scale = min(1, 640 / frame.shape[1])
+                scale = min(1, 960 / max(frame.shape[:2]))
                 small = cv2.resize(frame, None, fx=scale, fy=scale)
-                faces = detector.detectMultiScale(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), 1.1, 5, minSize=(24, 24))
-                centers = [((a + w / 2) / small.shape[1], (b + h / 2) / small.shape[0]) for a, b, w, h in faces]
-                if centers:
-                    center = min(centers, key=lambda p: (p[0] - previous[0]) ** 2 + (p[1] - previous[1]) ** 2)
+                if neural is not None:
+                    neural.setInputSize((small.shape[1], small.shape[0]))
+                    _, detected = neural.detect(small)
+                    faces = [] if detected is None else detected[:, :4]
+                else:
+                    faces = detector.detectMultiScale(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), 1.1, 5, minSize=(24, 24))
+                centers = [(float((a + w / 2) / small.shape[1]), float((b + h / 2) / small.shape[0])) for a, b, w, h in faces]
+                center = select_face(centers, previous)
+                if center is not None:
                     previous = center if not frames else tuple(.65 * old + .35 * new for old, new in zip(previous, center))
-                    frames.append({"time": round(t, 3), "x": round(previous[0], 4), "y": round(previous[1], 4)})
+                # Keep a stationary key when the selected face disappears: never
+                # interpolate across the gap towards an unrelated person's face.
+                frames.append({"time": round(t, 3), "x": round(previous[0], 4), "y": round(previous[1], 4), "detected": center is not None})
             if progress:
                 progress(100 * t / duration, "mengikuti wajah")
             t += interval
     finally:
         capture.release()
-    if not frames:
+    detected_count = sum(row.pop("detected") for row in frames)
+    if not detected_count:
         raise ValueError("Wajah tidak terdeteksi. Gunakan crop manual atau keyframe.")
-    return {"x": frames[0]["x"], "y": frames[0]["y"], "zoom": 1, "keyframes": frames}
+    return {"x": frames[0]["x"], "y": frames[0]["y"], "zoom": 1, "keyframes": frames,
+            "detector": "YuNet" if neural is not None else "Haar fallback", "detected_frames": detected_count,
+            "sampled_frames": len(frames), "note": "Wajah hilang/jauh: crop ditahan. Tinjau keyframe setelah pergantian adegan; ini bukan deteksi pembicara aktif."}
+
+
+def select_face(centers: list, previous: tuple, max_distance: float = .25) -> tuple | None:
+    """Only follow a nearby face; retain the user's anchor when nobody matches."""
+    if not centers:
+        return None
+    center = min(centers, key=lambda p: (p[0] - previous[0]) ** 2 + (p[1] - previous[1]) ** 2)
+    distance = (center[0] - previous[0]) ** 2 + (center[1] - previous[1]) ** 2
+    return center if distance <= max_distance ** 2 else None

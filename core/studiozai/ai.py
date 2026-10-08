@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import re
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -22,6 +25,71 @@ PROVIDERS = {
     "sd_local": {"label": "Stable Diffusion lokal", "url": "http://127.0.0.1:1234/v1", "image": True},
 }
 VOICES = ["marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"]
+_MODEL_CACHE: dict[tuple, tuple[float, dict]] = {}
+
+
+def model_rank(identifier: str, kind: str = "ai") -> tuple:
+    name = identifier.lower()
+    preferred = any(word in name for word in ("mini", "luna", "flash", "haiku", "instant", "lite", "20b"))
+    stable = not any(word in name for word in ("preview", "experimental", "exp-", "deprecated"))
+    version = tuple(int(part) for part in re.findall(r"\d+", name)[:3])
+    return (stable, preferred, version, name)
+
+
+def supports_model(identifier: str, kind: str) -> bool:
+    name = identifier.lower()
+    if kind == "image":
+        return "image" in name or name.startswith(("dall-e", "sd-"))
+    if kind == "speech":
+        return "tts" in name
+    return not any(word in name for word in ("embed", "whisper", "audio", "speech", "tts", "realtime", "image", "dall-e", "moderation", "guard", "compound", "codex", "robotics"))
+
+
+def validate_provider_base(provider: str, base: str) -> str:
+    from urllib.parse import urlparse
+    if provider not in PROVIDERS:
+        raise ValueError("Penyedia tidak dikenal")
+    base = (base or PROVIDERS[provider]["url"]).rstrip("/")
+    parsed = urlparse(base)
+    if provider not in {"compatible", "sd_local"}:
+        official = urlparse(PROVIDERS[provider]["url"])
+        if parsed.scheme != "https" or parsed.hostname != official.hostname or parsed.port not in {None, 443}:
+            raise ValueError("Penyedia ini memakai alamat resmi. Untuk endpoint lain pilih API kompatibel.")
+    if parsed.query or parsed.fragment or parsed.username or parsed.password:
+        raise ValueError("Alamat API tidak boleh memuat kredensial atau parameter")
+    return base
+
+
+def discover_models(provider: str, base: str = "", key: str = "", kind: str = "ai") -> dict:
+    if kind not in {"ai", "image", "speech"}:
+        raise ValueError("Jenis model tidak dikenal")
+    base = validate_provider_base(provider, base)
+    if not key and provider not in {"compatible", "sd_local"}:
+        raise ValueError("Masukkan API key untuk mendeteksi model di akunmu")
+    cache_key = (provider, base, kind, hashlib.sha256(key.encode()).hexdigest())
+    cached = _MODEL_CACHE.get(cache_key)
+    if cached and time.monotonic() - cached[0] < 300:
+        return cached[1]
+    route = "/models?limit=1000" if provider == "anthropic" else "/models"
+    result = request(base, route, key, anthropic=provider == "anthropic")
+    rows = result.get("data", []) if isinstance(result, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("Daftar model penyedia tidak valid")  # noqa: TRY004
+    choices = {}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("active") is False:
+            continue
+        identifier = row.get("id")
+        if isinstance(identifier, str) and 0 < len(identifier) <= 200 and supports_model(identifier, kind):
+            choices[identifier] = {"id": identifier, "label": str(row.get("display_name") or identifier)[:200]}
+    ordered = sorted(choices.values(), key=lambda row: model_rank(row["id"], kind), reverse=True)
+    if not ordered:
+        raise ValueError("Tidak ada model yang sesuai. Pilih jenis/provider lain atau isi model manual.")
+    data = {"models": ordered, "recommended": ordered[0]["id"], "source": "provider", "note": "Saran berdasarkan jenis/nama model, bukan jaminan biaya atau kualitas. Akses inferensi tetap mengikuti kuota akun."}
+    if len(_MODEL_CACHE) > 64:
+        _MODEL_CACHE.clear()
+    _MODEL_CACHE[cache_key] = (time.monotonic(), data)
+    return data
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -60,11 +128,13 @@ def connection(kind: str) -> tuple[str, str, str, str]:
     capability = {"ai": "text", "image": "image", "speech": "speech"}[kind]
     if provider not in PROVIDERS or not PROVIDERS[provider].get(capability):
         raise ValueError(f"Pilih penyedia {kind} di Pengaturan")
-    base = str(settings.get(f"{kind}_base_url") or PROVIDERS[provider]["url"])
+    base = validate_provider_base(provider, str(settings.get(f"{kind}_base_url") or PROVIDERS[provider]["url"]))
     model = str(settings.get(f"{kind}_model", "")).strip()
     key = credentials.read().get(f"{kind}_api_key", "")
     if provider not in {"compatible", "sd_local", "sdxs_local"} and not key:
         raise ValueError("Isi API key di Pengaturan")
+    if model == "auto" or (kind == "ai" and not model):
+        model = discover_models(provider, base, key, kind)["recommended"]
     return provider, base, model, key
 
 

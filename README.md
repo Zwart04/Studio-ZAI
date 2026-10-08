@@ -2,13 +2,15 @@
 
 <p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.10.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.11.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
 
 ![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/creator-portrait.png)
 
-## Baru di 1.10
+## Baru di 1.11
 
-Kanvas editor dan klip manual kini portrait secara default. Windows dan Android mendapat split facecam/gameplay, judul pembuka, watermark teks/gambar, seleksi beberapa kata, kotak kata aktif, pratinjau perubahan caption, serta deteksi bahasa otomatis. Deteksi podcast, crop/keyframe, terjemahan, galeri, dan batch tiga rasio tetap tersedia. [Panduan lengkap dan batas fitur](docs/CREATOR.md) · [Pengujian rilis](docs/RELEASE-1.10.0.md).
+Kanvas editor dan klip manual kini portrait secara default. Windows dan Android mendapat split facecam/gameplay, judul pembuka, watermark teks/gambar, seleksi beberapa kata, kotak kata aktif, pratinjau perubahan caption, serta deteksi bahasa otomatis. Deteksi podcast, crop/keyframe, terjemahan, galeri, dan batch tiga rasio tetap tersedia. [Panduan lengkap dan batas fitur](docs/CREATOR.md) · [Pengujian rilis](docs/RELEASE-1.11.0.md).
+
+Provider + API key kini dapat mendeteksi model dan memberi saran. Pelacakan memakai YuNet di Windows dan ML Kit di Android; crop ditahan saat wajah hilang. Klip terpilih dapat diunduh/dibagikan dalam satu ZIP. Lisensi kode baru mengizinkan penggunaan publik tanpa menjual aplikasi/layanan; hasil video boleh dimonetisasi.
 
 ## Buat video dari ide sampai siap ekspor
 
@@ -26,10 +28,10 @@ Kanvas editor dan klip manual kini portrait secara default. Windows dan Android 
 
 | Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.10.0/StudioZAI-1.10.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
-| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.10.0/StudioZAI-1.10.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan pengujian v1.10.0](docs/RELEASE-1.10.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.10.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
+[Catatan pengujian v1.11.0](docs/RELEASE-1.11.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 
@@ -60,7 +62,7 @@ Alur pemilihan klip diuji dengan [video review speaker nyata 80,5 menit](https:/
 
 ## Kembangkan
 
-**Galeri klip lintas proyek** dan **ekspor batch 9:16 / 1:1 / 16:9** tersedia dalam paket Windows dan Android v1.10.0. [Panduan penggunaan](docs/CLIP_GALLERY.md).
+**Galeri klip lintas proyek** dan **ekspor batch 9:16 / 1:1 / 16:9** tersedia dalam paket Windows dan Android v1.11.0. [Panduan penggunaan](docs/CLIP_GALLERY.md).
 
 ```powershell
 git clone https://github.com/Zwart04/Studio-ZAI.git
@@ -81,4 +83,4 @@ flutter build apk --release
 
 [Arsitektur](docs/ARCHITECTURE.md) · [Fitur per platform](docs/FEATURES.md) · [Build dan signing](docs/BUILD.md) · [Changelog](docs/CHANGELOG.md)
 
-Kode aplikasi berlisensi [MIT](LICENSE). Model, font, dan library native memakai lisensi masing-masing. Referensi alur kreator: [openshorts](https://github.com/mutonby/openshorts) dan [OpenCreator](https://github.com/krillinai/OpenCreator).
+Kode aplikasi berlisensi [Studio ZAI Noncommercial](LICENSE). Model, font, dan library native memakai lisensi masing-masing. Referensi alur kreator: [openshorts](https://github.com/mutonby/openshorts) dan [OpenCreator](https://github.com/krillinai/OpenCreator).

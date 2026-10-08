@@ -6,9 +6,13 @@ import ctypes
 import json
 import os
 import sys
+import tempfile
+import threading
 from ctypes import wintypes
 
 from . import config
+
+_LOCK = threading.RLock()
 
 
 def _protect(value: bytes, decrypt: bool = False) -> bytes:
@@ -38,6 +42,11 @@ def read() -> dict[str, str]:
 
 
 def update(values: dict[str, str]) -> None:
+    with _LOCK:
+        _update(values)
+
+
+def _update(values: dict[str, str]) -> None:
     data = read()
     data.update({k: v for k, v in values.items() if v != "***"})
     raw = json.dumps(data).encode()
@@ -45,6 +54,14 @@ def update(values: dict[str, str]) -> None:
     if windows:
         raw = _protect(raw)
     path = config.data_dir() / "credentials.json"
-    path.write_text(json.dumps({"storage": "windows-dpapi" if windows else "private-file",
-        "data": base64.b64encode(raw).decode()}), encoding="utf-8")
-    os.chmod(path, 0o600)
+    descriptor, temporary = tempfile.mkstemp(prefix="credentials-", suffix=".tmp", dir=path.parent)
+    try:
+        os.chmod(temporary, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump({"storage": "windows-dpapi" if windows else "private-file", "data": base64.b64encode(raw).decode()}, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)

@@ -1,0 +1,39 @@
+{
+  "cybrary.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/cybrary.py",
+    "sha256": [
+      "bfbb2460d8711c904ceaaf4ae887bb0fd6c9c43e395efb3750bfbdecc648bf5d"
+    ]
+  },
+  "googledrive.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/googledrive.py",
+    "sha256": [
+      "f5800ea77725791d39d693e48e2e34ea71f6018ea4b4ab86c5e3f387d989e1fe"
+    ]
+  },
+  "listennotes.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/listennotes.py",
+    "sha256": [
+      "7409107e06292f532e15176a2886e856b1a20d673fbfe6678569ef0a633952aa"
+    ]
+  },
+  "stacommu.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/stacommu.py",
+    "sha256": [
+      "0db06e29a12203ad4ebd49cceca6df105eebcc6c6cebd63383b0e412f3f80d79",
+      "b8f8095592c712594cc727f5dc460947f0480bbe0746952ba031aa88562bdad4"
+    ]
+  },
+  "sverigesradio.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/sverigesradio.py",
+    "sha256": [
+      "d1a4a1112e78b8b7e387ec5e6f865bc1916fe16d1a6952f2078d7a597e1df65f"
+    ]
+  },
+  "wrestleuniverse.py": {
+    "source": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/yt_dlp/extractor/wrestleuniverse.py",
+    "sha256": [
+      "59cc5d9d53527dbff3febce6a0e686a4489588e93fceef7bf73c8a8ee93664d6"
+    ]
+  }
+}

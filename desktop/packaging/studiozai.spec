@@ -26,7 +26,10 @@ UI = ROOT / "ui"
 
 datas = [
     (str(CORE / "studiozai" / "models" / "registry.json"), "studiozai/models"),
-    (str(UI), "ui"),
+    *[(str(f), str(Path("ui") / f.parent.relative_to(UI))) for f in UI.rglob("*") if f.is_file() and f.suffix in {".html", ".css", ".js", ".svg", ".png", ".ico", ".woff", ".woff2", ".ttf"}],
+    (str(ROOT / "LICENSE"), "."),
+    (str(ROOT / "docs" / "licenses"), "licenses"),
+    (str(ROOT / "vendor" / "face_detection_yunet_2023mar.onnx"), "vendor"),
     (str(ROOT / "assets" / "logo.png"), "assets"),
 ]
 sd_cpu_bundle = ROOT / "vendor" / "sd-cpp-win-cpu-28b454b.zip"

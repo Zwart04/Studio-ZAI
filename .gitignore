@@ -12,6 +12,17 @@ dist/
 build/
 
 # App data / outputs
+.env
+.env.*
+!.env.example
+!.env.template
+credentials*.json
+settings.local.json
+*cookies*.txt
+*.pem
+*.key
+*.p12
+*.pfx
 output/
 projects/
 models/

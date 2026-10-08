@@ -834,6 +834,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
                       'start': widget.clip.start,
                       'end': widget.clip.end,
                       'x': framing['x'] ?? .5,
+                      'y': framing['y'] ?? .4,
                     });
                     if (result == null) {
                       throw Exception('Pelacakan tidak menghasilkan keyframe');
@@ -841,7 +842,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
                     if (mounted) {
                       setState(() {
                         framing = {...result, 'enabled': true, 'zoom': zoom};
-                        message = 'Keyframe wajah siap ditinjau.';
+                        message = 'Wajah: ${result['detected_frames']}/${result['sampled_frames']} sampel. Crop ditahan ketika wajah hilang; tinjau keyframe.';
                       });
                     }
                   }),

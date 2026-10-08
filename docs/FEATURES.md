@@ -1,4 +1,4 @@
-# Fitur Studio ZAI 1.10
+# Fitur Studio ZAI 1.11
 
 [Creator: podcast, kata, crop, terjemahan, galeri dan batch di Windows/Android](CREATOR.md).
 
@@ -24,7 +24,10 @@
 | Rekaman mikrofon | Browser/WebView | Izin mikrofon Android |
 | ZipVoice English/Mandarin | Runtime dibundel | Runtime dibundel |
 | Chatterbox kloning Indonesia | Opsional dari source + PyTorch, bobot >2 GB di luar model dasar | Belum tersedia pada paket ringan |
-| AI teks / pemilihan momen | OpenAI, Anthropic, DeepSeek, compatible | Sama |
+| AI teks / pemilihan momen | OpenAI, Anthropic, Groq, Gemini, DeepSeek, compatible | Sama |
+| Deteksi & saran model dari akun provider | Ya | Ya |
+| Pelacakan wajah dengan jangkar X/Y | YuNet; Haar pada source tanpa bobot | ML Kit accurate + tracking |
+| ZIP klip/format terpilih yang sudah dirender | Unduh ZIP | Bagikan ZIP |
 | Gambar / suara online | OpenAI | OpenAI |
 | Gambar lokal | SDXS-512, mesin SD.cpp CPU dalam paket | SDXS-512 CPU native pada ARM64; ARM32 belum didukung |
 | Duplikat proyek independen | Ya | Belum ada tombol duplikat |
@@ -36,4 +39,4 @@ Caption hasil render tidak ditimpa track pemutar kedua. Teks yang sudah menyatu 
 
 Sumber unduhan disimpan di proyek. Hapus proyek membuang sumber dan hasil miliknya; file asal eksternal dipertahankan. Cache hanya data sementara.
 
-HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.10.0.md).
+HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.11.0.md).

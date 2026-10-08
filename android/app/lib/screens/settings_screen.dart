@@ -136,11 +136,11 @@ class SettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Studio ZAI 1.10.0',
+              const Text('Studio ZAI 1.11.0',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: Tokens.space1),
               const Text(
-                  'Kode aplikasi MIT. Model dan suara mengikuti lisensi masing-masing; lihat dokumentasi model di GitHub.',
+                  'Kode boleh dipakai dan dibagikan publik; aplikasi dan layanan berbasis aplikasi ini tidak boleh dijual tanpa izin Zwart04. Model dan suara mengikuti lisensi masing-masing; lihat dokumentasi model di GitHub.',
                   style: TextStyle(color: Tokens.textDim, fontSize: 12)),
               const SizedBox(height: Tokens.space2),
               Text('Data: ${state.dataDir.path}',

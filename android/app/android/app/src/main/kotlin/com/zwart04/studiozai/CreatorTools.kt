@@ -2,8 +2,11 @@ package com.zwart04.studiozai
 
 import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.PointF
-import android.media.FaceDetector
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
+import java.util.concurrent.TimeUnit
 import android.media.MediaMetadataRetriever
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -45,42 +48,56 @@ object CreatorTools {
                     val start = call.argument<Number>("start")?.toDouble() ?: 0.0
                     val end = call.argument<Number>("end")?.toDouble() ?: 0.0
                     var previousX = call.argument<Number>("x")?.toDouble() ?: 0.5
-                    var previousY = 0.4
+                    var previousY = call.argument<Number>("y")?.toDouble() ?: 0.4
                     Thread {
                         val retriever = MediaMetadataRetriever()
+                        val detector = FaceDetection.getClient(FaceDetectorOptions.Builder()
+                            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                            .setMinFaceSize(.04f).enableTracking().build())
                         try {
                             require(start.isFinite() && end.isFinite() && start >= 0 && end > start) { "Rentang tidak valid" }
                             retriever.setDataSource(path)
                             val keys = mutableListOf<Map<String, Double>>()
+                            var detectedFrames = 0
+                            var trackedId: Int? = null
                             var t = 0.0
                             val step = max(0.75, (end - start) / 180)
                             while (t < end - start) {
                                 val frame = retriever.getFrameAtTime(((start + t) * 1000000).toLong(), MediaMetadataRetriever.OPTION_CLOSEST)
                                 if (frame != null) {
-                                    val width = 480
+                                    val width = minOf(960, frame.width)
                                     val height = max(2, (frame.height.toDouble() / frame.width * width).roundToInt())
                                     val scaled = Bitmap.createScaledBitmap(frame, width, height, true)
-                                    val rgb = scaled.copy(Bitmap.Config.RGB_565, false)
-                                    val faces = arrayOfNulls<FaceDetector.Face>(8)
-                                    val count = FaceDetector(width, height, 8).findFaces(rgb, faces)
-                                    val centers = (0 until count).mapNotNull { faces[it] }.filter { it.confidence() >= .3f }.map { face ->
-                                        val point = PointF(); face.getMidPoint(point)
-                                        Pair(point.x / width.toDouble(), point.y / height.toDouble())
-                                    }
-                                    val nearest = centers.minByOrNull { (it.first - previousX)*(it.first - previousX) + (it.second - previousY)*(it.second - previousY) }
-                                    if (nearest != null) {
-                                        previousX = if (keys.isEmpty()) nearest.first else previousX*.65+nearest.first*.35
-                                        previousY = if (keys.isEmpty()) nearest.second else previousY*.65+nearest.second*.35
+                                    try {
+                                        val faces = Tasks.await(detector.process(InputImage.fromBitmap(scaled, 0)), 30, TimeUnit.SECONDS)
+                                        fun distance(face: com.google.mlkit.vision.face.Face): Double {
+                                            val dx = face.boundingBox.exactCenterX() / width.toDouble() - previousX
+                                            val dy = face.boundingBox.exactCenterY() / height.toDouble() - previousY
+                                            return dx*dx + dy*dy
+                                        }
+                                        val nearest = faces.firstOrNull { trackedId != null && it.trackingId == trackedId }
+                                            ?: faces.minByOrNull { distance(it) }
+                                        if (nearest != null && distance(nearest) <= .25*.25) {
+                                            val cx = nearest.boundingBox.exactCenterX() / width.toDouble()
+                                            val cy = nearest.boundingBox.exactCenterY() / height.toDouble()
+                                            previousX = if (detectedFrames == 0) cx else previousX*.65+cx*.35
+                                            previousY = if (detectedFrames == 0) cy else previousY*.65+cy*.35
+                                            trackedId = nearest.trackingId
+                                            detectedFrames++
+                                        }
                                         keys.add(mapOf("time" to t, "x" to previousX, "y" to previousY))
+                                    } finally {
+                                        if (scaled !== frame) scaled.recycle()
+                                        frame.recycle()
                                     }
-                                    rgb.recycle(); if (scaled !== frame) scaled.recycle(); frame.recycle()
                                 }
                                 t += step
                             }
-                            require(keys.isNotEmpty()) { "Wajah tidak terdeteksi. Gunakan keyframe manual." }
-                            activity.runOnUiThread { result.success(mapOf("x" to keys.first()["x"], "y" to keys.first()["y"], "zoom" to 1.0, "keyframes" to keys)) }
+                            require(detectedFrames > 0) { "Wajah dekat titik crop tidak terdeteksi. Pilih titik wajah atau keyframe manual." }
+                            activity.runOnUiThread { result.success(mapOf("x" to keys.first()["x"], "y" to keys.first()["y"], "zoom" to 1.0, "keyframes" to keys,
+                                "detector" to "ML Kit", "detected_frames" to detectedFrames, "sampled_frames" to keys.size)) }
                         } catch (e: Exception) { activity.runOnUiThread { result.error("framing", e.message, null) } }
-                        finally { retriever.release() }
+                        finally { detector.close(); retriever.release() }
                     }.start()
                 }
                 else -> result.notImplemented()

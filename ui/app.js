@@ -280,6 +280,7 @@ function trackJob(job) {
       updateBatchSummary();
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
       else if (data.status === "cancelled") toast(t("common.cancel"));
+      else if (data.result?.zip) { const link=$('#batchZipDownload'); link.href=mediaUrl(data.result.zip);link.hidden=false;link.click();toast('ZIP klip siap'); }
       else if (data.result?.exports) toast(t("batch.done").replace("{total}", data.result.exports.length));
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
@@ -594,6 +595,7 @@ function updateBatchSummary() {
   const clips = $$("#clipGrid [data-batch-clip]:checked").length;
   const formats = $$("#batchPanel .batch-formats input:checked").length;
   $("#batchSummary").textContent = t("batch.summary").replace("{clips}", clips).replace("{formats}", formats).replace("{total}", clips * formats);
+  $("#batchZipBtn").disabled = !clips || !formats || Boolean(state.jobId) || batchSubmitting;
   $("#batchRenderBtn").disabled = !clips || !formats || clips > 20 || Boolean(state.jobId) || batchSubmitting;
 }
 
@@ -1390,6 +1392,7 @@ async function boot() {
     updateBatchSummary();
   });
   $("#batchRenderBtn").addEventListener("click", renderSelectedClips);
+  $("#batchZipBtn").onclick=async()=>{ if(!state.project||state.jobId)return;try { const clips=$$("#clipGrid [data-batch-clip]:checked").map(i=>Number(i.dataset.batchClip)), formats=$$("#batchPanel .batch-formats input:checked").map(i=>i.value); const job=await api(`/api/projects/${state.project.id}/clips-zip`,{method:'POST',body:JSON.stringify({clips,formats})});$('#batchZipDownload').hidden=true;trackJob(job); } catch(e){toast(e.message,'error');} };
   $("#backBtn").addEventListener("click", () => { state.project = null; renderProjects(); });
   $("#exportBtn").addEventListener("click", async () => {
     if (!state.project) return;

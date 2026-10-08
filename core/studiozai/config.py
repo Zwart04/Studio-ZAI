@@ -118,7 +118,8 @@ def save_settings(values: dict[str, Any]) -> dict[str, Any]:
     data = load_settings()
     values = dict(values)
     for kind in ("ai", "image", "speech"):
-        if f"{kind}_provider" in values and values[f"{kind}_provider"] != data.get(f"{kind}_provider") and values.get(f"{kind}_api_key", "***") == "***":
+        changed = any(field in values and values[field] != data.get(field, "") for field in (f"{kind}_provider", f"{kind}_base_url"))
+        if changed and values.get(f"{kind}_api_key", "***") == "***":
             values[f"{kind}_api_key"] = ""
     data.update(values)
     keys = {k: str(v) for k, v in data.items() if k.endswith("_api_key") and v}

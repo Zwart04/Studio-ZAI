@@ -1,4 +1,4 @@
-# Studio ZAI 1.10 — Windows & Android
+# Studio ZAI 1.11 — Windows & Android
 
 Alur creator mengacu pada fitur publik [SocialVisuals](https://socialvisuals.pro/), diperiksa 8 Oktober 2026. Implementasi, merek, font, dan kode memakai aset Studio ZAI sendiri.
 
@@ -74,8 +74,14 @@ Pilih crop **Split facecam + gameplay**, atur bagian atas dan bawah secara terpi
 
 ## Dependensi tambahan
 
-Windows: `core[face,translation]` menyediakan `opencv-python-headless>=4.10,<5`, SentencePiece, Sacremoses, subword-nmt, dan CTranslate2. Model Argos berasal dari indeks resmi; bobot tidak dimasukkan ke Git. OpenCV 5 menghapus API Haar yang dipakai versi ini sehingga tidak digunakan.
+Windows: `core[face,translation]` menyediakan `opencv-python-headless>=4.10,<5`, SentencePiece, Sacremoses, subword-nmt, dan CTranslate2. Model Argos berasal dari indeks resmi; bobot tidak dimasukkan ke Git. Pelacakan utama memakai YuNet; Haar dipakai hanya pada source tanpa bobot YuNet. Paket Windows menyertakan bobot dan lisensi MIT milik Shiqi Yu.
 
-Android: `com.google.mlkit:translate:17.0.3`; kode bridge terdapat pada folder native dan `android_overrides`. Unduhan model memakai koneksi yang tersedia ketika pengguna menekan tombol terjemahan.
+Android: `com.google.mlkit:translate:17.0.3` dan deteksi wajah offline `com.google.mlkit:face-detection:16.1.7`; kode bridge terdapat pada folder native dan `android_overrides`. Unduhan model memakai koneksi yang tersedia ketika pengguna menekan tombol terjemahan.
 
 Sumber implementasi: [Groq API](https://console.groq.com/docs/openai), [Gemini kompatibel OpenAI](https://ai.google.dev/gemini-api/docs/openai), [FFmpeg crop](https://ffmpeg.org/ffmpeg-filters.html#crop), [Argos](https://github.com/argosopentech/argos-translate), [ML Kit translation](https://developers.google.com/ml-kit/language/translation/android).
+
+## Pelacakan dan ZIP di 1.11
+
+Pindahkan titik crop ke wajah sebelum menekan Ikuti wajah. X/Y menjadi jangkar; wajah yang jauh tidak otomatis mengganti subjek. Ketika wajah hilang, crop ditahan. Tinjau pergantian adegan dan wajah saling melintas. Ini bukan pengenalan identitas atau pembicara aktif. UI menampilkan jumlah sampel yang mendeteksi wajah.
+
+Pilih klip dan format, render, lalu tekan **Unduh ZIP pilihan** (Windows) atau **Bagikan ZIP pilihan** (Android). ZIP hanya berisi MP4 terpilih; konfigurasi, key, cookies, dan JSON proyek tidak disertakan. Render diperlukan bila format belum tersedia.

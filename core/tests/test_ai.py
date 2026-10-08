@@ -11,6 +11,8 @@ from studiozai import ai, config, credentials, server
 @pytest.fixture
 def local_ai(monkeypatch, tmp_path):
     monkeypatch.setattr(config, '_base_dir', lambda: tmp_path)
+    # These tests exercise transport protocols against an isolated local stub.
+    monkeypatch.setattr(ai, 'validate_provider_base', lambda provider, base: base)
     captured = []
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):

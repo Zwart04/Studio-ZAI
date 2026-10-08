@@ -7,8 +7,6 @@ import math
 import re
 import subprocess
 import sys
-import urllib.error
-import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -893,28 +891,13 @@ def _rank_chunk(
         from .. import ai
         content = ai.text(prompt)
     else:
-        payload = json.dumps(
-            {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": "Jawab hanya dengan JSON valid."},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.2,
-            }
-        ).encode("utf-8")
-        request = urllib.request.Request(
-            base_url.rstrip("/") + "/chat/completions",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                **({"Authorization": f"Bearer {api_key}"} if api_key else {}),
-            },
-        )
+        from .. import ai
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            base_url = ai.validate_provider_base("compatible", base_url)
+            body = ai.request(base_url, "/chat/completions", api_key or "", {
+                "model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2,
+            })
+        except (RuntimeError, ValueError, OSError):
             return []
         content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
     start = content.find("[")
