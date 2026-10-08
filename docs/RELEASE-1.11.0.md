@@ -44,4 +44,4 @@ APK memakai signing key debug yang sama dengan rilis sebelumnya untuk kontinuita
 
 Paket lokal: `releases/1.11.0/`. [GitHub Release](https://github.com/Zwart04/Studio-ZAI/releases/tag/v1.11.0).
 
-Cache/build Studio dibersihkan setelah verifikasi. Empat cache lama dengan ACL Windows terkunci memerlukan penanganan administrator seperti dijelaskan sebelumnya. Penghapusan output kecil `dist`/JSON audit pada clone Cheat Clip ditolak pemeriksaan persetujuan otomatis dengan alasan `blocked by policy`; output itu dipertahankan. Virtualenv/node_modules clone tetap tersedia untuk menjalankan proyek.
+Cache/build Studio dibersihkan setelah verifikasi. Pemeriksaan akhir memastikan empat cache lama yang sebelumnya terkunci sudah tidak ada. Penghapusan output kecil `dist`/JSON audit pada clone Cheat Clip ditolak pemeriksaan persetujuan otomatis dengan alasan `blocked by policy`; output itu dipertahankan. Virtualenv/node_modules clone tetap tersedia untuk menjalankan proyek.
