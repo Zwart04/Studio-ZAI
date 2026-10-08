@@ -151,7 +151,8 @@ def render_timeline(
         x_ratio = max(0.0, min(1.0, float(item.get("x", 0.5))))
         y_ratio = max(0.0, min(1.0, float(item.get("y", 0.5))))
         width = _even(out_w * scale)
-        filters.append(f"[{index}:v]scale={max(2, width)}:-2[s{index}]")
+        opacity = max(0.0, min(1.0, float(item.get("opacity", 1.0))))
+        filters.append(f"[{index}:v]scale={max(2, width)}:-2,format=rgba,colorchannelmixer=aa={opacity:.3f}[s{index}]")
         filters.append(
             f"{label}[s{index}]overlay=x=(W-w)*{x_ratio:.4f}:y=(H-h)*{y_ratio:.4f}:"
             f"enable='between(t,{start:.3f},{end:.3f})'[v{index}]"

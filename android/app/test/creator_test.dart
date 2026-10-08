@@ -6,6 +6,53 @@ import 'package:studiozai/models.dart';
 import 'package:studiozai/services/clip_edits.dart';
 
 void main() {
+  test('Split uses independent areas and preserves both when trimming', () {
+    final f = <String, dynamic>{
+      'fraction': .35,
+      'top': {
+        'x': .2,
+        'y': .2,
+        'zoom': 2,
+        'keyframes': [
+          {'time': 0, 'x': .2, 'y': .2},
+          {'time': 4, 'x': .8, 'y': .2}
+        ]
+      },
+      'bottom': {'x': .5, 'y': .6}
+    };
+    expect(CreatorTools.splitFilter(f, 1920, 1080, 1080, 1920),
+        contains('vstack=inputs=2'));
+    final trimmed = CreatorTools.trimFraming(f, 2, 2);
+    expect(trimmed['top']['keyframes'].first['x'], closeTo(.5, .001));
+    expect(trimmed['bottom']['y'], .6);
+  });
+  test('Active box follows word timestamps and title watermark retain opacity',
+      () {
+    final row = Caption(0, 2, 'Halo dunia', [
+      {'word': 'Halo', 'start': 0, 'end': 1},
+      {'word': 'dunia', 'start': 1, 'end': 2}
+    ], {
+      'mode': 'box',
+      'boxColor': '#112233'
+    });
+    final ass = SubtitleBuilder.toAss([row]);
+    expect(ass, contains(',ActiveBox,,'));
+    expect(ass, contains(r'\3c&H332211&'));
+    expect(ass, contains('0:00:01.00,0:00:02.00'));
+    final mark = TimelineItem(
+        id: 'creator_watermark',
+        start: 0,
+        end: 2,
+        type: 'text',
+        text: '@test',
+        fontSize: 38,
+        opacity: .5);
+    final restored = TimelineItem.fromJson(mark.toJson());
+    expect(restored.opacity, .5);
+    expect(restored.fontSize, 38);
+    expect(SubtitleBuilder.toAss([], textItems: [restored.toJson()]),
+        contains(r'\alpha&H80&'));
+  });
   test('Split preserves language variants and interpolates crop at new start',
       () {
     final row = <String, dynamic>{

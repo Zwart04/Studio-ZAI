@@ -323,8 +323,8 @@ def refresh_captions(project: projects.Project, clip: projects.Clip) -> list[dic
     if captions != clip.captions:
         clip.invalidate_renders()
     clip.captions = captions
-    clip.caption_language = project.language
-    clip.caption_variants[project.language] = captions
+    clip.caption_language = project.transcript.get("language", project.language)
+    clip.caption_variants[clip.caption_language] = captions
     return clip.captions
 
 
@@ -380,8 +380,8 @@ def generate_captions_for_clip(
     if captions != clip.captions:
         clip.invalidate_renders()
     clip.captions = captions
-    clip.caption_language = project.language
-    clip.caption_variants[project.language] = captions
+    clip.caption_language = transcript.get("language", project.language)
+    clip.caption_variants[clip.caption_language] = captions
     _report(job, 95, "subtitle", f"{len(clip.captions)} baris subtitle dibuat")
     return clip.captions
 

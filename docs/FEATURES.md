@@ -1,4 +1,4 @@
-# Fitur Studio ZAI 1.9
+# Fitur Studio ZAI 1.10
 
 [Creator: podcast, kata, crop, terjemahan, galeri dan batch di Windows/Android](CREATOR.md).
 
@@ -10,6 +10,10 @@
 | Dub audio YouTube | Track yang tersedia | Track yang tersedia, retry terbatas tetap mempertahankan bahasa |
 | Video sumber tersimpan | Ya | Ya |
 | Trim, split, kanvas asli/9:16/1:1/16:9 | Ya | Ya |
+| Portrait default, split facecam/gameplay | Ya | Ya |
+| Judul pembuka dan watermark teks/gambar | Ya | Ya |
+| Multi-kata, highlight/kotak kata aktif | Ya | Ya |
+| Deteksi bahasa transkripsi otomatis | Ya, model multilingual | Ya, model multilingual |
 | Timeline video, media, teks, audio | Seret blok, tepi, dan berkas ke track | Potong/atur klip dan overlay |
 | Pemutar langsung + pratinjau otomatis | Ya | Ya |
 | Subtitle AI dari audio ID/EN | faster-whisper; editor menranskripsi rentang klip bila proyek belum punya transkrip | sherpa-onnx Whisper; hasil lama dipertahankan saat ASR hening |
@@ -32,4 +36,4 @@ Caption hasil render tidak ditimpa track pemutar kedua. Teks yang sudah menyatu 
 
 Sumber unduhan disimpan di proyek. Hapus proyek membuang sumber dan hasil miliknya; file asal eksternal dipertahankan. Cache hanya data sementara.
 
-HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.9.0.md).
+HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.10.0.md).

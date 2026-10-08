@@ -1,6 +1,6 @@
-# Studio ZAI 1.9 — Windows & Android
+# Studio ZAI 1.10 — Windows & Android
 
-Alur creator mengacu pada fitur publik [SocialVisuals](https://socialvisuals.pro/), diperiksa 29 September 2026. Implementasi, merek, font, dan kode memakai aset Studio ZAI sendiri.
+Alur creator mengacu pada fitur publik [SocialVisuals](https://socialvisuals.pro/), diperiksa 8 Oktober 2026. Implementasi, merek, font, dan kode memakai aset Studio ZAI sendiri.
 
 ## Pemetaan fitur
 
@@ -14,6 +14,13 @@ Alur creator mengacu pada fitur publik [SocialVisuals](https://socialvisuals.pro
 | Podcast panjang lewat AI | Transkrip dipecah, hasil divalidasi dan deduplikasi | Sama |
 | Review sebelum render | Draf, skor/alasan, judul/hook editable | Sama |
 | Caption per kata | Teks, timing, font, ukuran, warna, tebal | Sama; timestamp token Whisper diaktifkan |
+| Pilihan banyak kata | Pilih beberapa/semua kata lalu ubah gaya bersama | Sama |
+| Tampilan kata aktif | Baris, satu kata, highlight, kotak mengikuti kata | Sama |
+| Bahasa transkripsi | Deteksi otomatis atau 11 bahasa pilihan; model multilingual diperlukan | Sama; bahasa hasil ASR disimpan |
+| Gaming split | Dua crop independen untuk facecam dan gameplay; proporsi atas/bawah | Sama |
+| Judul pembuka | Saran lokal dari ucapan, edit, 4 preset, timing/ukuran/posisi | Sama |
+| Watermark | Teks atau PNG/JPEG/WebP, ukuran/posisi/opasitas | Sama |
+| Kanvas portrait | Default klip manual; viewport mengikuti rasio ekspor | Sama |
 | Animasi | None, pop, fade, rise, zoom, type; preset lama tetap tersedia | Sama |
 | Font & preset | 5 keluarga font bundel, preset bawaan, custom typography | Sama |
 | Posisi caption | X/Y relatif kanvas, posisi preset | Sama |
@@ -38,13 +45,24 @@ Tangkapan layar desktop menggunakan sumber sintetis untuk pengujian. [Galeri has
 1. Pilih video atau tautan, bahasa ucapan, dan **Podcast · tanya jawab & cerita** untuk wawancara. Angka **0 / Otomatis** memilih target 3–10 momen.
 2. Biarkan **Tinjau sebelum render** aktif. Whisper lokal perlu model terpasang. Jika transkripsi tidak tersedia, aplikasi menyatakan bahwa pilihan memakai analisis audio; itu bukan analisis makna podcast.
 3. Buka draf klip. Ubah judul/hook dan trim bila diperlukan. Di Windows buka **Editor per kata & terjemahan** atau **Atur crop & keyframe**. Di Android gunakan ikon tongkat di app bar editor (**Creator tools**).
-4. Pilih baris atau kata untuk mengatur gaya. Pilih **Seluruh baris** lalu **Terapkan gaya ke semua caption** untuk gaya bersama.
+4. Pilih baris atau kata untuk mengatur gaya. Aktifkan seleksi banyak kata untuk menerapkan font/warna/ukuran ke beberapa kata. Pilih mode kotak atau highlight untuk mengikuti kata aktif. Gunakan pratinjau video perubahan sebelum menyimpan. Pilih **Seluruh baris** lalu **Terapkan gaya ke semua caption** untuk gaya bersama.
 5. Pada crop, seret kotak, geser waktu, lalu tambahkan keyframe. **Ikuti wajah otomatis** membuat keyframe dari wajah terdekat dengan posisi awal. Tinjau saat ada lebih dari satu orang.
 6. Terjemahkan dari tab caption. Unduhan model pertama memerlukan internet dan ruang disk. Versi bahasa disimpan saat menekan **Simpan**; pemilihan versi tidak menghapus teks asli. Unduh/bagikan subtitle terpisah jika hanya perlu teks.
 7. Buka **Galeri** atau **Pilih momen & ekspor banyak format**, centang klip dan rasio, lalu render. Sumber yang telah disimpan digunakan lagi; tidak perlu mengunggah ulang.
 
+Klip lama mempertahankan pilihan rasio tersimpan. Jika klip lama masih landscape/asli, pilih kanvas **9:16 / Portrait**, simpan, lalu render ulang; file ekspor lama tidak berubah sendiri.
+
+## Finishing dan split gaming
+
+Pilih crop **Split facecam + gameplay**, atur bagian atas dan bawah secara terpisah, lalu proporsi facecam. Kedua area memakai sumber video yang sama. Tombol **Judul pembuka** membuat teks pada timeline; saran judul berasal dari ucapan lokal dan dapat diedit. **Watermark** menerima teks atau gambar dan berlaku sepanjang klip. Android membuka finishing lewat ikon branding di editor.
+
+![Kanvas portrait](screenshots/creator-portrait.png)
+
+[Contoh frame ekspor: split, judul, watermark, kotak kata aktif](screenshots/creator-export.png). Pratinjau draft memakai render FFmpeg tanpa menyimpan perubahan caption.
+
 ## Batas kemampuan yang perlu diketahui
 
+- Audit mencakup daftar fitur yang dipublikasikan SocialVisuals pada 8 Oktober 2026, bukan akses atau pengujian aplikasi berbayarnya. Saran judul lokal mengambil kalimat/hook dari caption; bukan generator cloud otomatis.
 - Skor adalah petunjuk editorial, bukan prediksi pasti viralitas. Pemilihan lokal memakai pola bahasa ID/EN; penyedia AI opsional dapat menilai konteks lebih luas.
 - Ikuti wajah melacak posisi wajah, bukan identitas atau diarization pembicara aktif. Wajah kecil, profil samping, atau pergantian kamera mungkin memerlukan keyframe manual.
 - Timing baris dan gaya baris dipertahankan saat terjemahan. Susunan kata berubah: timing kata diterjemahkan diperkirakan merata dan gaya khusus tiap kata perlu diatur kembali. Timestamp kata ASR digunakan bila model menghasilkannya; jika tidak, timing perkiraan tersedia untuk diedit.

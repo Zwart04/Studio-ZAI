@@ -1441,7 +1441,7 @@ function openSourceEditor() {
     <p class="field-help">Video tersimpan di proyek. Pilih bagian mana pun tanpa mengunduh lagi. Waktu dalam detik.</p>
     <div class="grid-2"><label>Mulai<input id="sourceStart" type="number" min="0" step="0.1" value="0"></label><label>Selesai<input id="sourceEnd" type="number" step="0.1" max="${project.duration}" value="${Math.min(30,project.duration)}"></label></div>
     <div class="row"><button class="ghost" id="markIn">Tandai mulai</button><button class="ghost" id="markOut">Tandai selesai</button></div>
-    <label>Kanvas<select id="sourceCanvas"><option value="original">Asli · rasio sumber</option><option value="portrait">Portrait 9:16</option><option value="square">Kotak 1:1</option><option value="landscape">Landscape 16:9</option></select></label>
+    <label>Kanvas<select id="sourceCanvas"><option value="portrait">Portrait 9:16</option><option value="original">Asli · rasio sumber</option><option value="square">Kotak 1:1</option><option value="landscape">Landscape 16:9</option></select></label>
     <button class="primary" id="createRange">Buat klip & edit</button>`);
   $('#markIn').onclick = () => { $('#sourceStart').value = $('#sourcePlayer').currentTime.toFixed(1); };
   $('#markOut').onclick = () => { $('#sourceEnd').value = $('#sourcePlayer').currentTime.toFixed(1); };

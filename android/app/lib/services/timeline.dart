@@ -23,6 +23,8 @@ class TimelineItem {
     this.crop = 'center',
     this.canvas = 'portrait',
     this.framing = const {},
+    this.opacity = 1,
+    this.fontSize = 0,
   });
 
   String id;
@@ -40,6 +42,8 @@ class TimelineItem {
   String crop;
   String canvas;
   Map<String, dynamic> framing;
+  double opacity;
+  double fontSize;
 
   double get duration => (end - start).clamp(0, double.infinity).toDouble();
 
@@ -59,6 +63,8 @@ class TimelineItem {
         crop: crop,
         canvas: canvas,
         framing: Map<String, dynamic>.from(framing),
+        opacity: opacity,
+        fontSize: fontSize,
       );
 
   Map<String, dynamic> toJson() => {
@@ -77,6 +83,8 @@ class TimelineItem {
         'crop': crop,
         'canvas': canvas,
         'framing': framing,
+        'opacity': opacity,
+        'fontSize': fontSize,
       };
 
   static TimelineItem fromJson(Map<String, dynamic> json) => TimelineItem(
@@ -95,13 +103,17 @@ class TimelineItem {
         crop: json['crop'] as String? ?? 'center',
         canvas: json['canvas'] as String? ?? 'portrait',
         framing: Map<String, dynamic>.from(json['framing'] as Map? ?? {}),
+        opacity: (json['opacity'] as num?)?.toDouble() ?? 1,
+        fontSize: (json['fontSize'] as num?)?.toDouble() ?? 0,
       );
 }
 
 class TimelineTrack {
-  TimelineTrack(
-      {required this.id, required this.kind, List<TimelineItem>? items})
-      : items = items ?? <TimelineItem>[];
+  TimelineTrack({
+    required this.id,
+    required this.kind,
+    List<TimelineItem>? items,
+  }) : items = items ?? <TimelineItem>[];
 
   String id;
   String kind; // video | media | text | audio
@@ -117,8 +129,10 @@ class TimelineTrack {
         id: json['id'] as String? ?? 'track',
         kind: json['kind'] as String? ?? 'media',
         items: (json['items'] as List? ?? const [])
-            .map((entry) =>
-                TimelineItem.fromJson(Map<String, dynamic>.from(entry as Map)))
+            .map(
+              (entry) => TimelineItem.fromJson(
+                  Map<String, dynamic>.from(entry as Map)),
+            )
             .toList(),
       );
 }
@@ -156,29 +170,37 @@ class Timeline {
   static Timeline fromJson(Map<String, dynamic> json) => Timeline(
         version: (json['version'] as num?)?.toInt() ?? 1,
         tracks: (json['tracks'] as List? ?? const [])
-            .map((entry) =>
-                TimelineTrack.fromJson(Map<String, dynamic>.from(entry as Map)))
+            .map(
+              (entry) => TimelineTrack.fromJson(
+                  Map<String, dynamic>.from(entry as Map)),
+            )
             .toList(),
       );
 
   /// Timeline awal untuk sebuah klip: satu item video + track kosong lainnya.
   static Timeline fromClip({required Clip clip, required String sourcePath}) {
-    return Timeline(tracks: [
-      TimelineTrack(id: 'v1', kind: 'video', items: [
-        TimelineItem(
-          id: 'v0',
-          start: 0,
-          end: clip.duration <= 0 ? 1 : clip.duration,
-          src: sourcePath,
-          srcStart: clip.start,
-          type: 'video',
-          crop: clip.crop,
-          canvas: clip.canvas,
+    return Timeline(
+      tracks: [
+        TimelineTrack(
+          id: 'v1',
+          kind: 'video',
+          items: [
+            TimelineItem(
+              id: 'v0',
+              start: 0,
+              end: clip.duration <= 0 ? 1 : clip.duration,
+              src: sourcePath,
+              srcStart: clip.start,
+              type: 'video',
+              crop: clip.crop,
+              canvas: clip.canvas,
+            ),
+          ],
         ),
-      ]),
-      TimelineTrack(id: 'm1', kind: 'media'),
-      TimelineTrack(id: 't1', kind: 'text'),
-      TimelineTrack(id: 'a1', kind: 'audio'),
-    ]);
+        TimelineTrack(id: 'm1', kind: 'media'),
+        TimelineTrack(id: 't1', kind: 'text'),
+        TimelineTrack(id: 'a1', kind: 'audio'),
+      ],
+    );
   }
 }

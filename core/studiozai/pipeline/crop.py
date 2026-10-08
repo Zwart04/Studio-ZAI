@@ -117,6 +117,10 @@ def canvas_size(shape: str, src_w: int, src_h: int) -> tuple[int, int]:
 def plan(mode: str = "center", src_w: int = 1920, src_h: int = 1080, out_size: tuple[int, int] | None = None, framing: dict | None = None) -> CropPlan:
     """Build the ffmpeg plan for the requested framing mode."""
     mode = (mode or "center").lower()
+    if mode == "split":
+        from .framing import split_graph
+        out_w, out_h = out_size or target_size(src_w, src_h)
+        return CropPlan("split", out_w, out_h, complex_graph=split_graph(framing or {}, src_w, src_h, out_w, out_h))
     if mode == "manual":
         from .framing import chain
         out_w, out_h = out_size or target_size(src_w, src_h)

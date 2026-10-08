@@ -59,7 +59,7 @@ def test_manual_range_reuses_source(monkeypatch, tmp_path):
     project.source = str(source)
     project.duration = 4686
     project.save()
-    clip = server.create_manual_clip(project.id, server.ManualClip(start=4600,end=4630))
+    clip = server.create_manual_clip(project.id, server.ManualClip(start=4600,end=4630,canvas="original"))
     assert clip['canvas'] == 'original'
     assert clip['title'].startswith('Source title')
     assert json.loads(project.project_file.read_text())['source'] == str(source)

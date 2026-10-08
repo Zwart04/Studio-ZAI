@@ -99,18 +99,21 @@ Future<Object?> _runSpeechWorker(List<Object?> request,
 }
 
 class TranscriptSegment {
-  TranscriptSegment(this.start, this.end, this.text, [this.words = const []]);
+  TranscriptSegment(this.start, this.end, this.text,
+      [this.words = const [], this.language = '']);
 
   final double start;
   final double end;
   final String text;
   final List<Map<String, dynamic>> words;
+  final String language;
 
   Map<String, dynamic> toJson() => {
         'start': double.parse(start.toStringAsFixed(3)),
         'end': double.parse(end.toStringAsFixed(3)),
         'text': text,
         'words': words,
+        'language': language,
       };
 
   static TranscriptSegment fromJson(Map<String, dynamic> json) =>
@@ -121,6 +124,7 @@ class TranscriptSegment {
         (json['words'] as List? ?? [])
             .map((w) => Map<String, dynamic>.from(w))
             .toList(),
+        json['language'] as String? ?? '',
       );
 }
 
@@ -198,7 +202,7 @@ class SpeechService {
           whisper: sherpa.OfflineWhisperModelConfig(
             encoder: encoder.path,
             decoder: decoder.path,
-            language: language,
+            language: language == 'auto' ? '' : language,
             task: 'transcribe',
             enableTokenTimestamps: true,
           ),
@@ -266,6 +270,7 @@ class SpeechService {
               text.trim(),
               _timedWords(decoded, speech.start / 16000.0,
                   speech.samples.length / 16000.0),
+              decoded.lang,
             ));
           }
         }
@@ -294,7 +299,7 @@ class SpeechService {
         final end = offset + samples.length / 16000.0;
         if (text.trim().isNotEmpty) {
           segments.add(TranscriptSegment(offset, end, text.trim(),
-              _timedWords(decoded, offset, end - offset)));
+              _timedWords(decoded, offset, end - offset), decoded.lang));
         }
         offset = end;
         onProgress?.call(end);

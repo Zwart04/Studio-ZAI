@@ -6,6 +6,7 @@ import time
 import urllib.request
 import uuid
 from studiozai import __version__
+from studiozai.utils import ffmpeg
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +36,9 @@ def wait_job(job):
 if __name__ == '__main__':
     # Use fresh app data on every run so earlier smoke images/projects cannot
     # make the empty-state assertion depend on test order.
-    env = dict(os.environ, LOCALAPPDATA=str(ROOT / f'build/packaged-smoke-v18-{uuid.uuid4().hex[:8]}'))
+    test_dir = ROOT / f'build/packaged-smoke-{uuid.uuid4().hex[:8]}'
+    test_dir.mkdir(parents=True)
+    env = dict(os.environ, LOCALAPPDATA=str(test_dir))
     # Reuse an already verified weight through an NTFS hardlink for the
     # packaged-image smoke. This does not copy 683 MB or modify the original.
     image_model = Path(os.environ.get('LOCALAPPDATA', '')) / 'StudioZAI/models/sdxs-512'
@@ -75,7 +78,11 @@ if __name__ == '__main__':
         with urllib.request.urlopen(BASE + '/timeline.js?v=' + __version__) as response:
             script = response.read().decode()
             assert 'schedulePreview()' in script and 'data-tl="preview"' not in script
-        source = next((ROOT / 'build/readme-demo-v18-release/projects').glob('*/source/studio-session.mp4'))
+        source = test_dir / 'source.mp4'
+        generated_source = ffmpeg.run_ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=15:duration=4',
+            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4', '-c:v', 'libx264', '-preset', 'ultrafast',
+            '-c:a', 'aac', '-shortest', str(source)])
+        assert generated_source.ok, generated_source.stderr
         project = request('/api/projects', {'title': 'Packaged smoke', 'source': str(source), 'lang': 'id'})
         for _ in range(60):
             project = request('/api/projects/' + project['id'])
@@ -95,7 +102,7 @@ if __name__ == '__main__':
         report = {'health': health, 'voice_runtimes': voices['available'],
             'unique_previews': True, 'local_image': test_local_image,
             'render': final['mp4'], 'project': project['id']}
-        (ROOT / 'build/packaged-smoke-v180.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+        (test_dir / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         request(route, method='DELETE')
         assert not (Path(env['LOCALAPPDATA']) / 'StudioZAI/projects' / project['id']).exists()
         print(json.dumps(report))

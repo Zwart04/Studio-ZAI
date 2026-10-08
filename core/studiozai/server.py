@@ -133,7 +133,7 @@ class AssetRequest(BaseModel):
 class ManualClip(BaseModel):
     start: float
     end: float
-    canvas: str = "original"
+    canvas: Literal["portrait", "original", "square", "landscape"] = "portrait"
 
 
 class BatchRenderRequest(BaseModel):
@@ -656,14 +656,15 @@ def _render_task(project_id: str, index: int):
 
 
 @app.post("/api/projects/{project_id}/clips/{index}/preview")
-def preview_clip(project_id: str, index: int) -> dict[str, Any]:
+def preview_clip(project_id: str, index: int, payload: ClipUpdate | None = None) -> dict[str, Any]:
     """Render draf cepat klip (540x960) untuk pratinjau di editor."""
     project = _project(project_id)
     try:
         project.clip(index)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    job = jobs.MANAGER.submit("preview", f"Pratinjau klip {index + 1}", _preview_task(project_id, index))
+    values = payload.model_dump(exclude_none=True) if payload else None
+    job = jobs.MANAGER.submit("preview", f"Pratinjau klip {index + 1}", _preview_task(project_id, index, values))
     return job.as_dict()
 
 
@@ -685,9 +686,11 @@ def generate_clip_captions(project_id: str, index: int) -> dict[str, Any]:
     return jobs.MANAGER.submit("captions", "Subtitle otomatis", run).as_dict()
 
 
-def _preview_task(project_id: str, index: int):
+def _preview_task(project_id: str, index: int, values: dict | None = None):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
+        if values:
+            project.update_clip(index, values)
         return service.render_preview(project, project.clip(index), job=job)
 
     return run
@@ -719,6 +722,33 @@ def add_project_asset(project_id: str, payload: AssetRequest) -> dict[str, Any]:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"path": path}
+
+
+@app.post("/api/projects/{project_id}/assets-upload")
+async def upload_project_logo(project_id: str, request: Request) -> dict[str, str]:
+    import uuid
+    from urllib.parse import unquote
+    project = _project(project_id)
+    name = sanitize_filename(Path(unquote(request.headers.get("x-filename", "logo.png"))).name, "logo.png")
+    if Path(name).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+        raise HTTPException(400, "Logo harus PNG, JPEG, atau WebP")
+    directory = project.root / "assets"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"logo-{uuid.uuid4().hex[:12]}-{name}"
+    total = 0
+    try:
+        with target.open("wb") as output:
+            async for chunk in request.stream():
+                total += len(chunk)
+                if total > 30 * 1024**2:
+                    raise HTTPException(413, "Logo maksimal 30 MB")
+                output.write(chunk)
+        if not total:
+            raise HTTPException(400, "Berkas kosong")
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return {"path": str(target)}
 
 
 @app.post("/api/projects/{project_id}/assets/upload")

@@ -76,7 +76,7 @@ const StudioTimeline = (() => {
     close() {
       clearInterval(this.changeTimer);
       clearTimeout(this.previewTimer);
-      this.generation++;
+      this.generation++;this.stageObserver?.disconnect();
       if (this.el) {
         this.el.querySelectorAll("video,audio").forEach((player) => {
           player.pause();
@@ -221,7 +221,11 @@ const StudioTimeline = (() => {
       const path = this.previewPath || state.project.source;
       const sourceStart = this.previewPath ? 0 : this.clip.start;
       stage.querySelectorAll('video').forEach(v => v.pause());
-      stage.innerHTML = `<video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video><span class="preview-status" id="tlPreviewStatus" role="status"></span>`;
+      stage.innerHTML = `<div class="output-frame"><video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video></div><span class="canvas-badge"></span><span class="preview-status" id="tlPreviewStatus" role="status"></span>`;
+      const base=this.items("video")[0]||{},sw=state.project.width||1920,sh=state.project.height||1080,ratio={portrait:9/16,square:1,landscape:16/9,original:sw/sh}[base.canvas]||9/16;
+      stage.querySelector(".canvas-badge").textContent={portrait:"Portrait 9:16",square:"Kotak 1:1",landscape:"Landscape 16:9",original:"Rasio sumber"}[base.canvas]||"Portrait 9:16";
+      const resize=()=>{const f=stage.querySelector(".output-frame"),w=Math.min(stage.clientWidth-16,(stage.clientHeight-45)*ratio);if(f){f.style.width=`${Math.max(40,w)}px`;f.style.height=`${Math.max(40,w/ratio)}px`;}};this.stageObserver?.disconnect();this.stageObserver=new ResizeObserver(resize);this.stageObserver.observe(stage);resize();
+      if(!this.previewPath)stage.querySelector("video").style.objectFit=["center","manual"].includes(base.crop)?"cover":"contain";
       const player = stage.querySelector('video');
       player.addEventListener('loadedmetadata', () => {
         player.currentTime = Math.min(sourceStart + clamp(position, 0, this.duration()), Math.max(0, player.duration - .05));
@@ -517,9 +521,9 @@ const StudioTimeline = (() => {
       const options = (values, value) => values.map(([id,label]) => `<option value="${id}" ${id === value ? 'selected' : ''}>${label}</option>`).join('');
       host.innerHTML = `<div class="inspector-tabs">${[['clip','Klip'],['subtitles','Subtitle'],['element','Elemen']].map(([id,label]) => `<button data-inspector="${id}" class="${this.inspectorTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
         <section class="inspector-section" ${this.inspectorTab !== 'clip' ? 'hidden' : ''}>
-          <h3>Video & audio</h3><label>Judul / hook<input id="tlHook" value="${escapeHtml(clip.title || '')}"></label><button class="ghost" data-creator="crop">Atur crop & keyframe</button><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
+          <h3>Video & audio</h3><label>Judul / hook<input id="tlHook" value="${escapeHtml(clip.title || '')}"></label><button class="ghost" data-creator="crop">Atur crop & keyframe</button><button class="ghost" data-finishing="title">Judul pembuka & preset</button><button class="ghost" data-finishing="watermark">Watermark logo / tulisan</button><button class="ghost" data-creator="splitTop">Split gaming · area facecam</button><button class="ghost" data-creator="splitBottom">Split gaming · area gameplay</button><label>Bagian facecam (%)<input id="tlSplitFraction" type="number" min="20" max="80" value="${Math.round((base.framing?.fraction||.35)*100)}"></label><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
           <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
-          <label>Penyesuaian gambar<select id="tlCrop">${options([['manual','Manual · keyframe'],['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
+          <label>Penyesuaian gambar<select id="tlCrop">${options([['split','Split gaming · facecam + gameplay'],['manual','Manual · keyframe'],['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
           <p class="field-help">Fit mempertahankan seluruh gambar. Ukuran asli mengikuti rasio video sumber.</p>
           <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlClipStart" value="${clip.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlClipEnd" value="${clip.end}"></label></div>
           <label>Audio<select id="tlAudio">${options([['original','Suara asli video'],['voice','Ganti dengan narasi'],['mix','Campur suara & narasi']],clip.audio_mode)}</select></label>
@@ -549,6 +553,9 @@ const StudioTimeline = (() => {
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
       const selected = this.selectedItem();
+      host.querySelectorAll('[data-finishing]').forEach(b=>b.onclick=()=>StudioFinishing[b.dataset.finishing](this));
+      host.querySelectorAll('[data-creator^="split"]').forEach(b=>b.onclick=()=>{videoItem.canvas='portrait';videoItem.crop='split';CreatorEditor.crop(this,b.dataset.creator==='splitTop'?'top':'bottom');});
+      host.querySelector('#tlSplitFraction')?.addEventListener('change',e=>{videoItem.framing={...videoItem.framing,fraction:clamp(+e.target.value/100,.2,.8)};});
       host.querySelector('#tlHook')?.addEventListener('input', e => { this.clip.title = e.target.value; });
       host.querySelector('[data-creator="words"]')?.addEventListener('click', () => CreatorEditor.words(this));
       host.querySelector('[data-creator="crop"]')?.addEventListener('click', () => CreatorEditor.crop(this));
@@ -591,9 +598,9 @@ const StudioTimeline = (() => {
 
       const videoItem = this.items("video")[0];
       const crop = host.querySelector("#tlCrop");
-      if (crop && videoItem) crop.addEventListener("change", () => { videoItem.crop = crop.value; this.renderTracks(); });
+      if (crop && videoItem) crop.addEventListener("change", () => { videoItem.crop = crop.value;if(crop.value==='split')videoItem.canvas='portrait';this.renderAll(); });
       const canvas = host.querySelector("#tlCanvas");
-      if (canvas && videoItem) canvas.addEventListener("change", () => { videoItem.canvas = canvas.value; });
+      if (canvas && videoItem) canvas.addEventListener("change", () => { videoItem.canvas = canvas.value;this.previewPath=null;this.renderStage(); });
 
       const audio = host.querySelector("#tlAudio");
       if (audio) audio.addEventListener("change", () => { this.clip.audio_mode = audio.value; });

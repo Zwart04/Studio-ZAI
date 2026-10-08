@@ -200,6 +200,17 @@ class Project:
     def update_clip(self, index: int, values: dict[str, Any]) -> Clip:
         self.snapshot()
         clip = self.clip(index)
+        import copy
+        values = copy.deepcopy(values)
+        timeline = copy.deepcopy(values.get("timeline", clip.timeline))
+        if timeline:
+            base = next((t.get("items", []) for t in timeline.get("tracks", []) if t.get("kind") == "video"), [])
+            if base:
+                if "canvas" in values:
+                    base[0]["canvas"] = values["canvas"]
+                else:
+                    values["canvas"] = base[0].get("canvas", clip.canvas)
+                values["timeline"] = timeline
         if any(
             key not in {"title", "index", "files", "storage_id"}
             and hasattr(clip, key) and getattr(clip, key) != value

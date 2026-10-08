@@ -39,18 +39,23 @@ class TimelineRender {
     final crop = base?.crop ?? 'center';
     final canvas = base?.canvas ?? 'portrait';
     final size = MediaTools.canvasSize(canvas, sourceWidth, sourceHeight);
-    final filter =
-        MediaTools.cropFilter(crop, sourceWidth, sourceHeight, canvas: canvas, framing: base?.framing ?? {});
+    final filter = MediaTools.cropFilter(
+      crop,
+      sourceWidth,
+      sourceHeight,
+      canvas: canvas,
+      framing: base?.framing ?? {},
+    );
     final complex = filter.contains(';');
 
     final buffer = StringBuffer()
       ..write(
-          '-y -ss ${offset.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(source)}');
+        '-y -ss ${offset.toStringAsFixed(3)} -t ${duration.toStringAsFixed(3)} -i ${_quote(source)}',
+      );
 
     final filters = <String>[];
     if (complex) {
-      filters.add(
-          '[0:v]${filter.replaceAll('[bgb][fgs]overlay=(W-w)/2:(H-h)/2', '[bgb][fgs]overlay=(W-w)/2:(H-h)/2[vbase]')}');
+      filters.add('[0:v]${filter.replaceAll("[vout]", "[vbase]")}');
     } else {
       filters.add('[0:v]$filter[vbase]');
     }
@@ -66,19 +71,26 @@ class TimelineRender {
         continue;
       }
       if (item.type == 'video') {
-        buffer.write(' -ss ${item.srcStart.toStringAsFixed(3)} '
-            '-t ${(item.end - item.start).toStringAsFixed(3)} -i ${_quote(item.src)}');
+        buffer.write(
+          ' -ss ${item.srcStart.toStringAsFixed(3)} '
+          '-t ${(item.end - item.start).toStringAsFixed(3)} -i ${_quote(item.src)}',
+        );
       } else {
         buffer.write(
-            ' -loop 1 -t ${duration.toStringAsFixed(3)} -i ${_quote(item.src)}');
+          ' -loop 1 -t ${duration.toStringAsFixed(3)} -i ${_quote(item.src)}',
+        );
       }
       final width = (size[0] * item.scale.clamp(0.05, 1.0)).round();
-      filters.add('[$index:v]scale=${width < 2 ? 2 : width}:-2[s$index]');
-      filters.add('$label[s$index]overlay='
-          'x=(W-w)*${item.x.clamp(0.0, 1.0).toStringAsFixed(4)}:'
-          'y=(H-h)*${item.y.clamp(0.0, 1.0).toStringAsFixed(4)}:'
-          "enable='between(t,${item.start.toStringAsFixed(3)},${item.end.toStringAsFixed(3)})'"
-          '[v$index]');
+      filters.add(
+        '[$index:v]scale=${width < 2 ? 2 : width}:-2,format=rgba,colorchannelmixer=aa=${item.opacity.clamp(0, 1)}[s$index]',
+      );
+      filters.add(
+        '$label[s$index]overlay='
+        'x=(W-w)*${item.x.clamp(0.0, 1.0).toStringAsFixed(4)}:'
+        'y=(H-h)*${item.y.clamp(0.0, 1.0).toStringAsFixed(4)}:'
+        "enable='between(t,${item.start.toStringAsFixed(3)},${item.end.toStringAsFixed(3)})'"
+        '[v$index]',
+      );
       label = '[v$index]';
       index++;
     }
@@ -87,7 +99,8 @@ class TimelineRender {
     final audioLabels = <String>[];
     if (await MediaTools.hasAudio(source)) {
       filters.add(
-          '[0:a]volume=${originalVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[abase]');
+        '[0:a]volume=${originalVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[abase]',
+      );
       audioLabels.add('[abase]');
     }
     for (final item
@@ -97,16 +110,18 @@ class TimelineRender {
       final length = item.end > item.start ? item.end - item.start : duration;
       buffer.write(' -i ${_quote(item.src)}');
       filters.add(
-          '[$index:a]atrim=0:${length.toStringAsFixed(3)},asetpts=PTS-STARTPTS,'
-          'volume=${item.gain.clamp(0.0, 4.0).toStringAsFixed(3)},'
-          'adelay=${(start * 1000).round()}:all=1[a$index]');
+        '[$index:a]atrim=0:${length.toStringAsFixed(3)},asetpts=PTS-STARTPTS,'
+        'volume=${item.gain.clamp(0.0, 4.0).toStringAsFixed(3)},'
+        'adelay=${(start * 1000).round()}:all=1[a$index]',
+      );
       audioLabels.add('[a$index]');
       index++;
     }
     if (voicePath != null && File(voicePath).existsSync()) {
       buffer.write(' -i ${_quote(voicePath)}');
       filters.add(
-          '[$index:a]volume=${voiceVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[a$index]');
+        '[$index:a]volume=${voiceVolume.clamp(0.0, 4.0).toStringAsFixed(3)}[a$index]',
+      );
       audioLabels.add('[a$index]');
       index++;
     }
@@ -118,24 +133,30 @@ class TimelineRender {
       audioMap = audioLabels.first;
     } else {
       filters.add(
-          '${audioLabels.join()}amix=inputs=${audioLabels.length}:duration=first:normalize=0[aaudio]');
+        '${audioLabels.join()}amix=inputs=${audioLabels.length}:duration=first:normalize=0[aaudio]',
+      );
       audioMap = '[aaudio]';
     }
 
     // ----------------------------------------------------------------- teks
     if (subtitlesPath != null) {
-      filters
-          .add('$label' '${MediaTools.subtitleFilter(subtitlesPath)}[vfinal]');
+      filters.add(
+        '$label'
+        '${MediaTools.subtitleFilter(subtitlesPath)}[vfinal]',
+      );
       label = '[vfinal]';
     }
 
     buffer
       ..write(
-          ' -filter_complex "${filters.join(';')}" -map "$label" -map "$audioMap"')
+        ' -filter_complex "${filters.join(';')}" -map "$label" -map "$audioMap"',
+      )
       ..write(
-          ' -c:a aac -b:a 256k -ar 48000 -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p')
+        ' -c:a aac -b:a 256k -ar 48000 -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p',
+      )
       ..write(
-          ' -t ${duration.toStringAsFixed(3)} -movflags +faststart ${_quote(output)}');
+        ' -t ${duration.toStringAsFixed(3)} -movflags +faststart ${_quote(output)}',
+      );
     return buffer.toString();
   }
 
@@ -166,7 +187,8 @@ class TimelineRender {
     if (!ReturnCode.isSuccess(code)) {
       final logs = await session.getOutput();
       throw Exception(
-          'Render timeline gagal. ${logs == null ? '' : logs.substring(logs.length > 300 ? logs.length - 300 : 0)}');
+        'Render timeline gagal. ${logs == null ? '' : logs.substring(logs.length > 300 ? logs.length - 300 : 0)}',
+      );
     }
     return output;
   }

@@ -1,3 +1,16 @@
+# v1.10.0 — 8 Oktober 2026
+
+- Perbaiki default portrait pada klip manual dan tampilan kanvas; sinkronkan rasio timeline dan klip, serta buang hasil lama setelah perubahan.
+- Windows/Android: split gaming dengan crop facecam/gameplay independen, proporsi, zoom, keyframe dan tracking posisi wajah.
+- Judul pembuka dengan saran lokal/preset dan watermark teks/gambar dengan ukuran, posisi dan opasitas.
+- Caption: seleksi beberapa kata, mode kata/highlight/kotak aktif, dan pratinjau video draft melalui jalur ekspor tanpa menyimpan draft.
+- Bahasa transkripsi otomatis dan 11 bahasa pilihan; bahasa ASR Android disimpan untuk caption berikutnya.
+- Audit ulang fitur publik SocialVisuals, rapikan paket lama dan hasil tes, serta kumpulkan source/paket terbaru dalam satu folder Studio ZAI.
+
+[Validasi](RELEASE-1.10.0.md) · [Cakupan dan batas fitur](CREATOR.md).
+
+---
+
 # v1.9.0 — 29 September 2026
 
 - Windows dan Android: mode podcast lokal dengan alasan skor, target jumlah otomatis, draf untuk review sebelum render, dan judul/hook editable.

@@ -136,7 +136,7 @@ class SettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Studio ZAI 1.9.0',
+              const Text('Studio ZAI 1.10.0',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: Tokens.space1),
               const Text(

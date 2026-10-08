@@ -1,27 +1,50 @@
 import 'dart:math' as math;
 import 'dart:convert';
+
 import 'package:flutter/services.dart';
+
 import 'cloud_ai.dart';
 
 /// Local editorial cues. Scores help review; they do not predict virality.
 class CreatorTools {
   static List<Map<String, dynamic>> trimRows(
-          List<Map<String, dynamic>> rows, double offset, double duration) =>
+    List<Map<String, dynamic>> rows,
+    double offset,
+    double duration,
+  ) =>
       rows
-          .where((r) =>
-              (r['end'] as num) > offset &&
-              (r['start'] as num) < offset + duration)
-          .map((r) => {
-                ...r,
-                'start': ((r['start'] as num) - offset).clamp(0, duration),
-                'end': ((r['end'] as num) - offset).clamp(0, duration),
-                if (r['words'] is List)
-                  'words': trimRows(List<Map<String, dynamic>>.from(r['words']),
-                      offset, duration),
-              })
+          .where(
+            (r) =>
+                (r['end'] as num) > offset &&
+                (r['start'] as num) < offset + duration,
+          )
+          .map(
+            (r) => {
+              ...r,
+              'start': ((r['start'] as num) - offset).clamp(0, duration),
+              'end': ((r['end'] as num) - offset).clamp(0, duration),
+              if (r['words'] is List)
+                'words': trimRows(
+                  List<Map<String, dynamic>>.from(r['words']),
+                  offset,
+                  duration,
+                ),
+            },
+          )
           .toList();
   static Map<String, dynamic> trimFraming(
-      Map<String, dynamic> f, double offset, double duration) {
+    Map<String, dynamic> f,
+    double offset,
+    double duration,
+  ) {
+    if (f.containsKey('top') || f.containsKey('bottom')) {
+      return {
+        ...f,
+        for (final k in ['top', 'bottom'])
+          if (f[k] is Map)
+            k: trimFraming(Map<String, dynamic>.from(f[k]), offset, duration),
+      };
+    }
     final frames = (f['keyframes'] as List? ?? [])
         .map((k) => Map<String, dynamic>.from(k))
         .toList();
@@ -39,7 +62,7 @@ class CreatorTools {
               .clamp(0, 1);
           return {
             'x': a['x'] + (b['x'] - a['x']) * r,
-            'y': a['y'] + (b['y'] - a['y']) * r
+            'y': a['y'] + (b['y'] - a['y']) * r,
           };
         }
         a = b;
@@ -56,13 +79,16 @@ class CreatorTools {
         ...frames
             .where((k) => k['time'] > offset && k['time'] < offset + duration)
             .map((k) => {...k, 'time': k['time'] - offset}),
-        {'time': duration, ...last}
-      ]
+        {'time': duration, ...last},
+      ],
     };
   }
 
   static Future<List<Map<String, dynamic>>> rankAi(
-      List<Map<String, dynamic>> transcript, double duration, int count) async {
+    List<Map<String, dynamic>> transcript,
+    double duration,
+    int count,
+  ) async {
     final chunks = <List<Map<String, dynamic>>>[],
         current = <Map<String, dynamic>>[];
     var length = 0;
@@ -85,7 +111,8 @@ class CreatorTools {
       final compact =
           chunk.map((s) => '${s['start']}-${s['end']} ${s['text']}').join('\n');
       final result = await CloudAI.text(
-          'Select up to ${autoCount(duration, count)} complete standalone moments. Include questions with answers, stories, hooks and takeaways. Avoid ads and repetition. Use transcript timestamps and duration 3–180 seconds. Return only JSON array with numeric start, end, score from 0 to 1, short title and reason.\n$compact');
+        'Select up to ${autoCount(duration, count)} complete standalone moments. Include questions with answers, stories, hooks and takeaways. Avoid ads and repetition. Use transcript timestamps and duration 3–180 seconds. Return only JSON array with numeric start, end, score from 0 to 1, short title and reason.\n$compact',
+      );
       final first = result.indexOf('['), last = result.lastIndexOf(']');
       if (first < 0 || last < first) {
         throw const FormatException('Respons AI tidak berisi JSON klip.');
@@ -111,17 +138,19 @@ class CreatorTools {
           'end': end,
           'score': value(r['score'], .8, 0, 1),
           'title': '${r['title'] ?? ''}',
-          'reason': '${r['reason'] ?? 'AI'}'
+          'reason': '${r['reason'] ?? 'AI'}',
         });
       }
     }
     pool.sort((a, b) => (b['score'] as num).compareTo(a['score'] as num));
     final chosen = <Map<String, dynamic>>[];
     for (final r in pool) {
-      if (chosen.any((c) =>
-          math.min(r['end'] as num, c['end'] as num) -
-              math.max(r['start'] as num, c['start'] as num) >
-          .5)) {
+      if (chosen.any(
+        (c) =>
+            math.min(r['end'] as num, c['end'] as num) -
+                math.max(r['start'] as num, c['start'] as num) >
+            .5,
+      )) {
         continue;
       }
       chosen.add(r);
@@ -140,7 +169,7 @@ class CreatorTools {
     'Anton',
     'Barlow Condensed',
     'DM Serif Display',
-    'Kalam'
+    'Kalam',
   ];
   static const languages = {
     'id': 'Indonesia',
@@ -153,53 +182,64 @@ class CreatorTools {
     'ja': '日本語',
     'ko': '한국어',
     'zh': '中文',
-    'ru': 'Русский'
+    'ru': 'Русский',
   };
   static final cues = <(RegExp, double, String)>[
     (
-      RegExp(r'\?|\b(kenapa|mengapa|bagaimana|gimana|apa yang|what|why|how)\b',
-          caseSensitive: false),
+      RegExp(
+        r'\?|\b(kenapa|mengapa|bagaimana|gimana|apa yang|what|why|how)\b',
+        caseSensitive: false,
+      ),
       .18,
-      'tanya-jawab'
+      'tanya-jawab',
     ),
     (
       RegExp(
-          r'\b(ternyata|rahasia|kesalahan|jangan|bayangkan|fakta|terpenting|secret|mistake|never|imagine|surprising|truth)\b',
-          caseSensitive: false),
+        r'\b(ternyata|rahasia|kesalahan|jangan|bayangkan|fakta|terpenting|secret|mistake|never|imagine|surprising|truth)\b',
+        caseSensitive: false,
+      ),
       .20,
-      'hook'
+      'hook',
     ),
     (
       RegExp(
-          r'\b(dulu|pernah|waktu itu|pengalaman|akhirnya|belajar|kisah|once|remember|learned|story|realized)\b',
-          caseSensitive: false),
+        r'\b(dulu|pernah|waktu itu|pengalaman|akhirnya|belajar|kisah|once|remember|learned|story|realized)\b',
+        caseSensitive: false,
+      ),
       .14,
-      'cerita'
+      'cerita',
     ),
     (
       RegExp(
-          r'\b(intinya|jadi|kesimpulan|caranya|pelajaran|solusi|tips|because|lesson|therefore|solution|advice)\b',
-          caseSensitive: false),
+        r'\b(intinya|jadi|kesimpulan|caranya|pelajaran|solusi|tips|because|lesson|therefore|solution|advice)\b',
+        caseSensitive: false,
+      ),
       .17,
-      'poin utama'
+      'poin utama',
     ),
   ];
   static final ads = RegExp(
-      r'\b(sponsor|kode promo|link di bio|subscribe|diskon|promo code|discount|commercial break)\b',
-      caseSensitive: false);
+    r'\b(sponsor|kode promo|link di bio|subscribe|diskon|promo code|discount|commercial break)\b',
+    caseSensitive: false,
+  );
   static int autoCount(double duration, int count) =>
       count > 0 ? count : (duration / 300).ceil().clamp(3, 10);
   static List<Map<String, dynamic>> podcast(
-      List<Map<String, dynamic>> transcript, double duration, int count) {
+    List<Map<String, dynamic>> transcript,
+    double duration,
+    int count,
+  ) {
     final segments = transcript
-        .where((s) =>
-            s['start'] is num &&
-            s['end'] is num &&
-            (s['start'] as num).isFinite &&
-            (s['end'] as num).isFinite &&
-            s['start'] >= 0 &&
-            s['end'] > s['start'] &&
-            s['start'] < duration)
+        .where(
+          (s) =>
+              s['start'] is num &&
+              s['end'] is num &&
+              (s['start'] as num).isFinite &&
+              (s['end'] as num).isFinite &&
+              s['start'] >= 0 &&
+              s['end'] > s['start'] &&
+              s['start'] < duration,
+        )
         .toList()
       ..sort((a, b) => (a['start'] as num).compareTo(b['start'] as num));
     final pool = <Map<String, dynamic>>[];
@@ -238,7 +278,7 @@ class CreatorTools {
           'reason':
               'Podcast lokal · ${reasons.isEmpty ? 'ucapan utuh' : reasons.join(', ')}',
           'title':
-              '${segments[i]['text']}'.split(RegExp(r'\s+')).take(12).join(' ')
+              '${segments[i]['text']}'.split(RegExp(r'\s+')).take(12).join(' '),
         });
         if (span >= 45 && RegExp(r'[.!?…]$').hasMatch(text)) break;
       }
@@ -246,10 +286,12 @@ class CreatorTools {
     pool.sort((a, b) => (b['score'] as num).compareTo(a['score'] as num));
     final chosen = <Map<String, dynamic>>[];
     for (final c in pool) {
-      if (chosen.any((s) =>
-          math.min(c['end'] as num, s['end'] as num) -
-              math.max(c['start'] as num, s['start'] as num) >
-          .5)) {
+      if (chosen.any(
+        (s) =>
+            math.min(c['end'] as num, s['end'] as num) -
+                math.max(c['start'] as num, s['start'] as num) >
+            .5,
+      )) {
         continue;
       }
       chosen.add(c);
@@ -271,20 +313,26 @@ class CreatorTools {
     final start = (row['start'] as num).toDouble(),
         span = ((row['end'] as num) - start) / math.max(1, tokens.length);
     final result = List.generate(
-        tokens.length,
-        (i) => <String, dynamic>{
-              'word': tokens[i],
-              'start': start + i * span,
-              'end': start + (i + 1) * span
-            });
+      tokens.length,
+      (i) => <String, dynamic>{
+        'word': tokens[i],
+        'start': start + i * span,
+        'end': start + (i + 1) * span,
+      },
+    );
     row['words'] = result;
     return result;
   }
 
   static double value(dynamic n, double fallback, double low, double high) =>
       n is num && n.isFinite ? n.toDouble().clamp(low, high) : fallback;
-  static String styleTags(Map style, double scale, int width, int height,
-      {bool position = true}) {
+  static String styleTags(
+    Map style,
+    double scale,
+    int width,
+    int height, {
+    bool position = true,
+  }) {
     var result = '';
     if (fonts.contains(style['font'])) result += '\\fn${style['font']}';
     if (style.containsKey('size')) {
@@ -311,7 +359,7 @@ class CreatorTools {
               r'\fscx75\fscy75\t(0,130,\fscx108\fscy108)\t(130,220,\fscx100\fscy100)',
           'fade': r'\fad(150,120)',
           'rise': r'\fad(100,80)',
-          'zoom': r'\fscx85\fscy85\t(0,300,\fscx100\fscy100)'
+          'zoom': r'\fscx85\fscy85\t(0,300,\fscx100\fscy100)',
         }[style['animation']] ??
         '';
     return result;
@@ -323,7 +371,11 @@ class CreatorTools {
       .replaceAll('}', r'\}')
       .replaceAll('\n', r'\N');
   static String captionText(
-      Map<String, dynamic> row, Map preset, int width, int height) {
+    Map<String, dynamic> row,
+    Map preset,
+    int width,
+    int height,
+  ) {
     final base = Map<String, dynamic>.from(row['style'] as Map? ?? {}),
         scale = height / 1920;
     final prefix = base.isEmpty
@@ -337,8 +389,10 @@ class CreatorTools {
       }
       return prefix +
           list
-              .map((w) =>
-                  '{\\k${math.max(1, (((w['end'] as num) - (w['start'] as num)) * 100).round())}}${escape('${w['word']}')}')
+              .map(
+                (w) =>
+                    '{\\k${math.max(1, (((w['end'] as num) - (w['start'] as num)) * 100).round())}}${escape('${w['word']}')}',
+              )
               .join(' ');
     }
     if (list.isEmpty) return '$prefix${escape('${row['text']}')}';
@@ -361,8 +415,84 @@ class CreatorTools {
         }).join(' ');
   }
 
+  static List<String> captionEvents(
+    Map<String, dynamic> row,
+    Map preset,
+    int width,
+    int height,
+  ) {
+    String timestamp(num n) {
+      final cs = (n * 100).round();
+      return '${cs ~/ 360000}:${(cs ~/ 6000 % 60).toString().padLeft(2, '0')}:${(cs ~/ 100 % 60).toString().padLeft(2, '0')}.${(cs % 100).toString().padLeft(2, '0')}';
+    }
+
+    String event(num start, num end, String text, [String name = 'Default']) =>
+        'Dialogue: 0,${timestamp(start)},${timestamp(end)},$name,,0,0,0,,$text';
+    final base = Map<String, dynamic>.from(row['style'] as Map? ?? {}),
+        mode = base['mode'];
+    if (!['word', 'box', 'highlight'].contains(mode)) {
+      return [
+        event(
+          row['start'],
+          row['end'],
+          captionText(row, preset, width, height),
+        ),
+      ];
+    }
+    final list = words(row), output = <String>[];
+    var cursor = (row['start'] as num).toDouble();
+    for (var i = 0; i < list.length; i++) {
+      final w = list[i],
+          start = value(w['start'], cursor, row['start'], row['end']),
+          end = value(w['end'], start, start, row['end']);
+      if (end <= start) continue;
+      if (mode == 'highlight') {
+        if (start > cursor) {
+          output.add(
+            event(cursor, start, captionText(row, preset, width, height)),
+          );
+        }
+        final current = Map<String, dynamic>.from(jsonDecode(jsonEncode(row)));
+        final currentWords = words(current);
+        currentWords[i]['style'] = {
+          ...(currentWords[i]['style'] as Map? ?? {}),
+          'color': base['highlight'] ?? '#abff66',
+        };
+        output.add(
+          event(start, end, captionText(current, preset, width, height)),
+        );
+      } else {
+        final style = {...base, ...(w['style'] as Map? ?? {})};
+        final color = '${base['boxColor'] ?? '#111111'}';
+        final box = mode == 'box' && RegExp(r'^#[\da-fA-F]{6}$').hasMatch(color)
+            ? '\\3c&H${color.substring(5, 7)}${color.substring(3, 5)}${color.substring(1, 3)}&'
+            : '';
+        output.add(
+          event(
+            start,
+            end,
+            '{${styleTags(style, height / 1920, width, height)}$box}${escape('${w['word']}')}',
+            mode == 'box' ? 'ActiveBox' : 'Default',
+          ),
+        );
+      }
+      cursor = end;
+    }
+    if (mode == 'highlight' && cursor < (row['end'] as num)) {
+      output.add(
+        event(cursor, row['end'], captionText(row, preset, width, height)),
+      );
+    }
+    return output;
+  }
+
   static String cropFilter(
-      Map<String, dynamic> f, int sw, int sh, int ow, int oh) {
+    Map<String, dynamic> f,
+    int sw,
+    int sh,
+    int ow,
+    int oh,
+  ) {
     final zoom = value(f['zoom'], 1, 1, 4), ratio = ow / oh;
     final cw = math.max(2, (math.min(sw, sh * ratio) / zoom).floor() ~/ 2 * 2),
         ch = math.max(2, (math.min(sh, sw / ratio) / zoom).floor() ~/ 2 * 2);
@@ -372,17 +502,18 @@ class CreatorTools {
         byTime[value(k['time'], 0, 0, 86400)] = {
           'time': value(k['time'], 0, 0, 86400),
           'x': value(k['x'], .5, 0, 1),
-          'y': value(k['y'], .5, 0, 1)
+          'y': value(k['y'], .5, 0, 1),
         };
       }
     }
     byTime.putIfAbsent(
-        0,
-        () => {
-              'time': 0.0,
-              'x': value(f['x'], .5, 0, 1),
-              'y': value(f['y'], .5, 0, 1)
-            });
+      0,
+      () => {
+        'time': 0.0,
+        'x': value(f['x'], .5, 0, 1),
+        'y': value(f['y'], .5, 0, 1),
+      },
+    );
     final frames = byTime.values.toList()
       ..sort((a, b) => (a['time'] as num).compareTo(b['time'] as num));
     String expr(String axis, int size, int crop) {
@@ -399,12 +530,42 @@ class CreatorTools {
     return "crop=$cw:$ch:'${expr('x', sw, cw)}':'${expr('y', sh, ch)}',scale=$ow:$oh,setsar=1";
   }
 
+  static String splitFilter(
+    Map<String, dynamic> f,
+    int sw,
+    int sh,
+    int ow,
+    int oh,
+  ) {
+    final topHeight = (oh * value(f['fraction'], .35, .2, .8)).floor() ~/ 2 * 2;
+    final top = cropFilter(
+      Map<String, dynamic>.from(
+        f['top'] as Map? ?? {'x': .15, 'y': .2, 'zoom': 2},
+      ),
+      sw,
+      sh,
+      ow,
+      topHeight,
+    );
+    final bottom = cropFilter(
+      Map<String, dynamic>.from(f['bottom'] as Map? ?? {'x': .5, 'y': .5}),
+      sw,
+      sh,
+      ow,
+      oh - topHeight,
+    );
+    return 'split=2[face][game];[face]$top[faceout];[game]$bottom[gameout];[faceout][gameout]vstack=inputs=2,setsar=1[vout]';
+  }
+
   static Future<List<Map<String, dynamic>>> translate(
-      List<Map<String, dynamic>> rows, String source, String target) async {
+    List<Map<String, dynamic>> rows,
+    String source,
+    String target,
+  ) async {
     final result = await channel.invokeListMethod<String>('translate', {
       'source': source,
       'target': target,
-      'texts': rows.map((r) => r['text']).toList()
+      'texts': rows.map((r) => r['text']).toList(),
     });
     if (result == null || result.length != rows.length) {
       throw Exception('Terjemahan tidak lengkap');
@@ -413,7 +574,7 @@ class CreatorTools {
       final row = <String, dynamic>{
         ...rows[i],
         'text': result[i],
-        'words': <Map<String, dynamic>>[]
+        'words': <Map<String, dynamic>>[],
       };
       words(row);
       return row;

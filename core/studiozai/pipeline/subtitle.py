@@ -402,9 +402,12 @@ def text_item_events(text_items: Sequence[dict[str, Any]], width: int, height: i
         x = int(max(0.0, min(1.0, float(item.get("x", 0.5)))) * width)
         y = int(max(0.0, min(1.0, float(item.get("y", 0.5)))) * height)
         anim = PRESETS[template].get("anim", "")
+        from .caption_style import number
+        size = number(item.get("fontSize") or PRESETS[template].get("size", 56), 56, 14, 160) * height / 1920
+        alpha = round((1 - number(item.get("opacity"), 1, 0, 1)) * 255)
         events.append(
             f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},Tpl_{template},,0,0,0,,"
-            f"{{\\an5\\pos({x},{y})}}{anim}{ass_escape(text)}"
+            f"{{\\an5\\pos({x},{y})}}{{\\fs{size:.1f}\\alpha&H{alpha:02X}&}}{anim}{ass_escape(text)}"
         )
     return events
 
@@ -430,6 +433,7 @@ def to_ass(
         margin_v = int(style.get("margin_v", 220) * scale)
 
     styles = [_style_line("Default", style, scale, alignment, margin_v)]
+    styles.append(_style_line("ActiveBox", {**style, "border_style": 3, "outline": 10}, scale, alignment, margin_v))
     # Satu style per template yang benar-benar dipakai item teks.
     used_templates = sorted({template_id(i.get("template")) for i in (text_items or [])})
     for template in used_templates:
@@ -460,12 +464,8 @@ def to_ass(
     events: list[str] = []
     if position != "off":
         for caption in captions:
-            from .caption_style import text as styled_text
-            events.append(
-                f"Dialogue: 0,{ass_timestamp(caption.start)},"
-                f"{ass_timestamp(max(caption.end, caption.start + 0.2))},Default,,0,0,0,,"
-                f"{styled_text(caption, style, width, height)}"
-            )
+            from .caption_style import events as styled_events
+            events.extend(styled_events(caption, style, width, height))
     events.extend(text_item_events(text_items or [], width, height))
     return "\n".join(header + events) + "\n"
 

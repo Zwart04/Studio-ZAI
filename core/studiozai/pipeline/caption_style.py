@@ -67,3 +67,49 @@ def text(caption, preset: dict, width: int, height: int) -> str:
         parts.append("{" + override + "}" + ass_escape(str(word.get("word", ""))))
         cursor = end
     return prefix + " ".join(parts)
+
+
+def events(caption, preset: dict, width: int, height: int) -> list[str]:
+    import copy
+
+    from .subtitle import ass_timestamp
+    def event(start, end, row, name="Default"):
+        return f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},{name},,0,0,0,,{text(row, preset, width, height)}"
+    mode = (caption.style or {}).get("mode", "line")
+    if mode not in {"word", "box", "highlight"}:
+        return [event(caption.start, max(caption.end, caption.start + .2), caption)]
+    words = caption.words
+    if not words:
+        tokens = caption.text.split()
+        span = (caption.end - caption.start) / max(1, len(tokens))
+        words = [{"word": w, "start": caption.start + i * span, "end": caption.start + (i + 1) * span} for i, w in enumerate(tokens)]
+    result = []
+    cursor = caption.start
+    for index, word in enumerate(words):
+        start = number(word.get("start"), cursor, caption.start, caption.end)
+        end = number(word.get("end"), start, start, caption.end)
+        if end <= start:
+            continue
+        row = copy.deepcopy(caption)
+        if mode == "highlight":
+            row.words = copy.deepcopy(words)
+            color = caption.style.get("highlight", "#abff66")
+            row.words[index]["style"] = {**row.words[index].get("style", {}), "color": color}
+            if start > cursor:
+                result.append(event(cursor, start, caption))
+        else:
+            row.text = str(word.get("word", ""))
+            row.words = []
+            row.style = {**caption.style, **word.get("style", {})}
+            if mode == "box":
+                color = str(row.style.get("boxColor", "#111111"))
+                row.style["boxColor"] = color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#111111"
+        rendered = event(start, end, row, "ActiveBox" if mode == "box" else "Default")
+        if mode == "box":
+            color = row.style.get("boxColor", "#111111")
+            rendered = rendered.replace(",,0,0,0,,", f",,0,0,0,,{{\\3c&H{color[5:7]}{color[3:5]}{color[1:3]}&}}")
+        result.append(rendered)
+        cursor = end
+    if mode == "highlight" and cursor < caption.end:
+        result.append(event(cursor, caption.end, caption))
+    return result

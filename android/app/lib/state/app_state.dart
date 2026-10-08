@@ -321,6 +321,14 @@ class AppState extends ChangeNotifier {
       }
 
       project.transcript = segments.map((s) => s.toJson()).toList();
+      if (project.language == 'auto') {
+        for (final segment in segments) {
+          if (segment.language.isNotEmpty) {
+            project.language = segment.language;
+            break;
+          }
+        }
+      }
       await saveProject(project);
       _report(60, 'mencari momen terbaik');
       List<ClipCandidate> candidates;
@@ -534,6 +542,14 @@ class AppState extends ChangeNotifier {
         return 0;
       }
       clip.captions = captions;
+      if (project.language == 'auto') {
+        for (final segment in segments) {
+          if (segment.language.isNotEmpty) {
+            project.language = segment.language;
+            break;
+          }
+        }
+      }
       clip.captionLanguage = project.language;
       clip.captionVariants[project.language] = captions;
       await saveClip(clip);
@@ -722,7 +738,7 @@ class AppState extends ChangeNotifier {
           text: text,
           modelId: modelId,
           outputPath: output,
-          language: project.language,
+          language: project.language == 'auto' ? 'id' : project.language,
           speakerId: speakerId);
       clip.files = {...clip.files, 'voice': file.path};
       clip.narration = text;

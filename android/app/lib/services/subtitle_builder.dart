@@ -1,5 +1,6 @@
 import 'text_presets.dart';
 import 'creator_tools.dart';
+
 // Subtitle builders: SRT and ASS (burned-in), ported from
 // core/studiozai/pipeline/subtitle.py.
 //
@@ -9,8 +10,13 @@ import 'creator_tools.dart';
 // desktop tanpa perlu filter drawtext.
 
 class Caption {
-  Caption(this.start, this.end, this.text,
-      [this.words = const [], this.style = const {}]);
+  Caption(
+    this.start,
+    this.end,
+    this.text, [
+    this.words = const [],
+    this.style = const {},
+  ]);
 
   double start;
   double end;
@@ -30,8 +36,11 @@ class Caption {
         (json['start'] as num).toDouble(),
         (json['end'] as num).toDouble(),
         json['text'] as String? ?? '',
-        List<Map<String, dynamic>>.from((json['words'] as List? ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map))),
+        List<Map<String, dynamic>>.from(
+          (json['words'] as List? ?? const []).map(
+            (e) => Map<String, dynamic>.from(e as Map),
+          ),
+        ),
         Map<String, dynamic>.from(json['style'] as Map? ?? {}),
       );
 }
@@ -47,14 +56,15 @@ class SubtitleBuilder {
   /// Template tipografi. Ukuran ditulis untuk tinggi kanvas 1920 lalu
   /// diskalakan (lihat [toAss]) sehingga proporsional di kanvas lain.
   static final Map<String, Map<String, dynamic>> presets = {
-    ...creatorTextPresets
+    ...creatorTextPresets,
   };
 
   static const defaultPreset = 'clean';
 
   static List<Map<String, String>> presetList() => presets.entries
       .map(
-          (entry) => {'id': entry.key, 'label': entry.value['label'] as String})
+        (entry) => {'id': entry.key, 'label': entry.value['label'] as String},
+      )
       .toList();
 
   /// Parse the editor's start|end|text format without silently discarding a
@@ -78,7 +88,8 @@ class SubtitleBuilder {
           end <= start ||
           text.isEmpty) {
         throw FormatException(
-            'Baris subtitle ${index + 1} belum lengkap. Gunakan mulai|selesai|teks, misalnya 0.00|2.50|Halo.');
+          'Baris subtitle ${index + 1} belum lengkap. Gunakan mulai|selesai|teks, misalnya 0.00|2.50|Halo.',
+        );
       }
       captions.add({'start': start, 'end': end, 'text': text});
     }
@@ -106,12 +117,14 @@ class SubtitleBuilder {
 
     void flush() {
       if (buffer.isEmpty) return;
-      captions.add(Caption(
-        (buffer.first['start'] as num).toDouble(),
-        (buffer.last['end'] as num).toDouble(),
-        buffer.map((w) => w['word'] as String).join(' ').trim(),
-        List<Map<String, dynamic>>.from(buffer),
-      ));
+      captions.add(
+        Caption(
+          (buffer.first['start'] as num).toDouble(),
+          (buffer.last['end'] as num).toDouble(),
+          buffer.map((w) => w['word'] as String).join(' ').trim(),
+          List<Map<String, dynamic>>.from(buffer),
+        ),
+      );
       buffer = [];
     }
 
@@ -145,8 +158,9 @@ class SubtitleBuilder {
           .map((w) => Map<String, dynamic>.from(w))
           .toList();
       if (words.isNotEmpty) {
-        captions
-            .addAll(groupWords(words, maxWords: maxWords, maxChars: maxChars));
+        captions.addAll(
+          groupWords(words, maxWords: maxWords, maxChars: maxChars),
+        );
         continue;
       }
       final text = (segment['text'] as String? ?? '').trim();
@@ -169,11 +183,13 @@ class SubtitleBuilder {
       if (current.isNotEmpty) chunks.add(current);
       final span = (end - start).clamp(0.4, double.infinity) / chunks.length;
       for (var i = 0; i < chunks.length; i++) {
-        captions.add(Caption(
-          start + i * span,
-          start + (i + 1) * span,
-          chunks[i].join(' '),
-        ));
+        captions.add(
+          Caption(
+            start + i * span,
+            start + (i + 1) * span,
+            chunks[i].join(' '),
+          ),
+        );
       }
     }
     return captions;
@@ -215,11 +231,18 @@ class SubtitleBuilder {
       .replaceAll('}', r'\}')
       .replaceAll('\n', r'\N');
 
-  static String _styleLine(String name, Map<String, dynamic> style,
-      double scale, int alignment, int marginV) {
+  static String _styleLine(
+    String name,
+    Map<String, dynamic> style,
+    double scale,
+    int alignment,
+    int marginV,
+  ) {
     final marginH = (SubtitleBuilder.marginH * scale).round();
-    final fontSize =
-        (((style['size'] as num?) ?? 56) * scale).round().clamp(10, 300);
+    final fontSize = (((style['size'] as num?) ?? 56) * scale).round().clamp(
+          10,
+          300,
+        );
     final outline = ((style['outline'] as num?) ?? 3) * scale;
     final shadow = ((style['shadow'] as num?) ?? 1) * scale;
     return 'Style: $name,${style['font'] ?? 'Roboto'},$fontSize,${style['primary']},${style['secondary']},'
@@ -244,9 +267,23 @@ class SubtitleBuilder {
         : ((style['marginV'] as num? ?? 220) * scale).round();
 
     final styles = <String>[
-      _styleLine('Default', style, scale,
-          {'bottom': 2, 'middle': 5, 'top': 8}[position] ?? 2, marginV)
+      _styleLine(
+        'Default',
+        style,
+        scale,
+        {'bottom': 2, 'middle': 5, 'top': 8}[position] ?? 2,
+        marginV,
+      ),
     ];
+    styles.add(
+      _styleLine(
+        'ActiveBox',
+        {...style, 'border': 3, 'outline': 10},
+        scale,
+        {'bottom': 2, 'middle': 5, 'top': 8}[position] ?? 2,
+        marginV,
+      ),
+    );
     final usedTemplates = <String>{
       for (final item in textItems) templateId(item['template']),
     }.toList()
@@ -273,9 +310,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
 
     final events = <String>[];
     for (final caption in position == 'off' ? <Caption>[] : captions) {
-      events.add('Dialogue: 0,${_assTime(caption.start)},'
-          '${_assTime(caption.end > caption.start ? caption.end : caption.start + 0.2)},'
-          'Default,,0,0,0,,${CreatorTools.captionText(caption.toJson(), style, width, height)}');
+      events.addAll(
+        CreatorTools.captionEvents(caption.toJson(), style, width, height),
+      );
     }
     for (final item in textItems) {
       final text = (item['text'] as String? ?? '').trim();
@@ -288,9 +325,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
       final y =
           ((item['y'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0) * height;
       final anim = presets[template]?['anim'] as String? ?? '';
+      final requestedSize = (item['fontSize'] as num?)?.toDouble() ?? 0;
+      final size = (requestedSize > 0
+              ? requestedSize
+              : (presets[template]?['size'] as num? ?? 56)) *
+          scale;
+      final alpha = ((1 - CreatorTools.value(item['opacity'], 1, 0, 1)) * 255)
+          .round()
+          .toRadixString(16)
+          .padLeft(2, '0');
       events.add(
-          'Dialogue: 0,${_assTime(start)},${_assTime(end < start + 0.2 ? start + 0.2 : end)},'
-          'Tpl_$template,,0,0,0,,{\\an5\\pos(${x.round()},${y.round()})}$anim${_escape(text)}');
+        'Dialogue: 0,${_assTime(start)},${_assTime(end < start + 0.2 ? start + 0.2 : end)},'
+        'Tpl_$template,,0,0,0,,{\\an5\\pos(${x.round()},${y.round()})\\fs${size.toStringAsFixed(1)}\\alpha&H$alpha&}$anim${_escape(text)}',
+      );
     }
     return '$header\n${events.join('\n')}\n';
   }

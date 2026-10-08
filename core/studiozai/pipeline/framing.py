@@ -36,7 +36,16 @@ def chain(data: dict, sw: int, sh: int, ow: int, oh: int) -> str:
     return f"crop={cw}:{ch}:'{expression('x', sw, cw)}':'{expression('y', sh, ch)}',scale={ow}:{oh}:flags=lanczos,setsar=1"
 
 
+def split_graph(data: dict, sw: int, sh: int, ow: int, oh: int) -> str:
+    top_height = max(2, min(oh - 2, int(oh * number(data.get("fraction"), .35, .2, .8)) // 2 * 2))
+    top = chain(data.get("top") or {"x": .15, "y": .2, "zoom": 2}, sw, sh, ow, top_height)
+    bottom = chain(data.get("bottom") or {"x": .5, "y": .5}, sw, sh, ow, oh - top_height)
+    return f"split=2[face][game];[face]{top}[faceout];[game]{bottom}[gameout];[faceout][gameout]vstack=inputs=2,setsar=1[vout]"
+
+
 def slice_framing(data: dict, offset: float, duration: float) -> dict:
+    if "top" in data or "bottom" in data:
+        return {**data, **{k: slice_framing(data[k], offset, duration) for k in ("top", "bottom") if k in data}}
     f = clean(data)
     frames = f["keyframes"]
     if not frames:
