@@ -28,7 +28,9 @@ Script integrasi yang dipelihara: `tools/smoke_batch_ui.py`, `tools/smoke_creato
 
 Seluruh pengerjaan dikumpulkan di `C:\Users\Zwart\Downloads\Coding AI\Studio ZAI`. Source, dokumentasi dan bukti visual disimpan; paket terakhir berada di `releases/1.10.0/`. Build lama, virtualenv duplikat, skrip/media temporer, fixture dan keluaran tes dibersihkan setelah paket diperiksa. Source Python aplikasi dan tes yang dipelihara tetap diperlukan untuk pengembangan.
 
-Sekitar 7 GB artefak lama dibersihkan sebelum build baru. Angka ini ukuran logis perkiraan, bukan pengukuran tepat blok disk: sebagian fixture memakai hardlink. Tiga direktori cache lama (`.pytest_cache`, `core/.pytest_cache` dan `.tmp-pytest`) tetap terkunci oleh izin Windows. Pembersihan massal sempat ditolak pemeriksaan otomatis; pembersihan dilanjutkan dengan target artefak yang diverifikasi melalui `flutter clean` dan `git clean` scoped. Data/model/proyek pengguna di LOCALAPPDATA tetap tersimpan.
+Sekitar 7 GB artefak lama dibersihkan sebelum build baru. Angka ini ukuran logis perkiraan, bukan pengukuran tepat blok disk: sebagian fixture memakai hardlink. Empat direktori cache lama (`.pytest_cache`, `.tmp-pytest`, `core/.pytest_cache` dan `core/.tmp-pytest`) tetap terkunci oleh izin Windows. Pembersihan massal sempat ditolak pemeriksaan otomatis; pembersihan dilanjutkan dengan target artefak yang diverifikasi melalui `flutter clean` dan `git clean` scoped. Data/model/proyek pengguna di LOCALAPPDATA tetap tersimpan.
+
+Pemeriksaan setelah pembersihan: total berkas yang dapat dibaca sekitar **644 MiB** termasuk metadata Git; paket terakhir **551 MiB**. Sebelum perbaikan, folder memuat sekitar **9.84 GiB** ukuran logis. Empat direktori terkunci tidak dapat dihitung; angka ini bukan jaminan jumlah blok disk fisik yang dibebaskan. `build/`, `dist/`, `.venv-build/`, `.test-fixtures/`, build Flutter dan cache Gradle proyek sudah dihapus.
 
 ## Batas validasi
 
