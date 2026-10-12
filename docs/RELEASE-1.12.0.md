@@ -39,6 +39,7 @@ Halaman publik [SocialVisuals](https://socialvisuals.pro/) diperiksa sebagai ref
 | ASR nyata | Tiny CPU: cold ID 4,438 detik / EN 1,307 detik; Small: ID 7,041 / EN 7,084. RSS puncak sekitar 250–580 MiB. Fixture TTS sekitar 14–15 detik; ini bukan skor kualitas podcast |
 | EXE nyata | Health 1.12, runtime suara, preview/export, GGUF lokal dan inferensi gambar lokal diuji dengan LOCALAPPDATA terisolasi. ASR paket diuji terpisah tanpa download model |
 | Android | Build release, package/build number dan signature diperiksa. Tidak ada HP terhubung: penggunaan RAM, kamera, izin dan kualitas pada perangkat fisik belum dibuktikan |
+| GitHub Actions | Job Python dan Flutter pada Linux sukses untuk commit `cfbeda2`: [hasil run](https://github.com/Zwart04/Studio-ZAI/actions/runs/38218652907) |
 
 Benchmark memakai model yang sudah terpasang, tanpa download model atau inferensi cloud. Angka ini berlaku untuk Ryzen 5 5500U dengan RAM sekitar 11,4 GiB, bukan janji waktu untuk semua perangkat atau durasi podcast.
 
@@ -66,6 +67,6 @@ Kode Studio ZAI memakai **Studio ZAI Noncommercial License 1.0**, bukan MIT: bol
 
 Audit rahasia mencari pola kredensial dan nama file privat pada sumber, history dan isi arsip. Hasil nol temuan tidak menjamin semua bentuk rahasia dapat dikenali. API key Windows disimpan melalui mekanisme lokal yang ada; aplikasi tidak menyertakan key pengguna pada rilis.
 
-Warning toolchain Android mengenai plugin Kotlin/format SDK masih ada meskipun build berhasil. Tidak ada uji provider berbayar atau perangkat Android fisik. Kualitas deteksi wajah, ASR, ranking dan timestamp tetap perlu ditinjau pada materi pengguna. Tidak ada klaim kode bebas semua bug.
+Warning toolchain Android mengenai plugin Kotlin/format SDK masih ada meskipun build berhasil. APK memakai identitas sertifikat Android Debug yang juga dipakai APK 1.11 lokal; distribusi Play Store memerlukan konfigurasi signing produksi terpisah. Tidak ada uji provider berbayar atau perangkat Android fisik. Kualitas deteksi wajah, ASR, ranking dan timestamp tetap perlu ditinjau pada materi pengguna. Tidak ada klaim kode bebas semua bug.
 
 Artefak publik: [rilis GitHub v1.12.0](https://github.com/Zwart04/Studio-ZAI/releases/tag/v1.12.0). Checksum berada pada `SHA256SUMS.txt` di rilis tersebut. Bukti lokal tersimpan dalam folder `build` dengan nama `hybrid-*`; file media uji dan cache build sementara dapat dibersihkan setelah validasi.

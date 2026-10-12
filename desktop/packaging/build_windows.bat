@@ -28,6 +28,12 @@ if defined STUDIOZAI_FFMPEG_DIR (
 )
 
 echo [4/4] Membangun aplikasi...
+python tools\fetch_llama_runtime.py
+if errorlevel 1 exit /b 1
+python tools\fetch_js_runtime.py
+if errorlevel 1 exit /b 1
+python tools\collect_runtime_notices.py
+if errorlevel 1 exit /b 1
 pyinstaller desktop\packaging\studiozai.spec --noconfirm --distpath dist --workpath build
 if errorlevel 1 exit /b 1
 
