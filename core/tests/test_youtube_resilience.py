@@ -300,6 +300,7 @@ def test_unduh_audio_pindah_keluarga_bila_cdn_ditolak(monkeypatch, tmp_path):
 
 
 def test_unduh_audio_semua_keluarga_gagal_pesan_ramah(monkeypatch, tmp_path):
+    monkeypatch.setattr(download, "_download_audio_native", lambda *a: (_ for _ in ()).throw(RuntimeError("koneksi cadangan gagal")))
     monkeypatch.setattr(download, "_extract", lambda *a, **k: {"title": "uji"})
     monkeypatch.setattr(download, "_pick_audio_format",
                         lambda *a, **k: {"url": "https://cdn/u.m4a", "ext": "m4a"})

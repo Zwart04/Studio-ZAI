@@ -12,6 +12,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from . import config
 from .utils.text import sanitize_filename
@@ -20,6 +21,22 @@ from .utils.text import sanitize_filename
 PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 DEFAULT_CROP = "center"
+
+
+def source_thumbnail_url(source: str) -> str:
+    try:
+        parsed = urlparse(source)
+        if parsed.hostname == "youtu.be":
+            video_id = parsed.path.strip("/").split("/")[0]
+        elif parsed.hostname in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+            video_id = parse_qs(parsed.query).get("v", [""])[0]
+            if not video_id and parsed.path.startswith(("/shorts/", "/embed/")):
+                video_id = parsed.path.split("/")[2]
+        else:
+            return ""
+        return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id) else ""
+    except (ValueError, IndexError):
+        return ""
 DEFAULT_SUBTITLE_PRESET = "clean"
 _MISSING = object()
 _LOCKS: dict[str, threading.RLock] = {}

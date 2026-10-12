@@ -621,10 +621,33 @@ async function renderHomeProjects() {
   }
 }
 
+function previewAspect(canvas, width = 0, height = 0) {
+  if (canvas === "portrait") return "9 / 16";
+  if (canvas === "square") return "1 / 1";
+  if (canvas === "original" && Number(width) > 0 && Number(height) > 0) return `${Math.min(8192, Number(width))} / ${Math.min(8192, Number(height))}`;
+  return "16 / 9";
+}
+
+function potentialBadge(score) {
+  if (score === null || score === undefined || !Number.isFinite(Number(score))) return "";
+  const value = Math.round(Math.max(0, Math.min(1, Number(score))) * 100);
+  const level = value >= 75 ? "high" : value >= 45 ? "medium" : "low";
+  return `<span class="potential-score ${level}" title="Skor rekomendasi analisis. Semakin tinggi, semakin kuat potensi klip; tidak menjamin viral.">Skor ${value}<small>/100</small></span>`;
+}
+
+function renderedPreviewCanvas(files, canvas) {
+  const path = clipPreviewPath(files || {});
+  if (!path || files.mp4 === path) return canvas;
+  for (const [key, value] of [["mp4_portrait", "portrait"], ["mp4_square", "square"], ["mp4_landscape", "landscape"]]) {
+    if (files[key] === path) return value;
+  }
+  return canvas;
+}
+
 function projectCard(project) {
-  const thumb = project.thumb ? `<img class="thumb" src="${mediaUrl(project.thumb)}" alt="" />` : `<div class="thumb"></div>`;
+  const thumb = project.thumb ? `<img class="thumb" src="${mediaUrl(project.thumb)}" alt="" />` : project.source_thumbnail ? `<img class="thumb" src="${escapeHtml(project.source_thumbnail)}" alt="Gambar sumber video" loading="lazy" />` : `<div class="thumb">Preview belum tersedia</div>`;
   return `<article class="clip" data-project="${project.id}" style="cursor:pointer">
-    ${thumb}
+    <div class="clip-preview" style="--preview-ratio:${previewAspect(project.preview_canvas || 'portrait', project.width, project.height)}">${thumb}${potentialBadge(project.preview_score)}</div>
     <div class="meta">
       <strong>${escapeHtml(project.title)}</strong>
       <span class="score">${project.clips} klip · ${project.duration_label || formatClock(project.duration)} · ${project.language || ""}</span>
@@ -683,8 +706,8 @@ function paintGallery() {
     const poster = clipThumbnailPath(files);
     const media = preview
       ? `<video controls playsinline preload="none" ${poster ? `poster="${mediaUrl(poster)}"` : ""} src="${mediaUrl(preview)}" aria-label="${escapeHtml(clip.title)}"></video>`
-      : `<div class="gallery-draft">${t("gallery.draft")}</div>`;
-    return `<article class="clip gallery-clip">${media}
+      : clip.source_thumbnail ? `<img class="thumb" src="${escapeHtml(clip.source_thumbnail)}" alt="Gambar sumber video" loading="lazy" />` : `<div class="gallery-draft">${t("gallery.draft")}</div>`;
+    return `<article class="clip gallery-clip"><div class="clip-preview" style="--preview-ratio:${previewAspect(renderedPreviewCanvas(files, clip.canvas), clip.source_width, clip.source_height)}">${media}${potentialBadge(clip.score)}</div>
       <div class="meta"><span class="score">${escapeHtml(clip.project_title)}</span><strong>${escapeHtml(clip.title)}</strong>
       <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · ${t("clips.score")} ${Number(clip.score || 0).toFixed(2)}</span></div>
       <div class="gallery-actions"><button class="mini" data-gallery-open="${escapeHtml(clip.project_id)}" data-storage="${escapeHtml(clip.storage_id)}">${t("common.edit")}</button>${clipDownloadLinks(files)}</div></article>`;
@@ -814,6 +837,14 @@ function renderProjectDetail() {
   }
   sourceAction.disabled = !project.source || !project.duration;
   const grid = $("#clipGrid");
+  let scoreHelp = $("#clipScoreHelp");
+  if (!scoreHelp) {
+    scoreHelp = document.createElement("p");
+    scoreHelp.id = "clipScoreHelp";
+    scoreHelp.className = "muted";
+    grid.before(scoreHelp);
+  }
+  scoreHelp.textContent = "Skor lebih tinggi menunjukkan rekomendasi potensi yang lebih kuat. Skor ini tidak menjamin viral.";
   if (!project.clips.length) {
     grid.innerHTML = `<div class="empty">${t("projects.empty")}</div>`;
     return;
@@ -822,11 +853,11 @@ function renderProjectDetail() {
     const poster = clipThumbnailPath(clip.files);
     const thumb = poster
       ? `<img class="thumb" src="${mediaUrl(poster)}" alt="" loading="lazy" />`
-      : `<div class="thumb skeleton"></div>`;
+      : project.source_thumbnail ? `<img class="thumb" src="${escapeHtml(project.source_thumbnail)}" alt="Gambar sumber, belum frame klip" loading="lazy" />` : `<div class="thumb">Preview belum tersedia</div>`;
     const ready = Boolean(clipPreviewPath(clip.files));
-    const status = ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`;
+    const status = (ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`) + (project.execution?.ranking === "heuristic-only" ? `<span class="badge">heuristik</span>` : "");
     return `<article class="clip">
-      <button type="button" class="clip-open" data-edit="${clip.index}" aria-label="Buka ${escapeHtml(clip.title || 'klip')} di editor">${thumb}<span class="clip-open-hint">Putar &amp; edit</span></button>
+      <button type="button" class="clip-open clip-preview" style="--preview-ratio:${previewAspect(renderedPreviewCanvas(clip.files || {}, clip.canvas), project.width, project.height)}" data-edit="${clip.index}" aria-label="Buka ${escapeHtml(clip.title || 'klip')} di editor">${thumb}${potentialBadge(clip.score)}<span class="clip-open-hint">Putar &amp; edit</span></button>
       <div class="meta">
         <label class="clip-select"><input type="checkbox" data-batch-clip="${clip.index}" data-storage="${clip.storage_id}" ${batchSelection.has(clip.storage_id) ? "checked" : ""} />${t("clips.select")}</label>
         <strong>${escapeHtml(clip.title || "Klip " + (clip.index + 1))}</strong>

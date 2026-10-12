@@ -477,6 +477,11 @@ def list_projects() -> list[dict[str, Any]]:
             "language": p.language,
             "updated": p.updated,
             "thumb": next((c.files.get("thumb") for c in p.clips if c.files.get("thumb")), None),
+            "source_thumbnail": projects.source_thumbnail_url(p.source_url) if p.processing_mode != "offline" else "",
+            "preview_canvas": p.clips[0].canvas if p.clips else "portrait",
+            "preview_score": p.clips[0].score if p.clips else None,
+            "width": p.width,
+            "height": p.height,
         }
         for p in projects.list_projects()
     ]
@@ -503,6 +508,10 @@ def clip_gallery() -> list[dict[str, Any]]:
                 "start": clip.start,
                 "end": clip.end,
                 "score": clip.score,
+                "canvas": clip.canvas,
+                "source_width": project.width,
+                "source_height": project.height,
+                "source_thumbnail": projects.source_thumbnail_url(project.source_url) if project.processing_mode != "offline" else "",
                 "updated": project.updated,
                 "files": available,
             })
@@ -547,7 +556,10 @@ def _ingest_task(project_id: str, source: str, online: bool = False):
 
 @app.get("/api/projects/{project_id}")
 def get_project(project_id: str) -> dict[str, Any]:
-    return _project(project_id).as_dict()
+    project = _project(project_id)
+    result = project.as_dict()
+    result["source_thumbnail"] = projects.source_thumbnail_url(project.source_url) if project.processing_mode != "offline" else ""
+    return result
 
 
 @app.delete("/api/projects/{project_id}")

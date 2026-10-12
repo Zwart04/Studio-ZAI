@@ -22,9 +22,13 @@ def main():
     assert result.ok,result.stderr
     project=projects.Project.create('Browser fixture',str(source))
     project.duration=5;project.width=640;project.height=360
+    project.source_url='https://youtu.be/oPZY7nKtUTc'  # Public source image; playback remains synthetic local media.
     project.add_clip(projects.Clip(0,1,4,title='Subtitle fixture',canvas='portrait',captions=[
         {'start':0,'end':3,'text':'Halo dunia','style':{'mode':'highlight'},
          'words':[{'word':'Halo','start':0,'end':1.5},{'word':'dunia','start':1.5,'end':3}]}]))
+    project.save()
+    project.add_clip(projects.Clip(1,0,2,title='Landscape fixture',canvas='landscape',score=.9))
+    project.add_clip(projects.Clip(2,0,2,title='Square fixture',canvas='square',score=.4))
     project.save()
     (OUT/'fixture.json').write_text(json.dumps({'project_id':project.id}),encoding='utf-8')
     from studiozai.server import app

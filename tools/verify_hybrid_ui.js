@@ -54,6 +54,21 @@ async function main(){
     await page.setViewportSize({width:1440,height:1000});
     await page.locator('#nav [data-page="projects"]').click();
     await page.locator(`[data-open="${fixture.project_id}"]`).click();
+    const card=await page.locator('#clipGrid .clip-open').first().boundingBox();
+    assert.ok(Math.abs(card.width/card.height-9/16)<.02,'Portrait card ratio');
+    for (const [index,ratio] of [[1,16/9],[2,1]]) {
+      const frame=await page.locator('#clipGrid .clip-open').nth(index).boundingBox();
+      assert.ok(Math.abs(frame.width/frame.height-ratio)<.02,'Preview card canvas ratio');
+    }
+    assert.match(await page.locator('#clipGrid .potential-score').nth(1).innerText(),/90/);
+    await page.waitForFunction(()=>document.querySelector('#clipGrid img.thumb')?.naturalWidth>0);
+    for (const width of [360,540,768,1024,1440]) {
+      await page.setViewportSize({width,height:1000});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`Card overflow at ${width}`);
+    }
+    await page.screenshot({path:path.join(OUT,'preview-cards.png')});
+    await page.locator('#clipGrid .potential-score').first().waitFor();
+    report.checks.push('portrait preview card and visible score badge');
     await page.locator('#clipGrid [data-edit]').first().click();
     await page.locator('#tlVideo').waitFor();
     await page.waitForFunction(()=>document.querySelector('#tlVideo')?.readyState>=2);

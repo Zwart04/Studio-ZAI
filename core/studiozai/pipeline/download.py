@@ -299,6 +299,7 @@ def _http_copy(
         if total:
             end = min(end, total - 1)
         chunk: bytes | None = None
+        last_error = None
         for _attempt in range(3):
             try:
                 with _http_open(url, f"bytes={position}-{end}", family) as response:
@@ -308,10 +309,13 @@ def _http_copy(
                         whole_file = True
                 if chunk is not None:
                     break
-            except (urllib.error.URLError, OSError, TimeoutError):
+            except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                last_error = exc
                 chunk = None
         if not chunk:
-            raise RuntimeError("koneksi unduhan gagal berulang kali")
+            status = getattr(last_error, "code", None)
+            detail = f"HTTP {status}" if status else type(last_error).__name__ if last_error else "respons kosong"
+            raise RuntimeError(f"koneksi unduhan gagal berulang kali ({detail})") from last_error
         handle.write(chunk)
         done += len(chunk)
         position += len(chunk)
@@ -649,6 +653,25 @@ def download(
     }
 
 
+def _download_audio_native(url, out_dir, cookies, progress_cb, audio_lang):
+    def attempt(family):
+        fresh = _extract(url, None, cookies)
+        chosen = _pick_audio_format(fresh, audio_lang)
+        directory = Path(out_dir) / "native-audio"
+        directory.mkdir(parents=True, exist_ok=True)
+        options = _base_options(directory, cookies, progress_cb, family=family)
+        options.update({"format": chosen.get("format_id") or "bestaudio", "retries": 2, "fragment_retries": 2})
+        with _yt_dlp().YoutubeDL(options) as ydl:
+            if audio_lang:
+                _install_language_selector(ydl, options["format"], audio_lang)
+            info = ydl.extract_info(url, download=True)
+            path = _resolve_output(Path(ydl.prepare_filename(info)), directory)
+        if not path.is_file() or not path.stat().st_size:
+            raise RuntimeError("Jalur cadangan tidak menghasilkan audio")
+        return path, info
+    return ytnet.try_families(attempt)[0]
+
+
 def download_audio(
     url: str,
     out_dir: str | Path,
@@ -679,9 +702,16 @@ def download_audio(
         target = target.with_suffix("." + (chosen.get("ext") or "m4a"))
         # Unduhan byte CDN juga bisa ditolak per keluarga IP — coba
         # bergantian seperti jalur metadata/caption.
-        ytnet.try_families(
-            lambda family: _http_download(chosen["url"], target, progress_cb, family)
-        )
+        try:
+            ytnet.try_families(
+                lambda family: _http_download(chosen["url"], target, progress_cb, family)
+            )
+        except (RuntimeError, OSError, TimeoutError):
+            # The native downloader refreshes signed URLs and retains extractor headers/cookies.
+            target.unlink(missing_ok=True)
+            if progress_cb:
+                progress_cb(0, "Mencoba jalur audio cadangan")
+            target, info = _download_audio_native(url, out_dir, cookies, progress_cb, audio_lang)
     except Exception as exc:
         raise RuntimeError(ytnet.friendly_error("mengunduh audio", exc)) from exc
     if not target.exists():

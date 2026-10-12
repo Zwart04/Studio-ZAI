@@ -530,7 +530,8 @@ def generate_clips(
                 project.notes = "Batas hasil LLM tidak sesuai durasi pilihan; memakai kandidat heuristik."
         else:
             project.execution["ranking"] = "heuristic-only"
-            project.notes = "LLM belum siap atau hasilnya tidak valid; kandidat ini memakai heuristik. Atur model lokal untuk analisis LLM."
+            setup = "Periksa provider, model dan API key yang dipilih." if project.processing_mode == "online_ai" else "Atur model lokal untuk analisis LLM."
+            project.notes = f"LLM belum siap atau hasilnya tidak valid; kandidat ini memakai heuristik. {setup}"
     else:
         project.execution["ranking"] = "heuristic-only"
     candidates = candidates[:count]
