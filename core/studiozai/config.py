@@ -13,6 +13,7 @@ APP_SLUG = "StudioZAI"
 DEFAULT_SETTINGS: dict[str, Any] = {
     "lang": "id",
     "asr_model": "whisper-small-int8",
+    "asr_device": "auto",
     "tts_voice_id": "supertonic-3-int8",
     "tts_voice_en": "piper-en_US-ljspeech-medium",
     "clone_model": "zipvoice-zh-en",

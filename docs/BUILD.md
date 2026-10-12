@@ -1,4 +1,6 @@
-# Build Studio ZAI 1.11
+# Build Studio ZAI 1.12
+
+Lihat [hasil pengujian dan batas rilis 1.12](RELEASE-1.12.0.md). Sebelum build Windows, ambil runtime yang versinya dipatok dengan `tools/fetch_llama_runtime.py` dan `tools/fetch_js_runtime.py`; keduanya mengunduh runtime, bukan bobot model. Audit paket aktual dengan `tools/audit_release_privacy.py` sebelum upload.
 
 ## Desktop
 

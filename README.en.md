@@ -2,7 +2,9 @@
 
 <p align="center">A simple video studio for Windows and Android. Find moments in long videos, edit them directly, and make captions, voiceovers, and images with local models.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.11.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/FEATURES.md">Platform features</a> · <a href="docs/MODELS.md">Models & licenses</a></p>
+Version 1.12 adds caption-first processing, local GGUF ranking, live subtitle playback, phone rotation handling and source relinking. [Usage, validation and limitations](docs/RELEASE-1.12.0.md).
+
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Download v1.12.0</strong></a> · <a href="README.md">Bahasa Indonesia</a> · <a href="docs/FEATURES.md">Platform features</a> · <a href="docs/MODELS.md">Models & licenses</a></p>
 
 ![Studio ZAI editor with a playable video, captions, and timeline](docs/screenshots/creator-portrait.png)
 
@@ -26,10 +28,10 @@ The installed models work without an API key. Downloading a model or a video URL
 
 | Platform | Package | Notes |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-windows-x64.zip) | Extract the whole folder and run **StudioZAI.exe**. FFmpeg and AI runtimes are bundled; model weights download separately. |
-| Android 8+ | [One universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-android.apk) | Local image inference requires ARM64. |
+| Windows 10/11 x64 | [Windows ZIP](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/StudioZAI-1.12.0-windows-x64.zip) | Extract the whole folder and run **StudioZAI.exe**. FFmpeg and AI runtimes are bundled; model weights are installed separately. |
+| Android 8+ | [One universal APK](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/StudioZAI-1.12.0-android.apk) | Local image inference requires ARM64. |
 
-[Release validation](docs/RELEASE-1.11.0.md) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/SHA256SUMS.txt) · [Build guide](docs/BUILD.md)
+[Release validation](docs/RELEASE-1.12.0.md) · [SHA-256 checksums](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/SHA256SUMS.txt) · [Build guide](docs/BUILD.md)
 
 ## Get started
 

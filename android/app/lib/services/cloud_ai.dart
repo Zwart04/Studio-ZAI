@@ -188,7 +188,9 @@ class CloudAI {
     final cached = _catalogCache[cacheKey];
     if (ownClient &&
         cached != null &&
-        DateTime.now().difference(cached.$1).inMinutes < 5) { return cached.$2; }
+        DateTime.now().difference(cached.$1).inMinutes < 5) {
+      return cached.$2;
+    }
     client ??= http.Client();
     try {
       final req = http.Request('GET', uri)..followRedirects = false;

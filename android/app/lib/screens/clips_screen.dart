@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../models.dart';
 import '../state/app_state.dart';
@@ -39,6 +40,26 @@ class ClipsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(Tokens.space4),
       children: [
+        if (!project.online)
+          OutlinedButton.icon(
+              onPressed: state.jobState == JobState.running
+                  ? null
+                  : () async {
+                      final files =
+                          await FilePicker.pickFiles(type: FileType.video);
+                      final path = files.firstOrNull?.path;
+                      if (path == null) return;
+                      try {
+                        await state.relinkSource(path);
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text('$error')));
+                        }
+                      }
+                    },
+              icon: const Icon(Icons.link),
+              label: const Text('Tautkan ulang video yang dipindah')),
         Row(
           children: [
             Expanded(
@@ -65,7 +86,15 @@ class ClipsScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        FilledButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>Scaffold(appBar:AppBar(title:const Text('Ekspor batch')),body:GalleryScreen(state:state,project:project)))),icon:const Icon(Icons.video_library),label:const Text('Pilih momen & ekspor banyak format')),
+        FilledButton.icon(
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Ekspor batch')),
+                        body: GalleryScreen(state: state, project: project)))),
+            icon: const Icon(Icons.video_library),
+            label: const Text('Pilih momen & ekspor banyak format')),
         OutlinedButton.icon(
             onPressed: state.jobState == JobState.running
                 ? null

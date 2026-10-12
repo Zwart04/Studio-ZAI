@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../theme/tokens.dart';
+import 'live_video_subtitle.dart';
 
 /// Pemutar pratinjau untuk berkas hasil render.
 ///
@@ -18,9 +19,13 @@ class VideoPreview extends StatefulWidget {
     this.endSeconds,
     this.targetAspectRatio,
     this.fit = BoxFit.contain,
+    this.captions = const [],
+    this.subtitlePosition = 'bottom',
   });
 
   final String path;
+  final List<Map<String, dynamic>> captions;
+  final String subtitlePosition;
   final double? targetAspectRatio;
   final BoxFit fit;
   final double startSeconds;
@@ -86,6 +91,22 @@ class _VideoPreviewState extends State<VideoPreview>
   }
 
   @override
+  void didUpdateWidget(covariant VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final controller = _controller;
+    if (controller != null &&
+        controller.value.isInitialized &&
+        oldWidget.startSeconds != widget.startSeconds) {
+      final seconds = controller.value.position.inMilliseconds / 1000;
+      if (seconds < widget.startSeconds ||
+          widget.endSeconds != null && seconds >= widget.endSeconds!) {
+        controller.seekTo(
+            Duration(milliseconds: (widget.startSeconds * 1000).round()));
+      }
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) _controller?.pause();
   }
@@ -133,6 +154,12 @@ class _VideoPreviewState extends State<VideoPreview>
                 ),
               ),
             ),
+            Positioned.fill(
+                child: LiveVideoSubtitle(
+                    player: controller,
+                    captions: widget.captions,
+                    startSeconds: widget.startSeconds,
+                    position: widget.subtitlePosition)),
             Positioned(
               left: 8,
               right: 8,

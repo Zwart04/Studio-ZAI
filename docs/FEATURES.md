@@ -1,4 +1,4 @@
-# Fitur Studio ZAI 1.11
+# Fitur Studio ZAI 1.12
 
 [Creator: podcast, kata, crop, terjemahan, galeri dan batch di Windows/Android](CREATOR.md).
 
@@ -24,7 +24,10 @@
 | Rekaman mikrofon | Browser/WebView | Izin mikrofon Android |
 | ZipVoice English/Mandarin | Runtime dibundel | Runtime dibundel |
 | Chatterbox kloning Indonesia | Opsional dari source + PyTorch, bobot >2 GB di luar model dasar | Belum tersedia pada paket ringan |
-| AI teks / pemilihan momen | OpenAI, Anthropic, Groq, Gemini, DeepSeek, compatible | Sama |
+| Mode default | Hybrid, caption dahulu dan LLM lokal terpilih; fallback heuristik berlabel | Caption dahulu, ASR on-device, heuristik berlabel |
+| Full Offline | Sumber lokal dan model terpasang; loopback LLM | Sumber/model di HP; tidak memerlukan PC |
+| LLM lokal nyata | Ollama, API loopback compatible, atau GGUF yang sudah ada melalui runtime CPU bundel | Belum diaktifkan; perlu pengujian HP fisik |
+| AI online opsional | OpenAI, Anthropic, Groq, Gemini, DeepSeek, compatible | Provider cloud yang dipilih pengguna |
 | Deteksi & saran model dari akun provider | Ya | Ya |
 | Pelacakan wajah dengan jangkar X/Y | YuNet; Haar pada source tanpa bobot | ML Kit accurate + tracking |
 | ZIP klip/format terpilih yang sudah dirender | Unduh ZIP | Bagikan ZIP |
@@ -33,10 +36,10 @@
 | Duplikat proyek independen | Ya | Belum ada tombol duplikat |
 | Hapus proyek / cache terpisah | Ya | Ya |
 
-Video langsung tersedia di editor. Perubahan digabung setelah jeda singkat dan dirender otomatis; video sebelumnya tetap dapat diputar selama pembaruan. Ekspor tetap tindakan terpisah. Ini editor sederhana, bukan compositor GPU real-time setara CapCut. Tangkapan layar README berasal dari demo sintetis, bukan proyek pengguna.
+Preview normal memutar sumber asli/segmen lokal dengan subtitle overlay tersinkron playback. Edit caption tidak menjalankan encoded preview otomatis. Tombol draf terenkode memeriksa komposisi final, termasuk crop, judul, watermark, overlay media dan audio tracks. Preview normal belum menggantikan compositor final untuk semua track. Tangkapan layar README berasal dari demo sintetis.
 
 Caption hasil render tidak ditimpa track pemutar kedua. Teks yang sudah menyatu dengan sumber tidak dapat dihapus otomatis; posisi/off membantu mencegah tambahan teks bertumpuk.
 
-Sumber unduhan disimpan di proyek. Hapus proyek membuang sumber dan hasil miliknya; file asal eksternal dipertahankan. Cache hanya data sementara.
+Impor lokal mereferensikan file asli. Sumber unduhan disimpan di proyek. Hapus proyek membuang hasil miliknya; file asal eksternal dipertahankan. Cache memiliki versi dan checksum; cache rusak tidak dipakai.
 
-HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi rilis ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi rilis](RELEASE-1.11.0.md).
+HP fisik, mikrofon perangkat, gambar native Android, dan layanan cloud live belum diuji end-to-end pada sesi ini. Tidak ada iOS, sinkronisasi cloud proyek, atau publikasi langsung ke media sosial. [Validasi 1.12](RELEASE-1.12.0.md).

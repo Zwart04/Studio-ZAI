@@ -27,6 +27,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _canvas = 'portrait';
   bool _useTranscript = true;
   bool _useAi = false;
+  bool _online = true;
+  String _processingMode = 'hybrid';
 
   @override
   void dispose() {
@@ -60,6 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
         reviewFirst: _reviewFirst,
         audioLanguage: _audioLanguage.isEmpty ? null : _audioLanguage,
         canvas: _canvas,
+        online: _online,
+        processingMode: _processingMode,
       );
       if (mounted) widget.onOpenClips();
     } catch (error) {
@@ -180,6 +184,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontSize: 12,
                   height: 1.5,
                 ),
+              ),
+              DropdownButtonFormField<String>(
+                key: ValueKey(_processingMode),
+                initialValue: _processingMode,
+                decoration: const InputDecoration(labelText: 'Mode pemrosesan'),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'hybrid', child: Text('Hybrid Local AI')),
+                  DropdownMenuItem(
+                      value: 'offline',
+                      child: Text('Full Offline · berkas lokal')),
+                  DropdownMenuItem(
+                      value: 'online_ai', child: Text('Online AI · opsional')),
+                ],
+                onChanged: (value) => setState(() {
+                  _processingMode = value ?? 'hybrid';
+                  _useAi = _processingMode == 'online_ai';
+                }),
+              ),
+              const Text(
+                  'Android memakai heuristik lokal bila LLM on-device belum tersedia. ASR tetap di perangkat.'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _online,
+                onChanged: (value) => setState(() => _online = value),
+                title: const Text('Mode online'),
+                subtitle: const Text(
+                    'Caption dahulu; audio hanya jika dibutuhkan. Video klip saat preview/render.'),
               ),
             ],
           ),
@@ -400,6 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 value: _useAi,
                 onChanged: (value) => setState(() {
                   _useAi = value;
+                  _processingMode = value ? 'online_ai' : 'hybrid';
                   if (value) _useTranscript = true;
                 }),
                 title: const Text(

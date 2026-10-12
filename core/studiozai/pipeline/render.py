@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -35,9 +36,26 @@ def selected_encoder(explicit: str | None = None) -> str:
 
 def encoder_args(encoder: str | None = None) -> list[str]:
     name = selected_encoder(encoder)
+    if name == "preview":
+        # Draf pratinjau sekali-lihat: jauh lebih cepat, kualitas secukupnya.
+        return ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p"]
     if name == "h264_nvenc":
         return ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23"]
     return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+
+
+# Leave CPU capacity for playback and the interface while the encoder runs.
+def threads_per_ffmpeg() -> int:
+    cores = os.cpu_count() or 2
+    if cores <= 4:
+        return 1
+    if cores <= 8:
+        return 2
+    return 3
+
+
+def thread_args() -> list[str]:
+    return ["-threads", str(threads_per_ffmpeg())]
 
 
 def escape_filter_path(path: str | Path) -> str:
@@ -130,16 +148,16 @@ def render_clip(
     copy_audio = audio_mode == "original" and audio_label is None and map_audio and can_copy_audio(src)
     args += [
         *(["-c:a", "copy"] if copy_audio else AUDIO_ENCODE_ARGS),
-        *encoder_args(encoder), "-movflags", "+faststart", str(out),
+        *encoder_args(encoder), *thread_args(), "-movflags", "+faststart", str(out),
     ]
 
     def report(fraction: float) -> None:
         if progress_cb:
             progress_cb(min(99.0, max(0.0, fraction)), "merender klip")
 
-    result = ffmpeg.run_ffmpeg(args, duration, report, timeout=7200)
-    if not result.ok:
-        raise RuntimeError(f"render gagal: {result.stderr[-400:]}")
+    has_audio = any(s.get("codec_type") == "audio" for s in ffmpeg.ffprobe_json(src).get("streams", []))
+    ffmpeg.finalize_video(args, out, duration, report, size=(plan.out_w, plan.out_h),
+                          require_audio=has_audio or bool(voice_path))
     if progress_cb:
         progress_cb(100.0, "klip selesai")
     return out

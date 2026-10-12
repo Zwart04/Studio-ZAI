@@ -9,8 +9,7 @@ import 'media_tools.dart';
 import 'wav_chunks.dart';
 import 'model_manager.dart';
 
-// A top-level worker keeps Flutter callbacks, ChangeNotifiers, and native
-// handles on the UI isolate. The message contains only strings/numbers/ports.
+// Native handles stay in the worker isolate; UI callbacks receive messages.
 Future<void> _speechWorkerEntry(List<Object?> request) async {
   final reply = request.last as SendPort;
   final worker =
@@ -128,6 +127,122 @@ class TranscriptSegment {
       );
 }
 
+Future<void> _asrServer(List<Object?> init) async {
+  final worker =
+      SpeechService(ModelManager.forDirectory(Directory(init[0] as String)));
+  final inbox = ReceivePort();
+  (init[1] as SendPort).send(inbox.sendPort);
+  Timer? idle;
+  try {
+    await for (final message in inbox) {
+      final request = message as List;
+      idle?.cancel();
+      final reply = request.last as SendPort;
+      if (request[0] == 'shutdown') {
+        worker.reset();
+        reply.send(['done', null]);
+        break;
+      }
+      try {
+        await worker.loadAsr(request[2] as String,
+            language: request[3] as String);
+        final segments = await worker.transcribeWav(request[1] as String,
+            language: request[3] as String,
+            onProgress: (seconds) => reply.send(['progress', seconds]));
+        reply.send(['done', segments.map((row) => row.toJson()).toList()]);
+      } catch (error) {
+        worker.reset();
+        reply.send(['error', error.toString()]);
+      }
+      idle = Timer(const Duration(seconds: 30), worker.reset);
+    }
+  } finally {
+    idle?.cancel();
+    worker.reset();
+    inbox.close();
+  }
+}
+
+class _AsrSession {
+  static Isolate? isolate;
+  static SendPort? server;
+  static String directory = '';
+  static Future<void> tail = Future.value();
+
+  static Future<Object?> run(String modelDirectory, String path, String model,
+      String language, void Function(double)? progress) async {
+    final previous = tail, gate = Completer<void>();
+    tail = gate.future;
+    await previous;
+    final reply = ReceivePort(), errors = ReceivePort();
+    final result = Completer<Object?>();
+    StreamSubscription? subscription, errorSubscription;
+    var settling = false, sent = false;
+    Future<void> finish() async {
+      isolate?.removeErrorListener(errors.sendPort);
+      isolate?.removeOnExitListener(errors.sendPort);
+      await subscription?.cancel();
+      await errorSubscription?.cancel();
+      reply.close();
+      errors.close();
+      gate.complete();
+    }
+
+    try {
+      if (server == null || directory != modelDirectory) {
+        if (server != null) {
+          final closing = ReceivePort();
+          server!.send(['shutdown', closing.sendPort]);
+          await closing.first.timeout(const Duration(seconds: 5));
+          closing.close();
+        }
+        isolate?.kill(priority: Isolate.immediate);
+        server = null;
+        final ready = ReceivePort();
+        try {
+          isolate = await Isolate.spawn(
+              _asrServer, <Object?>[modelDirectory, ready.sendPort]);
+          server = await ready.first.timeout(const Duration(seconds: 10))
+              as SendPort;
+          directory = modelDirectory;
+        } finally {
+          ready.close();
+        }
+      }
+      errorSubscription = errors.listen((error) {
+        server = null;
+        if (!result.isCompleted) {
+          result.completeError(StateError('ASR worker berhenti: $error'));
+        }
+      });
+      isolate!.addErrorListener(errors.sendPort);
+      isolate!.addOnExitListener(errors.sendPort);
+      subscription = reply.listen((message) {
+        final row = message as List;
+        if (row[0] == 'progress') progress?.call((row[1] as num).toDouble());
+        if (row[0] == 'done' && !result.isCompleted) result.complete(row[1]);
+        if (row[0] == 'error' && !result.isCompleted) {
+          result.completeError(StateError('${row[1]}'));
+        }
+      });
+      server!.send(['transcribe', path, model, language, reply.sendPort]);
+      sent = true;
+      return await result.future.timeout(const Duration(minutes: 15));
+    } on TimeoutException {
+      // Native inference cannot be safely killed mid-call. Keep the serial gate
+      // until it returns, so a retry cannot allocate a second recognizer.
+      if (sent) {
+        settling = true;
+        unawaited(result.future
+            .then<void>((_) => finish(), onError: (_) => finish()));
+      }
+      rethrow;
+    } finally {
+      if (!settling) await finish();
+    }
+  }
+}
+
 /// On-device speech: Whisper (ASR), Piper/VITS (TTS) and ZipVoice (cloning)
 /// through sherpa-onnx. Everything runs offline on the phone.
 class SpeechService {
@@ -147,9 +262,8 @@ class SpeechService {
   Future<List<TranscriptSegment>> transcribeFile(
       String path, String modelId, String language,
       {void Function(double)? onProgress}) async {
-    final value = await _runSpeechWorker(
-        <Object?>['transcribe', models.modelsDir.path, path, modelId, language],
-        onProgress: onProgress);
+    final value = await _AsrSession.run(
+        models.modelsDir.path, path, modelId, language, onProgress);
     return (value as List)
         .map((row) =>
             TranscriptSegment.fromJson(Map<String, dynamic>.from(row as Map)))

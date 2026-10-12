@@ -16,6 +16,7 @@ class Caption {
     this.text, [
     this.words = const [],
     this.style = const {},
+    this.timingQuality = 'unknown',
   ]);
 
   double start;
@@ -23,6 +24,7 @@ class Caption {
   String text;
   List<Map<String, dynamic>> words;
   Map<String, dynamic> style;
+  String timingQuality;
 
   Map<String, dynamic> toJson() => {
         'start': double.parse(start.toStringAsFixed(3)),
@@ -30,6 +32,7 @@ class Caption {
         'text': text,
         'words': words,
         'style': style,
+        if (timingQuality != 'unknown') 'timing_quality': timingQuality,
       };
 
   static Caption fromJson(Map<String, dynamic> json) => Caption(
@@ -42,6 +45,7 @@ class Caption {
           ),
         ),
         Map<String, dynamic>.from(json['style'] as Map? ?? {}),
+        json['timing_quality'] as String? ?? 'unknown',
       );
 }
 

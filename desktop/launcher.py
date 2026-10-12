@@ -245,6 +245,18 @@ class Bridge:
         open_folder(path)
         return True
 
+    def open_external(self, url: str) -> bool:
+        """Buka tautan di browser luar (di jendela EdgeChromium, href biasa
+        justru membuat jendela sistem baru)."""
+        try:
+            import webbrowser
+
+            webbrowser.open(url)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log(f"bridge.open_external gagal: {exc!r}")
+            return False
+
     def open_path(self, path: str) -> bool:
         open_folder(os.path.dirname(path))
         return True
@@ -259,6 +271,7 @@ def open_window(url: str) -> int:
     try:
         import webview
 
+        webview.settings["ALLOW_DOWNLOADS"] = True
         webview.create_window(
             "Studio ZAI",
             url,

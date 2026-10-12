@@ -44,14 +44,14 @@ if __name__ == '__main__':
     image_model = Path(os.environ.get('LOCALAPPDATA', '')) / 'StudioZAI/models/sdxs-512'
     packaged_model = Path(env['LOCALAPPDATA']) / 'StudioZAI/models/sdxs-512'
     image_weight = 'sdxs-512-tinySDdistilled_Q8_0.gguf'
-    test_local_image = (image_model / image_weight).is_file()
+    test_local_image = os.environ.get('STUDIOZAI_SMOKE_IMAGE') == '1' and (image_model / image_weight).is_file()
     if test_local_image:
         packaged_model.mkdir(parents=True, exist_ok=True)
         if not (packaged_model / image_weight).exists():
             os.link(image_model / image_weight, packaged_model / image_weight)
         (packaged_model / '.installed').write_text(
             (image_model / '.installed').read_text(encoding='utf-8'), encoding='utf-8')
-    process = subprocess.Popen([str(ROOT / 'dist/StudioZAI/StudioZAI.exe'), 'serve', '--port', '8740', '--no-browser'],
+    process = subprocess.Popen([os.environ.get('STUDIOZAI_SMOKE_EXE', str(ROOT / 'dist/StudioZAI/StudioZAI.exe')), 'serve', '--port', '8740', '--no-browser'],
         env=env, creationflags=subprocess.CREATE_NO_WINDOW)
     try:
         for _ in range(90):
@@ -69,6 +69,12 @@ if __name__ == '__main__':
         assert voices['available']['piper'] and voices['available']['zipvoice'], voices
         assert 'anthropic' in request('/api/ai/providers')['providers']
         assert request('/api/images') == []
+        local_model = os.environ.get('STUDIOZAI_SMOKE_GGUF')
+        if local_model:
+            loaded = wait_job(request('/api/local-llm/start', {'path': local_model}))
+            discovered = request('/api/local-llm/models')
+            assert any(row['id'] == loaded['model'] for row in discovered['models'])
+            request('/api/local-llm/stop', {}, 'POST')
         if test_local_image:
             generated = wait_job(request('/api/images', {
                 'prompt': 'minimalist studio product photograph of a small speaker',
@@ -100,6 +106,7 @@ if __name__ == '__main__':
         final = wait_job(request(route + '/clips/0/render', {}, 'POST'))['files']
         assert Path(final['mp4']).stat().st_size > 1000
         report = {'health': health, 'voice_runtimes': voices['available'],
+            'bundled_gguf_runtime': bool(local_model),
             'unique_previews': True, 'local_image': test_local_image,
             'render': final['mp4'], 'project': project['id']}
         (test_dir / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
@@ -108,5 +115,18 @@ if __name__ == '__main__':
         print(json.dumps(report))
         print('Packaged Windows smoke passed, including preview, export and cleanup.')
     finally:
-        process.terminate()
-        process.wait(timeout=15)
+        # Bunuh seluruh tree proses (launcher EXE bisa menelurkan anak server);
+        # terminate() saja sering menyisakan server yang mengunci _internal.
+        try:
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        except Exception:
+            pass
+        try:
+            process.terminate()
+        except Exception:
+            pass
+        try:
+            process.wait(timeout=15)
+        except Exception:
+            pass

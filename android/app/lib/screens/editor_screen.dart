@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -41,6 +40,9 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _selectedKind;
   String? _selectedId;
   String? _previewPath;
+  double _sourceOffset = 0;
+  String? _sourcePreviewPath;
+  bool _encodedDraft = false;
   int _tab = 0;
   Timer? _changeTimer, _previewTimer;
   bool _previewBusy = false;
@@ -57,7 +59,35 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _schedulePreview() {
     _previewTimer?.cancel();
-    _previewTimer = Timer(const Duration(milliseconds: 1000), _preview);
+    if (_encodedDraft) {
+      _encodedDraft = false;
+      _previewPath = _sourcePreviewPath;
+    }
+    if (mounted) setState(() {});
+    if (widget.state.currentProject?.source.isNotEmpty == true ||
+        _previewPath != null ||
+        _previewBusy) {
+      return;
+    }
+    _previewTimer = Timer(const Duration(milliseconds: 150), _prepareSource);
+  }
+
+  Future<void> _prepareSource() async {
+    if (!mounted || _previewBusy) return;
+    _previewBusy = true;
+    try {
+      final source = await widget.state.sourceForClip(widget.clip);
+      if (mounted) {
+        setState(() {
+          _previewPath = _sourcePreviewPath = source['path'] as String;
+          _sourceOffset = (source['offset'] as num).toDouble();
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _previewMessage = '$error');
+    } finally {
+      _previewBusy = false;
+    }
   }
 
   @override
@@ -68,8 +98,6 @@ class _EditorScreenState extends State<EditorScreen> {
     _captions = TextEditingController(text: _captionsToText(clip));
     _itemText = TextEditingController();
     widget.state.addListener(_stateChanged);
-    final output = clip.files['mp4'];
-    if (output != null && File(output).existsSync()) _previewPath = output;
     _lastFingerprint = _fingerprint();
     _schedulePreview();
     _changeTimer = Timer.periodic(const Duration(milliseconds: 350), (_) {
@@ -353,12 +381,15 @@ class _EditorScreenState extends State<EditorScreen> {
     _previewBusy = true;
     setState(() => _previewMessage = 'Memperbarui video…');
     try {
-      await _save();
       final fingerprint = _fingerprint();
       _lastFingerprint = fingerprint;
       final snapshot = Clip.fromJson(
         jsonDecode(jsonEncode(widget.clip.toJson())) as Map<String, dynamic>,
       );
+      snapshot.timeline = _timeline.toJson();
+      if (_captions.text != _captionsToText(widget.clip)) {
+        snapshot.captions = _textToCaptions(_captions.text);
+      }
       final file = await widget.state.previewClip(snapshot);
       if (!mounted) return;
       if (fingerprint != _fingerprint()) {
@@ -367,6 +398,7 @@ class _EditorScreenState extends State<EditorScreen> {
       }
       setState(() {
         _previewPath = file.path;
+        _encodedDraft = true;
         _previewMessage = '';
       });
     } catch (error) {
@@ -590,6 +622,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
+                TextButton(
+                    onPressed: _previewBusy ? null : _preview,
+                    child: const Text('Draf terenkode')),
                 if (_previewMessage.isNotEmpty)
                   Flexible(
                     child: Text(
@@ -631,8 +666,16 @@ class _EditorScreenState extends State<EditorScreen> {
                           ? BoxFit.cover
                           : BoxFit.contain,
                       startSeconds:
-                          _previewPath == null ? widget.clip.start : 0,
-                      endSeconds: _previewPath == null ? widget.clip.end : null,
+                          _encodedDraft ? 0 : widget.clip.start - _sourceOffset,
+                      endSeconds: _encodedDraft
+                          ? widget.clip.duration
+                          : widget.clip.end - _sourceOffset,
+                      captions: _encodedDraft
+                          ? const []
+                          : (_captions.text == _captionsToText(widget.clip)
+                              ? widget.clip.captions
+                              : _textToCaptions(_captions.text)),
+                      subtitlePosition: widget.clip.subtitlePosition,
                     ),
                   ),
           ),

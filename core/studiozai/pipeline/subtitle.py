@@ -225,6 +225,7 @@ class Caption:
     text: str
     words: list[dict[str, Any]] = field(default_factory=list)
     style: dict[str, Any] = field(default_factory=dict)
+    timing_quality: str = "unknown"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -233,7 +234,39 @@ class Caption:
             "text": self.text,
             "words": self.words,
             "style": self.style,
+            **({"timing_quality": self.timing_quality} if self.timing_quality != "unknown" else {}),
         }
+
+
+# Kata/efek non-ucapan yang sering ditulis model ASR sebagai "kata".
+_SOUND_WORDS = (
+    "laughter|applause|music|cheering|snickering|giggle|cough|laughs|"
+    "tawa|tepuk|musik|sorak|batuk|tertawa|bertepuk"
+)
+
+_EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]"
+)
+
+
+def clean_caption_text(text: str) -> str:
+    """Bersihkan teks caption dari tag suara/emoji agar sesuai ucapan.
+
+    Model ASR sering menulis ``[Musik]``, ``(tertawa)``, ``*cheering*`` atau
+    emoji sebagai bagian transkrip. Tanpa dibersihkan, teks itu ikut terbakar
+    ke subtitle dan terlihat "tidak sesuai ucapan". Tanda baca wajar
+    (! ? . , : ; - ' ") dipertahankan; hanya pola non-ucapan yang dibuang.
+    """
+    if not text:
+        return ""
+    # Kurung hanya dibuang bila isinya kata suara; jika tidak, dipertahankan.
+    cleaned = re.sub(r"\((?:[^()]*?)\)", lambda m: " " if re.search(
+        rf"(?i)\b({_SOUND_WORDS})\b", m.group(0)) else m.group(0), text)
+    cleaned = re.sub(r"\[.*?\]|\*.*?\*", " ", cleaned)
+    cleaned = re.sub(rf"\b({_SOUND_WORDS})\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = _EMOJI_RE.sub("", cleaned)
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def group_words(
@@ -262,7 +295,7 @@ def group_words(
         buffer.clear()
 
     for word in words:
-        text = str(word.get("word", "")).strip()
+        text = clean_caption_text(str(word.get("word", "")))
         if not text:
             continue
         if buffer:
@@ -306,7 +339,7 @@ def captions_from_segments(
         if words:
             captions.extend(group_words(words, max_words=max_words, max_chars=max_chars))
             continue
-        text = str(segment.get("text", "")).strip()
+        text = clean_caption_text(str(segment.get("text", "")))
         if not text:
             continue
         chunks = _split_plain_text(text, max_words, max_chars)
@@ -354,7 +387,8 @@ def _karaoke_text(caption: Caption, preset: dict[str, Any]) -> str:
     parts: list[str] = []
     for word in caption.words:
         duration_cs = max(1, round((float(word["end"]) - float(word["start"])) * 100))
-        parts.append(f"{{\\k{duration_cs}}}{ass_escape(str(word['word']))}")
+        at = max(0, round((float(word["start"]) - caption.start) * 100))
+        parts.append(f"{{\\kt{at}\\kf{duration_cs}}}{ass_escape(str(word['word']))}")
     return " ".join(parts)
 
 

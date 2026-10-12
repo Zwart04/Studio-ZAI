@@ -37,7 +37,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   late Map<String, List<Map<String, dynamic>>> variants;
   late String language;
   late TextEditingController title;
-  late VideoPlayerController video;
+  VideoPlayerController? video;
   int cue = 0, word = -1, revision = 0;
   double time = 0;
   bool busy = false, ready = false, splitMode = false, multiWords = false;
@@ -86,21 +86,33 @@ class _CreatorScreenState extends State<CreatorScreen> {
       ),
     );
     variants[language] = rows;
-    video = VideoPlayerController.file(File(widget.project.source));
-    video.initialize().then((_) async {
-      await video.setVolume(0);
-      await video.seekTo(
-        Duration(milliseconds: (widget.clip.start * 1000).round()),
-      );
-      if (mounted) setState(() => ready = true);
-    }).catchError((Object e) {
-      if (mounted) setState(() => message = '$e');
-    });
+    // Mode online: video penuh mungkin belum diunduh (source kosong).
+    // Tetap buka editor (caption bisa disunting); video pratinjau menyusul
+    // lewat render saat pengguna memintanya.
+    final sourceFile = File(widget.project.source);
+    if (widget.project.source.isNotEmpty && sourceFile.existsSync()) {
+      final controller = VideoPlayerController.file(sourceFile);
+      video = controller;
+      controller.initialize().then((_) async {
+        await controller.setVolume(0);
+        await controller.seekTo(
+          Duration(milliseconds: (widget.clip.start * 1000).round()),
+        );
+        if (mounted) setState(() => ready = true);
+      }).catchError((Object e) {
+        if (mounted) setState(() => message = '$e');
+      });
+    } else {
+      message =
+          'Video sumber belum tersimpan di perangkat (mode online hemat). '
+          'Caption tetap bisa disunting; ketuk Pratinjau untuk merender cuplikan '
+          'atau unduh video penuh dari editor.';
+    }
   }
 
   @override
   void dispose() {
-    video.dispose();
+    video?.dispose();
     title.dispose();
     super.dispose();
   }
@@ -130,7 +142,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   Future<void> seek(double value) async {
     setState(() => time = value.clamp(0, widget.clip.duration));
     if (ready) {
-      await video.seekTo(
+      await video?.seekTo(
         Duration(milliseconds: ((widget.clip.start + time) * 1000).round()),
       );
     }
@@ -399,6 +411,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
                 child: Text('Highlight kata aktif'),
               ),
               DropdownMenuItem(value: 'box', child: Text('Kotak kata aktif')),
+              DropdownMenuItem(value: 'karaoke', child: Text('Karaoke fill')),
             ],
             onChanged: (v) => setState(
               () =>
@@ -501,10 +514,12 @@ class _CreatorScreenState extends State<CreatorScreen> {
             items: [
               'none',
               'pop',
+              'bounce',
               'fade',
               'rise',
               'zoom',
               'type',
+              'typewriter',
             ].map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
             onChanged: (v) => setStyle('animation', v),
           ),
@@ -653,8 +668,8 @@ class _CreatorScreenState extends State<CreatorScreen> {
   Color color(String hex) =>
       Color(int.tryParse(hex.replaceFirst('#', 'ff'), radix: 16) ?? 0xffffffff);
   Widget crop() {
-    final sw = ready ? video.value.size.width : 1920.0,
-        sh = ready ? video.value.size.height : 1080.0,
+    final sw = video?.value.size.width ?? 1920.0,
+        sh = video?.value.size.height ?? 1080.0,
         ratio = splitMode
             ? (9 / 16) /
                 (cropPart == 'top'
@@ -741,8 +756,17 @@ class _CreatorScreenState extends State<CreatorScreen> {
                 onTapDown: (d) => move(d.localPosition),
                 child: Stack(
                   children: [
-                    if (ready)
-                      VideoPlayer(video)
+                    if (ready && video != null)
+                      VideoPlayer(video!)
+                    else if (message.isNotEmpty && video == null)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(message,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70)),
+                        ),
+                      )
                     else
                       const Center(child: CircularProgressIndicator()),
                     Positioned(
@@ -828,11 +852,14 @@ class _CreatorScreenState extends State<CreatorScreen> {
                       () => message =
                           'Mengikuti wajah. Periksa keyframe ketika ada beberapa orang.',
                     );
+                    final source =
+                        await widget.state.sourceForClip(widget.clip);
+                    final offset = (source['offset'] as num).toDouble();
                     final result = await CreatorTools.channel
                         .invokeMapMethod<String, dynamic>('trackFace', {
-                      'path': widget.project.source,
-                      'start': widget.clip.start,
-                      'end': widget.clip.end,
+                      'path': source['path'],
+                      'start': widget.clip.start - offset,
+                      'end': widget.clip.end - offset,
                       'x': framing['x'] ?? .5,
                       'y': framing['y'] ?? .4,
                     });
@@ -842,7 +869,8 @@ class _CreatorScreenState extends State<CreatorScreen> {
                     if (mounted) {
                       setState(() {
                         framing = {...result, 'enabled': true, 'zoom': zoom};
-                        message = 'Wajah: ${result['detected_frames']}/${result['sampled_frames']} sampel. Crop ditahan ketika wajah hilang; tinjau keyframe.';
+                        message =
+                            'Wajah: ${result['detected_frames']}/${result['sampled_frames']} sampel. Crop ditahan ketika wajah hilang; tinjau keyframe.';
                       });
                     }
                   }),

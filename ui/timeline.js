@@ -38,7 +38,11 @@ const StudioTimeline = (() => {
       if (!clip) return;
       this.close();
       this.clip = clip;
-      this.previewPath = clip.files?.mp4 || null;
+      this.previewPath = null;
+      this.sourceOffset = 0;
+      this.sourceEnd = Infinity;
+      this.sourcePath = null;
+      this.encodedDraft = false;
       this.playhead = 0;
       this.selected = null;
       const saved = clip.timeline && Array.isArray(clip.timeline.tracks) ? clip.timeline : null;
@@ -70,13 +74,34 @@ const StudioTimeline = (() => {
 
     schedulePreview() {
       clearTimeout(this.previewTimer);
-      this.previewTimer = setTimeout(() => this.preview(), 900);
+      if (this.encodedDraft) { this.encodedDraft = false; this.previewPath = this.sourcePath; this.renderStage(this.playhead); }
+      if (this.renderedStart !== this.clip.start || this.renderedCanvas !== this.clip.canvas) this.renderStage(this.playhead);
+      this.subtitleOverlay?.paint();
+      if (state.project.source || (this.previewPath && this.clip.start >= this.sourceOffset && this.clip.end <= this.sourceEnd) || this.previewBusy) return;
+      this.previewTimer = setTimeout(() => this.prepareSource(), 150);
+    },
+
+    async prepareSource() {
+      if (!this.el || this.el.hidden || this.previewBusy) return;
+      this.previewBusy = true;
+      const generation = this.generation;
+      this.setPreviewState('loading', 'Menyiapkan sumber klip…');
+      try {
+        const job = await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/source-preview`, {method:'POST', body:JSON.stringify({start:this.clip.start,end:this.clip.end})});
+        const source = await waitJob(job.id);
+        if (generation !== this.generation || this.el.hidden) return;
+        this.previewPath = this.sourcePath = source.path; this.sourceOffset = source.offset;
+        this.sourceEnd = source.end || Infinity;
+        this.renderStage(); this.setPreviewState('');
+      } catch (error) { if (generation === this.generation) this.setPreviewState('error', error.message); }
+      finally {this.previewBusy = false; if (generation === this.generation && (this.clip.start < this.sourceOffset || this.clip.end > this.sourceEnd)) this.schedulePreview();}
     },
 
     close() {
       clearInterval(this.changeTimer);
       clearTimeout(this.previewTimer);
       this.generation++;this.stageObserver?.disconnect();
+      this.subtitleOverlay?.destroy(); this.subtitleOverlay = null;
       if (this.el) {
         this.el.querySelectorAll("video,audio").forEach((player) => {
           player.pause();
@@ -158,6 +183,7 @@ const StudioTimeline = (() => {
             <div class="editor-brand"><span>Editor video</span><strong id="tlTitle"></strong></div>
             <div class="row" style="gap:var(--s2)">
               <button class="ghost" data-tl="save">${t("common.save")}</button>
+              <button class="ghost" data-tl="draft">Draf terenkode</button>
               <button class="primary" data-tl="render">Ekspor video</button>
               <button class="tl-close" data-tl="close" aria-label="Tutup editor" title="Tutup editor">×</button>
             </div>
@@ -187,6 +213,7 @@ const StudioTimeline = (() => {
       };
       bind("close", () => this.close());
       bind("save", () => this.save());
+      bind("draft", () => this.preview());
       bind("render", () => this.render());
       bind("add-text", () => this.addText());
       bind("add-media", () => this.addMedia());
@@ -215,18 +242,104 @@ const StudioTimeline = (() => {
 
     /* --------------------------------------------------------------------- stage */
 
+    // ID video YouTube dari berbagai format tautan (watch/shorts/live/youtu.be).
+    youtubeId(url) {
+      if (!url) return null;
+      const m = String(url).match(/(?:youtube\.com\/(?:watch\?[^#]*v=|shorts\/|live\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      return m ? m[1] : null;
+    },
+
+    // Bingkai pratinjau selalu mengikuti rasio kanvas yang dipilih. Lebar dan
+    // tinggi dihitung dari SATU angka yang sudah di-clamp (bukan clamp width dan
+    // height secara terpisah seperti sebelumnya — clamp terpisah membuat bingkai
+    // 16:9 memaksa tinggi minimal 40px lalu rasio pecah di stage kecil).
+    fitStage() {
+      const stage = this.el && this.el.querySelector("#tlStage");
+      const frame = stage && stage.querySelector(".output-frame");
+      if (!stage || !frame) return;
+      const ratio = this.stageRatio || 9 / 16;
+      const availW = Math.max(40, stage.clientWidth - 16);
+      const availH = Math.max(40, stage.clientHeight - 45);
+      const width = Math.min(availW, availH * ratio);
+      frame.style.aspectRatio = String(ratio);
+      frame.style.width = `${Math.round(width)}px`;
+      frame.style.height = "";
+      // Embed YouTube selalu 16:9 dan harus muat penuh di dalam bingkai;
+      // dihitung eksplisit karena max-height pada elemen ber-aspect-ratio bisa
+      // membuat lebar dan tinggi tidak konsisten.
+      const embed = frame.querySelector(".yt-embed");
+      if (embed) {
+        const embedW = Math.round(Math.min(width, (width / ratio) * (16 / 9)));
+        embed.style.width = `${embedW}px`;
+        embed.style.height = `${Math.round(embedW * 9 / 16)}px`;
+      }
+    },
+
+    // Pasang pengamat ukuran stage sekali; semua cabang renderStage memakainya.
+    watchStage() {
+      this.stageObserver?.disconnect();
+      const stage = this.el && this.el.querySelector("#tlStage");
+      if (!stage) return;
+      this.stageObserver = new ResizeObserver(() => this.fitStage());
+      this.stageObserver.observe(stage);
+      this.fitStage();
+    },
+
+    // Status pratinjau: "" (bersih), "loading" (veil + spinner), atau "error".
+    // Dipisah supaya teks "memperbarui" tidak pernah terbaca sebagai kegagalan.
+    setPreviewState(kind, message = "") {
+      const veil = this.el && this.el.querySelector("#tlPreviewVeil");
+      if (veil) veil.classList.toggle("show", kind === "loading");
+      const status = this.el && this.el.querySelector("#tlPreviewStatus");
+      if (!status) return;
+      status.className = `preview-status${kind ? ` is-${kind}` : ""}`;
+      status.textContent = message;
+    },
+
     renderStage(position = this.playhead, playing = false) {
+      this.subtitleOverlay?.destroy(); this.subtitleOverlay = null;
       const stage = this.el.querySelector("#tlStage");
       if (!stage) return;
       const path = this.previewPath || state.project.source;
-      const sourceStart = this.previewPath ? 0 : this.clip.start;
+      const base = this.items("video")[0] || {};
+      const sw = state.project.width || 1920, sh = state.project.height || 1080;
+      const ratio = { portrait: 9 / 16, square: 1, landscape: 16 / 9, original: sw / sh }[base.canvas] || 9 / 16;
+      const badgeText = { portrait: "Portrait 9:16", square: "Kotak 1:1", landscape: "Landscape 16:9", original: "Rasio sumber" }[base.canvas] || "Portrait 9:16";
+      this.stageRatio = ratio;
+      // Elemen yang sama di setiap cabang: bingkai, lencana rasio, baris status,
+      // dan veil loading yang menutupi seluruh stage selama render draf.
+      const chrome = (frame) => `${frame}<span class="canvas-badge">${badgeText}</span>` +
+        `<span class="preview-status" id="tlPreviewStatus" role="status"></span>` +
+        `<span class="preview-veil" id="tlPreviewVeil" aria-hidden="true"><span class="spinner"></span></span>`;
+      const ytId = (!path && state.project.source_url) ? this.youtubeId(state.project.source_url) : null;
+      if (!path && ytId) {
+        // Mode online sebelum pratinjau render: streaming YouTube langsung
+        // (rentang klip, berhenti di akhir — tanpa loop agar tidak
+        // "balik ke awal terus"). Begitu draf render jadi, otomatis diganti
+        // video hasil burn-in yang bersuara.
+        // Embed selalu 16:9 dan di-"contain" di dalam bingkai kanvas, sehingga
+        // pilihan Portrait/Kotak/Landscape tetap terlihat apa adanya.
+        const start = Math.max(0, Math.floor(this.clip.start));
+        const end = Math.max(start + 1, Math.ceil(this.clip.end));
+        stage.innerHTML = chrome(`<div class="output-frame yt-frame"><span class="yt-embed"><iframe id="tlYt" src="https://www.youtube.com/embed/${ytId}?start=${start}&end=${end}&autoplay=0&controls=1&rel=0" title="Pratinjau YouTube" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></span></div>`);
+        this.watchStage();
+        return;
+      }
+      if (!path) {
+        // Mode online sebelum pratinjau pertama: belum ada berkas apa pun.
+        // Tampilkan status muat, bukan <video> mati dengan src kosong.
+        stage.innerHTML = chrome(`<div class="output-frame stage-empty"><div class="spinner"></div><p>${t("editor.preparingPreview")}</p></div>`);
+        this.watchStage();
+        return;
+      }
+      const sourceStart = this.encodedDraft ? 0 : this.clip.start - (this.sourceOffset || 0);
+      this.renderedStart = this.clip.start; this.renderedCanvas = this.clip.canvas;
       stage.querySelectorAll('video').forEach(v => v.pause());
-      stage.innerHTML = `<div class="output-frame"><video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video></div><span class="canvas-badge"></span><span class="preview-status" id="tlPreviewStatus" role="status"></span>`;
-      const base=this.items("video")[0]||{},sw=state.project.width||1920,sh=state.project.height||1080,ratio={portrait:9/16,square:1,landscape:16/9,original:sw/sh}[base.canvas]||9/16;
-      stage.querySelector(".canvas-badge").textContent={portrait:"Portrait 9:16",square:"Kotak 1:1",landscape:"Landscape 16:9",original:"Rasio sumber"}[base.canvas]||"Portrait 9:16";
-      const resize=()=>{const f=stage.querySelector(".output-frame"),w=Math.min(stage.clientWidth-16,(stage.clientHeight-45)*ratio);if(f){f.style.width=`${Math.max(40,w)}px`;f.style.height=`${Math.max(40,w/ratio)}px`;}};this.stageObserver?.disconnect();this.stageObserver=new ResizeObserver(resize);this.stageObserver.observe(stage);resize();
-      if(!this.previewPath)stage.querySelector("video").style.objectFit=["center","manual"].includes(base.crop)?"cover":"contain";
+      stage.innerHTML = chrome(`<div class="output-frame"><video id="tlVideo" controls playsinline preload="auto" data-source-start="${sourceStart}" src="${mediaUrl(path)}&v=${Date.now()}"></video></div>`);
+      this.watchStage();
+      if(!this.encodedDraft)stage.querySelector("video").style.objectFit=["center","manual"].includes(base.crop)?"cover":"contain";
       const player = stage.querySelector('video');
+      if (!this.encodedDraft) this.subtitleOverlay = SubtitleOverlay.mount(stage.querySelector('.output-frame'), player, () => this.clip, sourceStart);
       player.addEventListener('loadedmetadata', () => {
         player.currentTime = Math.min(sourceStart + clamp(position, 0, this.duration()), Math.max(0, player.duration - .05));
         if (playing) player.play().catch(() => {});
@@ -235,9 +348,9 @@ const StudioTimeline = (() => {
         this.playhead = clamp(player.currentTime - sourceStart, 0, this.duration());
         this.updatePlayhead();
       });
-      if (!this.previewPath) player.addEventListener('timeupdate', () => {
+      if (!this.encodedDraft) player.addEventListener('timeupdate', () => {
         if (player.currentTime < sourceStart) player.currentTime = sourceStart;
-        if (player.currentTime >= this.clip.end) { player.pause(); player.currentTime = sourceStart; }
+        if (player.currentTime >= sourceStart + this.duration()) { player.pause(); player.currentTime = sourceStart; }
       });
     },
 
@@ -553,6 +666,9 @@ const StudioTimeline = (() => {
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
       const selected = this.selectedItem();
+      // Dideklarasikan di awal: closure di bawah dievaluasi saat klik (setelah
+      // bind selesai), tapi deklarasi di atas menghindari risiko TDZ saat refactor.
+      const videoItem = this.items("video")[0];
       host.querySelectorAll('[data-finishing]').forEach(b=>b.onclick=()=>StudioFinishing[b.dataset.finishing](this));
       host.querySelectorAll('[data-creator^="split"]').forEach(b=>b.onclick=()=>{videoItem.canvas='portrait';videoItem.crop='split';CreatorEditor.crop(this,b.dataset.creator==='splitTop'?'top':'bottom');});
       host.querySelector('#tlSplitFraction')?.addEventListener('change',e=>{videoItem.framing={...videoItem.framing,fraction:clamp(+e.target.value/100,.2,.8)};});
@@ -596,7 +712,6 @@ const StudioTimeline = (() => {
       if (clipStart) clipStart.addEventListener("change", updateTrim);
       if (clipEnd) clipEnd.addEventListener("change", updateTrim);
 
-      const videoItem = this.items("video")[0];
       const crop = host.querySelector("#tlCrop");
       if (crop && videoItem) crop.addEventListener("change", () => { videoItem.crop = crop.value;if(crop.value==='split')videoItem.canvas='portrait';this.renderAll(); });
       const canvas = host.querySelector("#tlCanvas");
@@ -609,6 +724,7 @@ const StudioTimeline = (() => {
         node.addEventListener("click", () => {
           this.clip.subtitle_preset = node.dataset.preset;
           this.renderInspector();
+          this.schedulePreview();
         })
       );
 
@@ -642,6 +758,7 @@ const StudioTimeline = (() => {
         node.addEventListener("click", () => {
           selected.template = node.dataset.itemPreset;
           this.renderInspector();
+          this.schedulePreview();
         })
       );
 
@@ -748,8 +865,10 @@ const StudioTimeline = (() => {
       if (this.busy || this.previewBusy) { this.schedulePreview(); return; }
       this.previewBusy = true;
       const generation = this.generation, fingerprint = this.fingerprint();
-      const status = () => this.el.querySelector('#tlPreviewStatus');
-      if (status()) status().textContent = 'Memperbarui video…';
+      // Loading = veil + spinner + teks "memperbarui"; error = teks merah tanpa
+      // veil. Keduanya tidak pernah berbagi tampilan supaya status muat tidak
+      // terbaca sebagai kegagalan.
+      this.setPreviewState("loading", t("editor.updatingPreview"));
       try {
         await this.save(true);
         const job = await api(`/api/projects/${state.project.id}/clips/${this.clip.index}/preview`, { method: "POST" });
@@ -761,10 +880,14 @@ const StudioTimeline = (() => {
           const position = Math.max(0, (player?.currentTime || 0) - Number(player?.dataset.sourceStart || 0));
           const playing = player && !player.paused;
           this.previewPath = result.mp4;
+          this.encodedDraft = true;
           this.renderStage(Math.min(position, this.clip.end - this.clip.start - .05), playing);
         }
+        this.setPreviewState("");
       } catch (error) {
-        if (generation === this.generation && !this.el.hidden && status()) status().textContent = 'Perubahan belum tampil: ' + error.message;
+        if (generation === this.generation && !this.el.hidden) {
+          this.setPreviewState("error", `${t("editor.previewFailed")}: ${error.message}`);
+        }
       } finally {
         this.previewBusy = false;
       }

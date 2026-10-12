@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Any
 
 from .. import models
+from ..jobs import bounded_inference
 from ..utils import ffmpeg
 
 ProgressCb = Callable[[float, str], None]
@@ -177,15 +178,18 @@ def _synthesize_supertonic(
     text: str, out_path: Path, voice_id: str, lang: str,
     progress_cb: ProgressCb | None,
 ) -> Path:
+    # Validate cheaply BEFORE importing the heavy optional sherpa_onnx so
+    # invalid voice presets fail fast with ValueError even when the
+    # engine is not installed.
+    sid = _supertonic_sid(voice_id)
+    language = lang.lower().split("-", 1)[0].split("_", 1)[0]
+    if language not in {"id", "en"}:
+        raise ValueError("Supertonic 3 di Studio ZAI tersedia untuk Indonesia dan English.")
     import wave
 
     import numpy as np
     import sherpa_onnx
 
-    sid = _supertonic_sid(voice_id)
-    language = lang.lower().split("-", 1)[0].split("_", 1)[0]
-    if language not in {"id", "en"}:
-        raise ValueError("Supertonic 3 di Studio ZAI tersedia untuk Indonesia dan English.")
     if progress_cb:
         progress_cb(10.0, "memuat Supertonic 3 lokal")
     with _SUPERTONIC_LOCK:
@@ -212,6 +216,7 @@ def _synthesize_supertonic(
     return out_path
 
 
+@bounded_inference
 def synthesize(
     text: str,
     out_path: str | Path,
@@ -309,6 +314,7 @@ def _apply_indonesian_checkpoint(model: Any) -> Any:
     return model
 
 
+@bounded_inference
 def clone_speak(
     text: str,
     out_path: str | Path,

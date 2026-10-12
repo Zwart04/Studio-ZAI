@@ -12,6 +12,15 @@ import 'speech.dart';
 import 'subtitle_builder.dart';
 import 'timeline.dart';
 import 'timeline_render.dart';
+import 'downloader.dart';
+
+/// Hasil resolve sumber render: berkas lokal + offset timeline berkas
+/// (waktu nol pada berkas berada di [offset]).
+class _RenderSource {
+  final File file;
+  final double offset;
+  _RenderSource(this.file, this.offset);
+}
 
 class ClipCandidate {
   ClipCandidate(this.start, this.end, this.score, this.reason,
@@ -326,7 +335,13 @@ class Pipeline {
             .toList(),
       });
     }
-    return SubtitleBuilder.captionsFromSegments(rows);
+    final captions = SubtitleBuilder.captionsFromSegments(rows);
+    final measured = rows.isNotEmpty &&
+        rows.every((row) => (row['words'] as List).isNotEmpty);
+    for (final caption in captions) {
+      caption.timingQuality = measured ? 'measured' : 'estimated';
+    }
+    return captions;
   }
 
   // ------------------------------------------------------------------ rendering
@@ -381,6 +396,63 @@ class Pipeline {
     return MediaTools.canvasSize(canvas, width, height);
   }
 
+  /// Resolve file + offset to render a clip from.
+  ///
+  /// - Local/fully-downloaded source: the saved file, offset 0.
+  /// - Mode online: download only the clip's time-section (cached per clip),
+  ///   return the segment and the offset its timeline starts at. The caller
+  ///   shifts clip timestamps by `offset` so `-ss` lands inside the segment.
+  Future<_RenderSource> _resolveRenderSource(Project project, Clip clip,
+      void Function(double, String) onProgress) async {
+    if (project.source.isNotEmpty && File(project.source).existsSync()) {
+      return _RenderSource(File(project.source), 0.0);
+    }
+    if (!project.online || project.sourceUrl.isEmpty) {
+      throw StateError('Media sumber tidak tersedia untuk klip ini.');
+    }
+    final cached = project.segmentFor(clip.index);
+    if (cached != null) {
+      final start = (cached['start'] as num?)?.toDouble() ?? 0.0;
+      final end = (cached['end'] as num?)?.toDouble() ?? 0.0;
+      final path = cached['path'] as String?;
+      if (path != null &&
+          File(path).existsSync() &&
+          start <= clip.start &&
+          clip.end <= end + 0.5) {
+        return _RenderSource(File(path), start);
+      }
+    }
+    onProgress(5, 'mengunduh segmen video');
+    if (project.audioPath.isEmpty || !File(project.audioPath).existsSync()) {
+      final audio = await Downloader.downloadAudio(
+          project.sourceUrl, projectDir, onProgress,
+          audioLanguage:
+              project.audioLanguage.isEmpty ? null : project.audioLanguage);
+      project.audioPath = audio.path;
+    }
+    final pad = 2.0;
+    final reqStart = clip.start - pad < 0 ? 0.0 : clip.start - pad;
+    final reqEnd = clip.end + pad;
+    final audioFile = File(project.audioPath);
+    final segment = await Downloader.downloadSection(
+        project.sourceUrl,
+        reqStart,
+        reqEnd,
+        clipDir(clip.index),
+        (p, m) => onProgress(5 + p * 0.7, m),
+        audioPath: audioFile.existsSync() ? project.audioPath : null,
+        audioLanguage:
+            project.audioLanguage.isEmpty ? null : project.audioLanguage);
+    project.storeSegment(clip.index, segment.file.path, segment.start, reqEnd);
+    return _RenderSource(segment.file, segment.start);
+  }
+
+  Future<Map<String, dynamic>> sourceForPreview(Project project, Clip clip,
+      void Function(double, String) onProgress) async {
+    final source = await _resolveRenderSource(project, clip, onProgress);
+    return {'path': source.file.path, 'offset': source.offset};
+  }
+
   Future<Clip> renderClip(
       Project project, Clip clip, void Function(double, String) onProgress,
       {String? canvasOverride}) async {
@@ -395,7 +467,8 @@ class Pipeline {
         : (Directory(
             '${clipDir(clip.index).path}/exports/${DateTime.now().microsecondsSinceEpoch}_$canvasOverride')
           ..createSync(recursive: true));
-    final resolution = await MediaTools.resolution(project.source);
+    final rs = await _resolveRenderSource(project, clip, onProgress);
+    final resolution = await MediaTools.resolution(rs.file.path);
     final sourceWidth = resolution['width'] ?? 0;
     final sourceHeight = resolution['height'] ?? 0;
     final timeline = timelineFor(project, clip);
@@ -414,7 +487,7 @@ class Pipeline {
     onProgress(20, 'merender klip ${clip.index + 1}');
     if (useTimeline) {
       await TimelineRender.renderClip(
-        source: project.source,
+        source: rs.file.path,
         timeline: timeline,
         output: output,
         sourceWidth: sourceWidth,
@@ -423,13 +496,14 @@ class Pipeline {
         voicePath: clip.audioMode != 'original' ? clip.files['voice'] : null,
         originalVolume: _baseVolume(clip),
         voiceVolume: clip.voiceVolume,
+        sourceOffset: rs.offset,
       );
     } else {
       await MediaTools.renderClip(
-        input: project.source,
+        input: rs.file.path,
         output: output,
-        start: clip.start,
-        end: clip.end,
+        start: clip.start - rs.offset,
+        end: clip.end - rs.offset,
         crop: clip.crop,
         canvas: clip.canvas,
         width: sourceWidth,
@@ -461,7 +535,8 @@ class Pipeline {
   Future<File> renderPreview(Project project, Clip clip,
       void Function(double, String) onProgress) async {
     final directory = clipDir(clip.index);
-    final resolution = await MediaTools.resolution(project.source);
+    final rs = await _resolveRenderSource(project, clip, onProgress);
+    final resolution = await MediaTools.resolution(rs.file.path);
     final sourceWidth = resolution['width'] ?? 0;
     final sourceHeight = resolution['height'] ?? 0;
     final timeline = timelineFor(project, clip);
@@ -486,7 +561,7 @@ class Pipeline {
         '${directory.path}/preview-${DateTime.now().microsecondsSinceEpoch}.mp4';
     onProgress(10, 'menyiapkan pratinjau');
     await TimelineRender.renderPreview(
-      source: project.source,
+      source: rs.file.path,
       timeline: timeline,
       output: output,
       sourceWidth: sourceWidth,
@@ -494,6 +569,8 @@ class Pipeline {
       subtitlesPath: assPath,
       voicePath: clip.audioMode != 'original' ? clip.files['voice'] : null,
       originalVolume: _baseVolume(clip),
+      voiceVolume: clip.voiceVolume,
+      sourceOffset: rs.offset,
     );
     onProgress(100, 'pratinjau siap');
     return File(output);

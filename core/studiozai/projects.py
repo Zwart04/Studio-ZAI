@@ -6,6 +6,7 @@ import copy
 import json
 import re
 import shutil
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -20,6 +21,49 @@ PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 DEFAULT_CROP = "center"
 DEFAULT_SUBTITLE_PRESET = "clean"
+_MISSING = object()
+_LOCKS: dict[str, threading.RLock] = {}
+_LOCK_GUARD = threading.Lock()
+
+
+def project_lock(project_id: str):
+    with _LOCK_GUARD:
+        return _LOCKS.setdefault(project_id, threading.RLock())
+
+
+class ProjectConflict(RuntimeError):
+    pass
+
+
+def _merge(base, local, current, path="project"):
+    if local == base:
+        return current
+    if current == base or current == local:
+        return local
+    if all(isinstance(value, dict) for value in (base, local, current)):
+        merged = {}
+        for name in base.keys() | local.keys() | current.keys():
+            value = _merge(base.get(name, _MISSING), local.get(name, _MISSING), current.get(name, _MISSING), f"{path}.{name}")
+            if value is not _MISSING:
+                merged[name] = value
+        return merged
+    if path == "project.clips" and all(isinstance(value, list) for value in (base, local, current)):
+        def keyed(rows):
+            return {row.get("storage_id", f"{row['index']:03d}"): {k: v for k, v in row.items() if k != "index"} for row in rows}
+        before, changed, latest = keyed(base), keyed(local), keyed(current)
+        if list(changed) == list(before):
+            order = list(latest)
+        elif list(latest) == list(before) or list(latest) == list(changed):
+            order = list(changed)
+        else:
+            raise ProjectConflict("Urutan klip berubah pada pekerjaan lain. Muat ulang proyek.")
+        rows = []
+        for key in dict.fromkeys([*order, *changed, *latest]):
+            value = _merge(before.get(key, _MISSING), changed.get(key, _MISSING), latest.get(key, _MISSING), f"clip.{key}")
+            if value is not _MISSING:
+                rows.append({**value, "index": len(rows)})
+        return rows
+    raise ProjectConflict(f"Perubahan bersamaan pada {path}. Data lama tetap aman; muat ulang proyek.")
 
 
 @dataclass
@@ -30,6 +74,7 @@ class Clip:
     title: str = ""
     score: float = 0.0
     reason: str = ""
+    analysis_metadata: dict[str, Any] = field(default_factory=dict)
     crop: str = DEFAULT_CROP
     subtitle_preset: str = DEFAULT_SUBTITLE_PRESET
     subtitle_position: str = "bottom"  # bottom | middle | top | off
@@ -87,7 +132,18 @@ class Project:
     transcript: dict[str, Any] = field(default_factory=dict)
     clips: list[Clip] = field(default_factory=list)
     notes: str = ""
+    processing_mode: str = "legacy"
+    execution: dict[str, Any] = field(default_factory=dict)
+    # Mode online: transkrip dari audio tanpa mengunduh video penuh.
+    # Video diunduh per-rentang klip saat render (lihat download.download_range).
+    online: bool = False
+    source_url: str = ""
+    audio_path: str = ""
+    preview_path: str = ""
+    heatmap: list[dict[str, float]] = field(default_factory=list)
+    segments: dict[str, dict[str, Any]] = field(default_factory=dict)
     _history: list[dict[str, Any]] = field(default_factory=list, repr=False)
+    _baseline_json: str | None = field(default=None, repr=False)
 
     # ------------------------------------------------------------------ paths
     @property
@@ -121,10 +177,33 @@ class Project:
 
     # ------------------------------------------------------------------ crud
     def save(self) -> Path:
-        self.updated = time.time()
-        self.root.mkdir(parents=True, exist_ok=True)
-        payload = self.as_dict()
-        self.project_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        with project_lock(self.id):
+            payload = self.as_dict()
+            if self._baseline_json is not None and self.project_file.is_file():
+                current = Project.from_dict(json.loads(self.project_file.read_text(encoding="utf-8")), capture_baseline=False).as_dict()
+                base = json.loads(self._baseline_json)
+                for value in (payload, current, base):
+                    value.pop("updated", None)
+                payload = _merge(base, payload, current)
+            self.updated = time.time()
+            payload["updated"] = self.updated
+            self.root.mkdir(parents=True, exist_ok=True)
+            temporary = self.root / f".project-{uuid.uuid4().hex}.tmp"
+            try:
+                temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+                temporary.replace(self.project_file)
+            finally:
+                temporary.unlink(missing_ok=True)
+            restored = Project.from_dict(payload, capture_baseline=False)
+            by_id = {clip.storage_id: clip for clip in self.clips}
+            for clip in restored.clips:
+                if clip.storage_id in by_id:
+                    by_id[clip.storage_id].__dict__.update(clip.__dict__)
+            restored.clips = [by_id.get(clip.storage_id, clip) for clip in restored.clips]
+            for name in payload:
+                if name in self.__dataclass_fields__:
+                    setattr(self, name, getattr(restored, name))
+            self._baseline_json = json.dumps(self.as_dict(), ensure_ascii=False)
         return self.project_file
 
     def as_dict(self) -> dict[str, Any]:
@@ -141,11 +220,19 @@ class Project:
             "updated": self.updated,
             "transcript": self.transcript,
             "notes": self.notes,
+            "processing_mode": self.processing_mode,
+            "execution": self.execution,
+            "online": self.online,
+            "source_url": self.source_url,
+            "audio_path": self.audio_path,
+            "preview_path": self.preview_path,
+            "heatmap": self.heatmap,
+            "segments": self.segments,
             "clips": [c.as_dict() for c in self.clips],
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Project:
+    def from_dict(cls, data: dict[str, Any], capture_baseline: bool = True) -> Project:
         project = cls(
             id=data["id"],
             title=data.get("title") or "Tanpa judul",
@@ -159,8 +246,18 @@ class Project:
             updated=float(data.get("updated") or time.time()),
             transcript=data.get("transcript") or {},
             notes=data.get("notes", ""),
+            processing_mode=data.get("processing_mode", "legacy"),
+            execution=dict(data.get("execution") or {}),
+            online=bool(data.get("online", False)),
+            source_url=data.get("source_url", ""),
+            audio_path=data.get("audio_path", ""),
+            preview_path=data.get("preview_path", ""),
+            heatmap=list(data.get("heatmap") or []),
+            segments=dict(data.get("segments") or {}),
         )
         project.clips = [Clip.from_dict(c) for c in data.get("clips", [])]
+        if capture_baseline:
+            project._baseline_json = json.dumps(project.as_dict(), ensure_ascii=False)
         return project
 
     # ------------------------------------------------------------------ history
@@ -236,7 +333,7 @@ class Project:
                 folders.add(parent)
         other_files = {str(Path(v).resolve()) for c in self.clips if c is not clip for v in c.files.values()}
         for folder in folders:
-            if folder.exists() and folder.resolve().parent == base and not any(str(p.resolve()) in other_files for p in folder.iterdir()):
+            if folder.exists() and folder.resolve().parent == base and not any(Path(other).is_relative_to(folder.resolve()) for other in other_files):
                 shutil.rmtree(folder)
         self.clips = [c for c in self.clips if c.index != index]
         self.renumber()
@@ -292,6 +389,44 @@ class Project:
             return candidate
         matches = sorted(self.source_dir.glob("*"), key=lambda p: p.stat().st_size)
         return matches[-1] if matches else None
+
+    def audio_media_path(self) -> Path | None:
+        """Media untuk transkripsi/analisis: video kalau ada, audio kalau online."""
+        media = self.media_path()
+        if media is not None:
+            return media
+        if self.online and self.audio_path:
+            candidate = Path(self.audio_path)
+            if candidate.exists():
+                return candidate
+        return None
+
+    def segment_path(self, storage_id: str) -> Path | None:
+        entry = self.segments.get(storage_id)
+        if not entry:
+            return None
+        candidate = Path(entry.get("path", ""))
+        return candidate if candidate.exists() else None
+
+    def segment_bounds(self, storage_id: str) -> tuple[float, float]:
+        entry = self.segments.get(storage_id) or {}
+        return float(entry.get("start") or 0.0), float(entry.get("end") or 0.0)
+
+    def store_segment(
+        self,
+        storage_id: str,
+        path: str | Path,
+        start: float = 0.0,
+        end: float = 0.0,
+    ) -> None:
+        self.segments[storage_id] = {
+            "path": str(path),
+            "start": float(start),
+            "end": float(end),
+        }
+
+    def clear_segments(self) -> None:
+        self.segments = {}
 
     # ------------------------------------------------------------------ factory
     @classmethod
@@ -394,7 +529,7 @@ def duplicate_project(project_id: str) -> Project:
     try:
         payload = relocate(project.as_dict())
         payload.update(id=clone_id, title=f"{project.title} (salinan)", created=time.time())
-        clone = Project.from_dict(payload)
+        clone = Project.from_dict(payload, capture_baseline=False)
         clone.save()
     except Exception:
         shutil.rmtree(target)

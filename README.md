@@ -2,13 +2,15 @@
 
 <p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.11.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
+Versi 1.12 menambahkan Hybrid Local AI, caption-first import, preview subtitle langsung, cache tervalidasi, dan render atomik. [Cara memakai dan hasil pengujian 1.12](docs/RELEASE-1.12.0.md).
+
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.12.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
 
 ![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/creator-portrait.png)
 
-## Baru di 1.11
+## Baru di 1.12
 
-Kanvas editor dan klip manual kini portrait secara default. Windows dan Android mendapat split facecam/gameplay, judul pembuka, watermark teks/gambar, seleksi beberapa kata, kotak kata aktif, pratinjau perubahan caption, serta deteksi bahasa otomatis. Deteksi podcast, crop/keyframe, terjemahan, galeri, dan batch tiga rasio tetap tersedia. [Panduan lengkap dan batas fitur](docs/CREATOR.md) · [Pengujian rilis](docs/RELEASE-1.11.0.md).
+Caption tersedia dipakai sebelum ASR; LLM lokal dapat memakai GGUF yang sudah Anda miliki. Preview subtitle mengikuti timing kata tanpa encode setiap edit. Rotasi video ponsel, penautan ulang sumber, konflik simpan dan hasil batch diperiksa. Split facecam/gameplay, judul, watermark, crop/keyframe, galeri dan batch tiga rasio tetap tersedia. [Panduan lengkap dan batas fitur](docs/CREATOR.md) · [Pengujian rilis](docs/RELEASE-1.12.0.md).
 
 Provider + API key kini dapat mendeteksi model dan memberi saran. Pelacakan memakai YuNet di Windows dan ML Kit di Android; crop ditahan saat wajah hilang. Klip terpilih dapat diunduh/dibagikan dalam satu ZIP. Lisensi kode baru mengizinkan penggunaan publik tanpa menjual aplikasi/layanan; hasil video boleh dimonetisasi.
 
@@ -28,10 +30,10 @@ Provider + API key kini dapat mendeteksi model dan memberi saran. Pelacakan mema
 
 | Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model diunduh saat dibutuhkan. |
-| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/StudioZAI-1.11.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/StudioZAI-1.12.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model dipasang terpisah. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/StudioZAI-1.12.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan pengujian v1.11.0](docs/RELEASE-1.11.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.11.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
+[Catatan pengujian v1.12.0](docs/RELEASE-1.12.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 
@@ -39,6 +41,8 @@ Provider + API key kini dapat mendeteksi model dan memberi saran. Pelacakan mema
 2. Tempel tautan atau pilih video lokal. Letakkan **bahasa konten** dan **track audio sumber** yang benar sebelum memilih suara klip asli atau narasi. Pada Android, tautan YouTube publik dan URL berkas langsung didukung; untuk TikTok/Instagram, impor berkas video yang telah disimpan. Desktop memakai situs yang didukung yt-dlp.
 3. Pilih jumlah klip dan tekan **Buat klip**. Jika **Subtitle AI dari audio** aktif, Whisper lokal mengenali ucapan; Studio ZAI tidak mengambil caption dari tautan. Aplikasi menyimpan sumber bersama proyek. Buka klip untuk memutar, memotong, mengubah kanvas, dan menata subtitle.
 4. Ekspor hasil saat selesai. Untuk mengambil momen lain, buka **Ambil bagian dari video sumber**; tidak perlu mengunduh video itu lagi.
+
+> **Mode online** (aktif secara default untuk tautan): Studio ZAI mengunduh **audio saja** dulu untuk transkrip dan pemilihan momen, lalu mengunduh **hanya rentang waktu** dari masing-masing klip saat dirender. Ini jauh lebih sedikit dibanding mengunduh seluruh video — sebuah klip 60 detik dari video berdurasi panjang hanya membutuhkan sekilas MB. Matikan untuk mengunduh seluruh video terlebih dahulu (berguna untuk sumber tidak berskala). Video penuh dapat diunduh kapan saja dari editor.
 
 > **Transkrip** adalah teks ucapan yang dipakai untuk memilih momen. **Subtitle** adalah bagian teks tersebut yang diberi waktu dan ditampilkan pada video. Jika sumber sudah memiliki tulisan yang menyatu dengan gambar, nonaktifkan subtitle tambahan atau ubah posisinya agar tidak bertumpuk. ZipVoice mendukung kloning English/Mandarin; kloning Indonesia hanya tersedia sebagai opsi desktop dari source dengan Chatterbox/PyTorch yang jauh lebih berat, belum di APK/EXE ringan. Sepuluh suara Supertonic mendukung TTS Indonesia/Inggris, bukan kloning.
 

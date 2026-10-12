@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,7 +19,17 @@ from .pipeline import download as download_pipeline
 from .pipeline import subtitle, voice
 from .utils.text import clock, sanitize_filename
 
-app = FastAPI(title="Studio ZAI", version=__version__)
+
+@asynccontextmanager
+async def lifespan(app):
+    _startup_cleanup()
+    yield
+
+
+app = FastAPI(title="Studio ZAI", version=__version__, lifespan=lifespan)
+
+# Additional workers require a recorded resource benchmark.
+RENDER_WORKERS = 1
 
 
 @app.middleware("http")
@@ -44,7 +56,8 @@ class NewProject(BaseModel):
 
 class ProcessRequest(BaseModel):
     source: str
-    count: int = Field(default=0, ge=0)
+    processing_mode: Literal["hybrid", "offline", "online_ai", "legacy"] = "hybrid"
+    count: int = Field(default=0, ge=0, le=20)
     analysis_mode: Literal["auto", "podcast"] = "auto"
     review_first: bool = True
     formats: list[Literal["portrait", "square", "landscape"]] = Field(default_factory=list)
@@ -52,7 +65,8 @@ class ProcessRequest(BaseModel):
     max_len: float = 0.0
     use_transcript: bool = True
     use_llm: bool = False
-    model: str | None = None
+    model: str | None = None  # model AI online untuk ranking momen (override)
+    asr_model: str | None = None  # model transkrip lokal (override)
     quality: str = "720p"
     format_id: str | None = None
     subtitle_position: str = "bottom"  # bottom | middle | top | off
@@ -60,6 +74,7 @@ class ProcessRequest(BaseModel):
     audio_lang: str | None = None  # pilih track audio multi-bahasa (mis. "id")
     audio_mode: str = "original"  # original | voice (ganti) | mix (campur)
     voice_id: str | None = None  # model suara untuk sulih suara TTS
+    online: bool = False  # mode online: audio dulu, video per-klip saat render
 
 
 class LinkInfoRequest(BaseModel):
@@ -118,11 +133,37 @@ def translate_captions(project_id: str, payload: TranslateRequest) -> dict[str, 
 def track_face(project_id: str, payload: TrackFaceRequest) -> dict[str, Any]:
     from .pipeline.framing import follow_face
     project = _project(project_id)
-    if not 0 <= payload.start < payload.end <= project.duration or project.media_path() is None:
+    if not 0 <= payload.start < payload.end <= project.duration:
         raise HTTPException(400, "Rentang video tidak valid")
-    return jobs.MANAGER.submit("framing", "Mengikuti wajah", lambda job: follow_face(
-        str(project.media_path()), payload.start, payload.end, payload.x,
-        lambda p, m: job.report(p, "crop", m), y=payload.y)).as_dict()
+    media = project.media_path()
+    if media is None and not (project.online and project.source_url):
+        raise HTTPException(400, "Rentang video tidak valid")
+
+    def run(job):
+        path = media
+        offset = 0.0
+        if path is None:
+            # Mode online: unduh hanya rentang yang dilacak, bukan video penuh.
+            pad = 2.0
+            start = max(0.0, payload.start - pad)
+            end = min(payload.end + pad, project.duration or payload.end + pad)
+            job.report(5, "crop", "mengunduh rentang video")
+            result = download_pipeline.download_range(
+                project.source_url,
+                start,
+                end,
+                project.source_dir,
+                cookies=config.load_settings().get("cookies_path") or None,
+            )
+            path = Path(result["path"])
+            # Berkas segmen dimulai sebelum rentang yang diminta; geser waktu
+            # agar pelacakan tetap pada detik sumber yang benar.
+            offset = float(result["start"] if result.get("start") is not None else start)
+        return follow_face(
+            str(path), payload.start - offset, payload.end - offset, payload.x,
+            lambda p, m: job.report(p, "crop", m), y=payload.y)
+
+    return jobs.MANAGER.submit("framing", "Mengikuti wajah", run).as_dict()
 
 
 class ClipUpdate(BaseModel):
@@ -204,7 +245,6 @@ def health() -> dict[str, Any]:
     return {"ok": True, "version": __version__, "app": "Studio ZAI"}
 
 
-@app.on_event("startup")
 def _startup_cleanup() -> None:
     try:
         removed = config.cleanup_stale_transcript_chunks()
@@ -265,6 +305,56 @@ def online_models(payload: ModelDiscovery) -> dict[str, Any]:
 @app.post("/api/ai/text")
 def generate_text(payload: PromptRequest) -> dict[str, Any]:
     return jobs.MANAGER.submit("text", "Menyusun teks", lambda _: {"text": ai.text(payload.prompt)}).as_dict()
+
+
+@app.get("/api/local-llm/models")
+def local_models():
+    settings = config.load_settings()
+    base = settings.get("llm_base_url") or "http://127.0.0.1:11434/v1"
+    try:
+        from .execution_policy import processing
+        with processing("hybrid"):
+            return ai.discover_models("compatible", base, credentials.read().get("llm_api_key", ""), "ai")
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, f"Runtime lokal belum siap: {exc}. Jalankan runtime dan pilih model terpasang.") from None
+
+
+@app.get("/api/local-llm/gguf")
+def gguf_models():
+    from . import local_runtime
+    return {"models": local_runtime.existing_models(), "runtime_available": local_runtime.binary() is not None}
+
+
+class LocalModelRequest(BaseModel):
+    path: str = Field(max_length=4096)
+
+
+@app.post("/api/local-llm/start")
+def start_local_model(payload: LocalModelRequest):
+    from . import local_runtime
+    def run(job):
+        job.report(5, "LLM lokal", "memuat model yang sudah tersimpan; tanpa unduhan model")
+        base, model, key = local_runtime.start(payload.path, job.check_cancel)
+        config.save_settings({"llm_base_url": base, "llm_model": model, "llm_api_key": key})
+        return {"model": model, "base_url": base}
+    return jobs.MANAGER.submit("llm-setup", "Muat model GGUF lokal", run).as_dict()
+
+
+@app.post("/api/local-llm/stop")
+def stop_local_model():
+    from . import local_runtime
+    local_runtime.stop()
+    return {"stopped": True}
+
+
+@app.exception_handler(projects.ProjectConflict)
+async def project_conflict(request: Request, exc: projects.ProjectConflict):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(jobs.QueueFull)
+async def queue_full(request: Request, exc: jobs.QueueFull):
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
 
 
 @app.post("/api/images")
@@ -440,10 +530,16 @@ def link_info(payload: LinkInfoRequest) -> dict[str, Any]:
     return info
 
 
-def _ingest_task(project_id: str, source: str):
+def _ingest_task(project_id: str, source: str, online: bool = False):
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
-        path = service.ingest(project, source, cookies=config.load_settings().get("cookies_path") or None, job=job)
+        path = service.ingest(
+            project,
+            source,
+            cookies=config.load_settings().get("cookies_path") or None,
+            job=job,
+            online=online,
+        )
         return {"media": str(path), "duration": project.duration}
 
     return run
@@ -479,6 +575,19 @@ def process_project(project_id: str, payload: ProcessRequest) -> dict[str, Any]:
     return job.as_dict()
 
 
+class RelinkRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=4096)
+
+
+@app.post("/api/projects/{project_id}/relink")
+def relink_project(project_id: str, payload: RelinkRequest):
+    try:
+        with projects.project_lock(project_id):
+            return service.relink_source(_project(project_id), payload.source).as_dict()
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 def _narration_text(project: Any, clip: Any) -> str:
     """Gabungkan transkrip yang jatuh di rentang klip -> teks narasi sulih suara."""
     parts: list[str] = []
@@ -495,10 +604,52 @@ def _narration_text(project: Any, clip: Any) -> str:
     return " ".join(parts).strip()
 
 
-def _process_task(project_id: str, payload: ProcessRequest):
+@app.post("/api/projects/{project_id}/fetch-video")
+def fetch_video(project_id: str) -> dict[str, Any]:
+    """Mode online: unduh video penuh belakangan (mis. untuk arsip)."""
+    project = _project(project_id)
+    if not project.online or not project.source_url:
+        raise HTTPException(400, "Proyek ini bukan mode online")
+    if project.source:
+        return {"media": project.source, "already": True}
+
     def run(job: jobs.Job) -> dict[str, Any]:
         project = projects.load_project(project_id)
-        if not project.source:
+        path = service.ingest(
+            project,
+            project.source_url,
+            cookies=config.load_settings().get("cookies_path") or None,
+            job=job,
+            audio_lang=None,
+            online=False,
+        )
+        project.online = False
+        project.source_url = ""
+        project.audio_path = ""
+        project.clear_segments()
+        project.save()
+        return {"media": str(path)}
+
+    return jobs.MANAGER.submit("ingest", f"Unduh video {project.title}", run).as_dict()
+
+
+def _process_task(project_id: str, payload: ProcessRequest):
+    settings_snapshot = config.load_settings()
+    settings_snapshot["llm_api_key"] = credentials.read().get("llm_api_key", "")
+    selected_provider = settings_snapshot.get("ai_provider")
+    provider_snapshot = None
+    if selected_provider:
+        provider_snapshot = (selected_provider, settings_snapshot.get("ai_base_url") or ai.PROVIDERS.get(selected_provider, {}).get("url", ""),
+                             payload.model or settings_snapshot.get("ai_model") or "auto", credentials.read().get("ai_api_key", ""))
+    def execute(job: jobs.Job) -> dict[str, Any]:
+        project = projects.load_project(project_id)
+        project.processing_mode = payload.processing_mode
+        existing_source = project.source_url or project.source
+        if existing_source and payload.source and payload.source != existing_source:
+            raise ValueError("Sumber berbeda dari proyek tersimpan. Buat proyek baru untuk sumber ini.")
+        if payload.processing_mode == "offline" and download_pipeline.is_url(payload.source or existing_source):
+            raise ValueError("Full Offline memerlukan berkas lokal")
+        if not project.source and not project.transcript.get("segments") and not project.audio_path:
             fmt = payload.format_id or download_pipeline.pick_format_id([], payload.quality)
             service.ingest(
                 project,
@@ -507,15 +658,22 @@ def _process_task(project_id: str, payload: ProcessRequest):
                 job=job,
                 format_id=fmt,
                 audio_lang=payload.audio_lang,
+                online=payload.online or payload.processing_mode == "hybrid",
+                captions_first=payload.use_transcript,
             )
         service.generate_clips(
             project,
             count=payload.count,
             min_len=payload.min_len,
             max_len=payload.max_len,
-            use_llm=payload.use_llm,
+            use_llm=payload.use_llm or payload.processing_mode in {"hybrid", "offline"},
             use_transcript=payload.use_transcript,
             analysis_mode=payload.analysis_mode,
+            asr_model=payload.asr_model,
+            model=payload.model,
+            processing_mode=payload.processing_mode,
+            settings_override=settings_snapshot,
+            connection_override=provider_snapshot,
             job=job,
         )
         for clip in list(project.clips):
@@ -543,6 +701,10 @@ def _process_task(project_id: str, payload: ProcessRequest):
                     service.render_clip(project, clip, job=job)
         return {"clips": len(project.clips), "project": projects.load_project(project_id).as_dict()}
 
+    def run(job):
+        from .execution_policy import processing
+        with processing(payload.processing_mode):
+            return execute(job)
     return run
 
 
@@ -561,7 +723,7 @@ def update_clip(project_id: str, index: int, payload: ClipUpdate) -> dict[str, A
 @app.post("/api/projects/{project_id}/clips")
 def create_manual_clip(project_id: str, payload: ManualClip) -> dict[str, Any]:
     project = _project(project_id)
-    if project.media_path() is None:
+    if project.media_path() is None and not project.online:
         raise HTTPException(400, "Video sumber belum tersimpan")
     if not 0 <= payload.start < payload.end <= project.duration or payload.canvas not in {"original", "portrait", "landscape", "square"}:
         raise HTTPException(400, "Rentang harus berada di dalam durasi video dan kanvas harus valid")
@@ -624,7 +786,7 @@ def batch_render(project_id: str, payload: BatchRenderRequest) -> dict[str, Any]
             project.clip(index)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
-    if project.media_path() is None:
+    if project.media_path() is None and not (project.online and project.source_url):
         raise HTTPException(400, "Video sumber tidak ditemukan")
 
     # Capture storage IDs and edits now: queued work must not silently switch to
@@ -645,43 +807,108 @@ def batch_render(project_id: str, payload: BatchRenderRequest) -> dict[str, Any]
 
     expected = {clip.storage_id: render_state(clip) for clip in selected}
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    save_lock = threading.Lock()
+    total_jobs = max(1, len(clip_ids) * len(formats))
+
+    class Progress:
+        def __init__(self, position: int, index: int, fmt: str, batch_job: Any = None):
+            self.position = position
+            self.batch_job = batch_job
+            label = {"portrait": "9:16", "square": "1:1", "landscape": "16:9"}[fmt]
+            self.label = f"{position + 1}/{total_jobs} · Klip {index + 1} · {label}"
+
+        @property
+        def cancel_requested(self) -> bool:
+            return bool(getattr(self.batch_job, "cancel_requested", False))
+
+        @cancel_requested.setter
+        def cancel_requested(self, value: bool) -> None:
+            # Pembatalan dari jalur render harus sampai ke job batch.
+            self.batch_job.cancel_requested = value
+
+        def check_cancel(self) -> None:
+            if getattr(self.batch_job, "check_cancel", None):
+                self.batch_job.check_cancel()
+            elif self.cancel_requested:
+                raise jobs.JobCancelled("dibatalkan pengguna")
+
+        def report(self, progress: float, stage: str = "", message: str = "") -> None:
+            fraction = max(0.0, min(1.0, (progress - 60) / 40))
+            if self.batch_job is not None:
+                self.batch_job.report(
+                    5 + 90 * (self.position + fraction) / total_jobs,
+                    "render batch", self.label)
+
+    done_jobs: list[object] = []
+
+    def render_one(position: int, clip: projects.Clip, fmt: str, batch_job: object) -> dict[str, Any]:
+        # Revalidate the immutable snapshot before and after encoding.
+        batch_job.check_cancel()
+        current = projects.load_project(project_id)
+        latest = next((item for item in current.clips if item.storage_id == clip.storage_id), None)
+        if latest is None or render_state(latest) != expected[clip.storage_id]:
+            raise RuntimeError(f"Klip {clip.index + 1} berubah sebelum dirender. Pilih ulang dan coba lagi.")
+        files = service.render_clip(
+            current, latest, job=Progress(position, clip.index, fmt, batch_job),
+            canvas_override=fmt, persist=False,
+        )
+        if f"mp4_{fmt}" not in files:
+            raise RuntimeError(f"Render klip {clip.index + 1} · {fmt} tidak menghasilkan berkas")
+        saved = False
+        with save_lock, projects.project_lock(project_id):
+            fresh = projects.load_project(project_id)
+            target = next((item for item in fresh.clips if item.storage_id == clip.storage_id), None)
+            if target is None:
+                raise RuntimeError(f"Klip {clip.index + 1} tidak ada lagi")
+            if render_state(target) != expected[clip.storage_id]:
+                raise RuntimeError(f"Klip {clip.index + 1} berubah selama render. Hasil lama tidak dipasang.")
+            if not getattr(batch_job, "cancel_requested", False):
+                target.files[f"mp4_{fmt}"] = files[f"mp4_{fmt}"]
+                if files.get(f"thumb_{fmt}"):
+                    target.files[f"thumb_{fmt}"] = files[f"thumb_{fmt}"]
+                fresh.save()
+                saved = True
+        done_jobs.append(True)
+        batch_job.report(5 + 95 * len(done_jobs) / total_jobs, "render batch",
+                         f"{len(done_jobs)}/{total_jobs} selesai")
+        return {"saved": saved, "index": latest.index, "format": fmt,
+                "path": files[f"mp4_{fmt}"], "clip_position": position}
+
     def run(job: jobs.Job) -> dict[str, Any]:
-        total = len(clip_ids) * len(formats)
         exports: list[dict[str, Any]] = []
-
-        class Progress:
-            def __init__(self, position: int, index: int, fmt: str):
-                self.position = position
-                label = {"portrait": "9:16", "square": "1:1", "landscape": "16:9"}[fmt]
-                self.label = f"{position + 1}/{total} · Klip {index + 1} · {label}"
-
-            def report(self, progress: float, stage: str = "", message: str = "") -> None:
-                fraction = max(0.0, min(1.0, (progress - 60) / 40))
-                job.report(5 + 90 * (self.position + fraction) / total, "render batch", self.label)
-
-        for position, (clip, fmt) in enumerate(
-            (clip, fmt) for clip in selected for fmt in formats
-        ):
-            job.check_cancel()
-            current = projects.load_project(project_id)
-            latest = next((item for item in current.clips if item.storage_id == clip.storage_id), None)
-            if latest is None or render_state(latest) != expected[clip.storage_id]:
-                raise RuntimeError("Klip berubah saat menunggu. Pilih kembali klip lalu ulangi ekspor.")
-            files = service.render_clip(
-                project, clip, job=Progress(position, clip.index, fmt),
-                canvas_override=fmt, persist=False,
-            )
-            job.check_cancel()
-            current = projects.load_project(project_id)
-            latest = next((item for item in current.clips if item.storage_id == clip.storage_id), None)
-            if latest is None or render_state(latest) != expected[clip.storage_id]:
-                raise RuntimeError("Klip berubah saat dirender. Ulangi ekspor untuk memakai edit terbaru.")
-            latest.files[f"mp4_{fmt}"] = files[f"mp4_{fmt}"]
-            if files.get(f"thumb_{fmt}"):
-                latest.files[f"thumb_{fmt}"] = files[f"thumb_{fmt}"]
-            current.save()
-            exports.append({"index": latest.index, "format": fmt, "path": files[f"mp4_{fmt}"]})
-        return {"exports": exports, "project": project_id}
+        unsaved = 0
+        failures: list[dict[str, Any]] = []
+        work = [(position, clip, fmt) for position, (clip, fmt) in enumerate(
+            (clip, fmt) for clip in selected for fmt in formats)]
+        with ThreadPoolExecutor(max_workers=RENDER_WORKERS) as pool:
+            # `job` diteruskan ke pekerja: canvas_overrride/flags yang sama,
+            # progres + pembatalan mengalir ke objek yang sama dengan manager.
+            futures = {pool.submit(render_one, position, clip, fmt, job): (clip, fmt)
+                       for position, clip, fmt in work}
+            for future in as_completed(futures):
+                clip, fmt = futures[future]
+                try:
+                    row = future.result()
+                except Exception as exc:  # noqa: BLE001 - beberapa klip boleh gagal, sisanya tetap jadi
+                    failures.append({"index": clip.index, "format": fmt, "error": str(exc)})
+                    continue
+                if not row.pop("saved"):
+                    unsaved += 1
+                    continue
+                exports.append(row)
+                job.result = {"exports": [dict(item) for item in exports], "project": project_id,
+                              "failures": list(failures), "unsaved": unsaved}
+        exports.sort(key=lambda row: row["clip_position"])
+        for row in exports:
+            row.pop("clip_position", None)
+        job.report(100, "render batch", f"{len(exports)}/{total_jobs} selesai")
+        job.result = {"exports": exports, "project": project_id, "failures": failures, "unsaved": unsaved}
+        if not exports and failures:
+            raise RuntimeError(f"Semua {len(failures)} render gagal: {failures[0]['error'][:200]}")
+        return {"exports": exports, "project": project_id,
+                "failures": failures, "unsaved": unsaved}
 
     return jobs.MANAGER.submit("batch-render", "Render beberapa format", run).as_dict()
 
@@ -788,6 +1015,19 @@ def create_subtitle_preset(values: dict[str, Any]) -> dict[str, str]:
         raise HTTPException(400, str(exc)) from exc
     subtitle.PRESETS[key] = style
     return {"id": key}
+
+
+@app.post("/api/projects/{project_id}/clips/{index}/source-preview")
+def source_preview(project_id: str, index: int, values: ClipUpdate | None = None):
+    project = _project(project_id)
+    clip = project.clip(index)
+    if values:
+        clip = project.update_clip(index, {k: v for k, v in values.model_dump().items() if v is not None})
+    def run(job):
+        path, offset = service._resolve_render_media(project, clip, job)
+        end = project.segment_bounds(clip.storage_id)[1] if project.online else project.duration
+        return {"path": str(path), "offset": offset, "end": end, "width": project.width, "height": project.height}
+    return jobs.MANAGER.submit("source-preview", "Sumber preview", run).as_dict()
 
 
 @app.post("/api/projects/{project_id}/assets")
@@ -1027,6 +1267,8 @@ def job_events(job_id: str) -> StreamingResponse:
             latest = job.events[-1] if job.events else None
             if latest is not None and (latest is not previous or time.time() - last_emit >= 1):
                 payload = latest.as_dict()
+                if job.kind == "batch-render":
+                    payload["result"] = job.result
                 payload["elapsed"] = int(time.time() - job.created)
                 idle = time.time() - latest.time
                 if idle >= 10:
@@ -1055,7 +1297,8 @@ def media(path: str) -> FileResponse:
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(status_code=404, detail="berkas tidak ditemukan")
     roots = [config.data_dir().resolve()]
-    if not any(root in resolved.parents or resolved == root for root in roots):
+    registered_source = any(p.source and Path(p.source).resolve() == resolved for p in projects.list_projects())
+    if not registered_source and not any(root in resolved.parents or resolved == root for root in roots):
         raise HTTPException(status_code=403, detail="akses di luar folder data")
     if resolved.name.lower().startswith((".env", "credentials", "settings", "cookies", "instance", "launcher")) or resolved.suffix.lower() not in {".mp4", ".mkv", ".mov", ".webm", ".avi", ".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".srt", ".vtt", ".ass", ".zip"}:
         raise HTTPException(403, "Berkas konfigurasi dan kredensial tidak dapat dibagikan")

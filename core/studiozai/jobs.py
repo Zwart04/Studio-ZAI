@@ -2,13 +2,44 @@
 
 from __future__ import annotations
 
+import queue
 import threading
 import time
 import traceback
 import uuid
 from collections.abc import Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
+from functools import wraps
 from typing import Any
+
+HEAVY_SLOT = threading.RLock()
+INFERENCE_SLOT = HEAVY_SLOT
+CURRENT_JOB = ContextVar("current_job", default=None)
+
+
+@contextmanager
+def inference_slot(check_cancel=None):
+    current = CURRENT_JOB.get()
+    check_cancel = check_cancel or (current.check_cancel if current else None)
+    while not INFERENCE_SLOT.acquire(timeout=.1):
+        if check_cancel:
+            check_cancel()
+    try:
+        if check_cancel:
+            check_cancel()
+        yield
+    finally:
+        INFERENCE_SLOT.release()
+
+
+def bounded_inference(fn):
+    @wraps(fn)
+    def run(*args, **kwargs):
+        with inference_slot():
+            return fn(*args, **kwargs)
+    return run
 
 
 @dataclass
@@ -28,6 +59,10 @@ class JobEvent:
 
 
 class JobCancelled(RuntimeError):
+    pass
+
+
+class QueueFull(RuntimeError):
     pass
 
 
@@ -85,16 +120,36 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._slots = threading.Semaphore(max_workers)
+        self._queue = queue.Queue(maxsize=64)
+        self._workers = []
+        self._worker_count = max_workers
 
     def submit(self, kind: str, title: str, fn: Callable[[Job], dict[str, Any] | None]) -> Job:
         job = Job(id=uuid.uuid4().hex[:12], kind=kind, title=title)
         with self._lock:
+            try:
+                self._queue.put_nowait((job, fn))
+            except queue.Full:
+                raise QueueFull("Antrean penuh. Tunggu pekerjaan selesai sebelum menambah job.") from None
             self._jobs[job.id] = job
-        threading.Thread(target=self._run, args=(job, fn), daemon=True).start()
+            if not self._workers:
+                for index in range(self._worker_count):
+                    worker = threading.Thread(target=self._worker_loop, daemon=True, name=f"studio-job-{index}")
+                    self._workers.append(worker)
+                    worker.start()
         return job
+
+    def _worker_loop(self):
+        while True:
+            job, fn = self._queue.get()
+            try:
+                self._run(job, fn)
+            finally:
+                self._queue.task_done()
 
     def _run(self, job: Job, fn: Callable[[Job], dict[str, Any] | None]) -> None:
         with self._slots:
+            token = CURRENT_JOB.set(job)
             try:
                 job.check_cancel()
                 job.status = "running"
@@ -115,6 +170,7 @@ class JobManager:
                 job.result["traceback"] = traceback.format_exc(limit=8)
             finally:
                 job.finished = time.time()
+                CURRENT_JOB.reset(token)
 
     def get(self, job_id: str) -> Job:
         with self._lock:

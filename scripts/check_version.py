@@ -22,7 +22,7 @@ PATTERNS = {
     "core/studiozai/__init__.py": re.compile(r'__version__\s*=\s*"([^"]+)"'),
     "core/pyproject.toml": re.compile(r'^version\s*=\s*"([^"]+)"', re.MULTILINE),
     "android/app/pubspec.yaml": re.compile(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)", re.MULTILINE),
-    "ui/index.html": re.compile(r'studiozai-v([0-9]+\.[0-9]+\.[0-9]+)'),
+    "ui/index.html": re.compile(r'/app\.js\?v=([0-9]+\.[0-9]+\.[0-9]+)'),
 }
 
 
@@ -55,7 +55,8 @@ def main() -> int:
             continue
         found = read_version(ROOT / relative, pattern)
         if found is None:
-            print(f"  dilewati       : {relative} (pola tidak ketemu)")
+            print(f"  GAGAL          : {relative} (versi tidak ditemukan)")
+            failures.append(relative)
             continue
         status = "sama" if found == source_version else "BEDA"
         print(f"  {status:<14} : {relative} -> {found}")

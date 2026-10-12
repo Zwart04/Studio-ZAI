@@ -334,6 +334,9 @@ class CreatorTools {
     bool position = true,
   }) {
     var result = '';
+    // \q2 = tanpa wrap; mode highlight memakai potongan <=22 karakter sehingga
+    // teks dijamin tetap satu baris (cheat-clip-pro memasang \q2 di tiap baris).
+    if (style['nowrap'] == true) result += r'\q2';
     if (fonts.contains(style['font'])) result += '\\fn${style['font']}';
     if (style.containsKey('size')) {
       result +=
@@ -357,6 +360,7 @@ class CreatorTools {
     result += <String, String>{
           'pop':
               r'\fscx75\fscy75\t(0,130,\fscx108\fscy108)\t(130,220,\fscx100\fscy100)',
+          'bounce': r'\fscy70\t(0,100,\fscy120)\t(100,220,\fscy100)',
           'fade': r'\fad(150,120)',
           'rise': r'\fad(100,80)',
           'zoom': r'\fscx85\fscy85\t(0,300,\fscx100\fscy100)',
@@ -404,15 +408,250 @@ class CreatorTools {
           final start = value(w['start'], 0, 0, 86400),
               end = value(w['end'], start, start, 86400),
               cueStart = (row['start'] as num).toDouble();
-          if (style['animation'] == 'type') {
+          if (style['animation'] == 'type' ||
+              style['animation'] == 'typewriter') {
             final at = ((start - cueStart) * 1000).round();
             tags += '\\alpha&HFF&\\t($at,${at + 1},\\alpha&H00&)';
-          } else if (preset['karaoke'] == true) {
+          } else if (preset['karaoke'] == true || base['mode'] == 'karaoke') {
             tags +=
-                '\\kt${((start - cueStart) * 100).round()}\\k${math.max(1, ((end - start) * 100).round())}';
+                '\\kt${((start - cueStart) * 100).round()}\\kf${math.max(1, ((end - start) * 100).round())}';
+            if (base['mode'] == 'karaoke') {
+              for (final item in [
+                ('1c', base['highlight'], '#abff66'),
+                ('2c', style['color'], '#ffffff')
+              ]) {
+                final color =
+                    RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch('${item.$2}')
+                        ? '${item.$2}'
+                        : item.$3;
+                tags +=
+                    '\\${item.$1}&H${color.substring(5, 7)}${color.substring(3, 5)}${color.substring(1, 3)}&';
+              }
+            }
           }
           return '{$tags}${escape('${w['word']}')}';
         }).join(' ');
+  }
+
+  static String _timestamp(num n) {
+    final cs = (n * 100).round();
+    return '${cs ~/ 360000}:${(cs ~/ 6000 % 60).toString().padLeft(2, '0')}:${(cs ~/ 100 % 60).toString().padLeft(2, '0')}.${(cs % 100).toString().padLeft(2, '0')}';
+  }
+
+  static String _dialogue(
+    num start,
+    num end,
+    String text, [
+    String name = 'Default',
+  ]) =>
+      'Dialogue: 0,${_timestamp(start)},${_timestamp(end)},$name,,0,0,0,,$text';
+
+  // Mode "highlight" meniru animasi kata aktif dari cheat-clip-pro: kata dikemas
+  // ke potongan pendek satu baris lalu dipotong menjadi irisan waktu yang saling
+  // bersambung sehingga sorotan tidak pernah berkedip di sela jeda bicara.
+  // Angka-angka di bawah persis milik cheat-clip-pro (video_engine.py) dan
+  // harus tetap sama dengan core/studiozai/pipeline/caption_style.py.
+  static const int _chunkMaxWords = 3;
+  static const int _chunkMaxChars = 22;
+  static const double _chunkPause = 0.38;
+  static const double _chunkMinDuration = 0.35;
+  static const double _chunkTailPad = 0.12;
+  static const double _chunkGap = 0.28;
+  static const double _sliceMin = 0.16;
+
+  /// Kata dengan start/end yang sudah di-clamp ke jendela caption.
+  static List<Map<String, dynamic>> _normalizedWords(
+    double cueStart,
+    double cueEnd,
+    List<Map<String, dynamic>> list,
+  ) {
+    final result = <Map<String, dynamic>>[];
+    var cursor = cueStart;
+    for (final word in list) {
+      final start = value(word['start'], cursor, cueStart, cueEnd),
+          end = value(word['end'], start, start, cueEnd);
+      if (end <= start) continue;
+      result.add({...word, 'start': start, 'end': end});
+      cursor = end;
+    }
+    return result;
+  }
+
+  /// Kemas kata ke potongan 1-3 kata / <=22 karakter. Pecah pada jeda bicara
+  /// >=_chunkPause atau tanda akhir kalimat, supaya kata tidak menggantung.
+  static List<List<Map<String, dynamic>>> _packChunks(
+    List<Map<String, dynamic>> list,
+  ) {
+    final chunks = <List<Map<String, dynamic>>>[];
+    var current = <Map<String, dynamic>>[];
+    var chars = 0;
+    for (final item in list) {
+      final token = '${item['word'] ?? ''}';
+      final paused = current.isNotEmpty &&
+          ((item['start'] as num).toDouble() -
+                  (current.last['end'] as num).toDouble()) >=
+              _chunkPause;
+      final sentence = current.isNotEmpty &&
+          RegExp(r'[.?!]$').hasMatch('${current.last['word'] ?? ''}');
+      final tooWide =
+          current.isNotEmpty && chars + token.length > _chunkMaxChars;
+      if (current.length >= _chunkMaxWords || paused || sentence || tooWide) {
+        chunks.add(current);
+        current = [item];
+        chars = token.length;
+      } else {
+        current.add(item);
+        chars += token.length + 1;
+      }
+    }
+    if (current.isNotEmpty) chunks.add(current);
+    return chunks;
+  }
+
+  static List<Map<String, dynamic>> previewWords(
+      Map<String, dynamic> row, double seconds) {
+    final mode = row['style']?['mode'] ?? 'line';
+    final list = words(row);
+    if (mode == 'word' || mode == 'box') {
+      return list
+          .where((w) => w['start'] <= seconds && seconds < w['end'])
+          .toList();
+    }
+    if (mode != 'highlight') return list;
+    final start = (row['start'] as num).toDouble(),
+        end = (row['end'] as num).toDouble();
+    final chunks = _packChunks(_normalizedWords(start, end, list));
+    final bounds = _chunkBounds(chunks, start, end);
+    for (var i = 0; i < chunks.length; i++) {
+      if (bounds[i][0] <= seconds && seconds < bounds[i][1]) {
+        final slices = _wordSlices(chunks[i], bounds[i][0], bounds[i][1]);
+        return List.generate(
+            chunks[i].length,
+            (k) =>
+                {...chunks[i][k], 'start': slices[k][0], 'end': slices[k][1]});
+      }
+    }
+    return [];
+  }
+
+  /// Batas tiap potongan: monoton, tidak saling tumpang tindih, di-clamp caption.
+  static List<List<double>> _chunkBounds(
+    List<List<Map<String, dynamic>>> chunks,
+    double cueStart,
+    double cueEnd,
+  ) {
+    final bounds = <List<double>>[];
+    for (final chunk in chunks) {
+      var start = (chunk.first['start'] as num).toDouble();
+      var end = math.max(
+        start + _chunkMinDuration,
+        (chunk.last['end'] as num).toDouble() + _chunkTailPad,
+      );
+      if (bounds.isNotEmpty) {
+        final previousEnd = bounds.last[1];
+        if (start < previousEnd) start = previousEnd;
+        if (end <= start) end = start + _chunkGap;
+      }
+      bounds.add([start, end]);
+    }
+    for (var i = 0; i < bounds.length - 1; i++) {
+      final current = bounds[i];
+      final following = bounds[i + 1];
+      if (current[1] > following[0]) {
+        final split = math.max(current[0] + _chunkGap, following[0]);
+        current[1] = split;
+        if (following[0] < split) {
+          following[0] = split;
+          following[1] = math.max(split + _chunkGap, following[1]);
+        }
+      }
+    }
+    // Caption berdampingan rapat, jadi potongan yang boleh melewati
+    // cueEnd akan menabrak Dialogue pertama caption berikutnya.
+    final clamped = <List<double>>[];
+    for (final b in bounds) {
+      final s = math.min(math.max(b[0], cueStart), cueEnd);
+      clamped.add([s, math.min(math.max(b[1], s), cueEnd)]);
+    }
+    return clamped;
+  }
+
+  /// Irisan waktu kata yang saling bersambung (tanpa jeda kosong).
+  static List<List<double>> _wordSlices(
+    List<Map<String, dynamic>> chunk,
+    double start,
+    double end,
+  ) {
+    if (end <= start) return <List<double>>[];
+    final count = chunk.length;
+    if (count == 1) {
+      return [
+        [start, end],
+      ];
+    }
+    final points = <double>[start];
+    for (var i = 1; i < count; i++) {
+      final raw = (chunk[i]['start'] as num).toDouble();
+      final lowest = points.last + _sliceMin;
+      final highest = end - _sliceMin * (count - i);
+      if (lowest > highest) {
+        points.add(points.last + (end - points.last) / (count - i + 1));
+      } else {
+        points.add(math.max(lowest, math.min(highest, raw)));
+      }
+    }
+    points.add(end);
+    return List.generate(count, (k) => <double>[points[k], points[k + 1]]);
+  }
+
+  /// Satu Dialogue per irisan: teks potongan, hanya kata aktif yang diwarnai.
+  static List<String> _highlightEvents(
+    Map<String, dynamic> row,
+    List<Map<String, dynamic>> list,
+    Map preset,
+    int width,
+    int height,
+  ) {
+    final base = Map<String, dynamic>.from(row['style'] as Map? ?? {});
+    final dynamic highlight = base['highlight'];
+    var color = highlight is String ? highlight : '#abff66';
+    if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(color)) color = '#abff66';
+    final cueStart = (row['start'] as num).toDouble(),
+        cueEnd = (row['end'] as num).toDouble();
+    final chunks = _packChunks(_normalizedWords(cueStart, cueEnd, list));
+    if (chunks.isEmpty) return <String>[];
+    final bounds = _chunkBounds(chunks, cueStart, cueEnd);
+    final output = <String>[];
+    for (var c = 0; c < chunks.length; c++) {
+      final chunk = chunks[c];
+      final slices = _wordSlices(chunk, bounds[c][0], bounds[c][1]);
+      for (var active = 0; active < slices.length; active++) {
+        final sliceStart = slices[active][0], sliceEnd = slices[active][1];
+        if (sliceEnd <= sliceStart) continue;
+        final current = Map<String, dynamic>.from(jsonDecode(jsonEncode(row)));
+        current['text'] =
+            chunk.map((item) => '${item['word'] ?? ''}').join(' ');
+        final chunkWords = <Map<String, dynamic>>[];
+        for (var i = 0; i < chunk.length; i++) {
+          final wordStyle =
+              Map<String, dynamic>.from(chunk[i]['style'] as Map? ?? {})
+                ..['nowrap'] = true;
+          if (i == active) wordStyle['color'] = color;
+          chunkWords.add(
+            Map<String, dynamic>.from(chunk[i])..['style'] = wordStyle,
+          );
+        }
+        current['words'] = chunkWords;
+        output.add(
+          _dialogue(
+            sliceStart,
+            sliceEnd,
+            captionText(current, preset, width, height),
+          ),
+        );
+      }
+    }
+    return output;
   }
 
   static List<String> captionEvents(
@@ -421,67 +660,42 @@ class CreatorTools {
     int width,
     int height,
   ) {
-    String timestamp(num n) {
-      final cs = (n * 100).round();
-      return '${cs ~/ 360000}:${(cs ~/ 6000 % 60).toString().padLeft(2, '0')}:${(cs ~/ 100 % 60).toString().padLeft(2, '0')}.${(cs % 100).toString().padLeft(2, '0')}';
-    }
-
-    String event(num start, num end, String text, [String name = 'Default']) =>
-        'Dialogue: 0,${timestamp(start)},${timestamp(end)},$name,,0,0,0,,$text';
     final base = Map<String, dynamic>.from(row['style'] as Map? ?? {}),
         mode = base['mode'];
     if (!['word', 'box', 'highlight'].contains(mode)) {
       return [
-        event(
+        _dialogue(
           row['start'],
           row['end'],
           captionText(row, preset, width, height),
         ),
       ];
     }
-    final list = words(row), output = <String>[];
+    final list = words(row);
+    if (mode == 'highlight') {
+      return _highlightEvents(row, list, preset, width, height);
+    }
+    final output = <String>[];
     var cursor = (row['start'] as num).toDouble();
     for (var i = 0; i < list.length; i++) {
       final w = list[i],
           start = value(w['start'], cursor, row['start'], row['end']),
           end = value(w['end'], start, start, row['end']);
       if (end <= start) continue;
-      if (mode == 'highlight') {
-        if (start > cursor) {
-          output.add(
-            event(cursor, start, captionText(row, preset, width, height)),
-          );
-        }
-        final current = Map<String, dynamic>.from(jsonDecode(jsonEncode(row)));
-        final currentWords = words(current);
-        currentWords[i]['style'] = {
-          ...(currentWords[i]['style'] as Map? ?? {}),
-          'color': base['highlight'] ?? '#abff66',
-        };
-        output.add(
-          event(start, end, captionText(current, preset, width, height)),
-        );
-      } else {
-        final style = {...base, ...(w['style'] as Map? ?? {})};
-        final color = '${base['boxColor'] ?? '#111111'}';
-        final box = mode == 'box' && RegExp(r'^#[\da-fA-F]{6}$').hasMatch(color)
-            ? '\\3c&H${color.substring(5, 7)}${color.substring(3, 5)}${color.substring(1, 3)}&'
-            : '';
-        output.add(
-          event(
-            start,
-            end,
-            '{${styleTags(style, height / 1920, width, height)}$box}${escape('${w['word']}')}',
-            mode == 'box' ? 'ActiveBox' : 'Default',
-          ),
-        );
-      }
-      cursor = end;
-    }
-    if (mode == 'highlight' && cursor < (row['end'] as num)) {
+      final style = {...base, ...(w['style'] as Map? ?? {})};
+      final color = '${base['boxColor'] ?? '#111111'}';
+      final box = mode == 'box' && RegExp(r'^#[\da-fA-F]{6}$').hasMatch(color)
+          ? '\\3c&H${color.substring(5, 7)}${color.substring(3, 5)}${color.substring(1, 3)}&'
+          : '';
       output.add(
-        event(cursor, row['end'], captionText(row, preset, width, height)),
+        _dialogue(
+          start,
+          end,
+          '{${styleTags(style, height / 1920, width, height)}$box}${escape('${w['word']}')}',
+          mode == 'box' ? 'ActiveBox' : 'Default',
+        ),
       );
+      cursor = end;
     }
     return output;
   }

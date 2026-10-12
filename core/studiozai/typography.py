@@ -15,7 +15,11 @@ def load() -> dict[str, dict[str, Any]]:
     path = config.data_dir() / "typography.json"
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def create(values: dict[str, Any]) -> tuple[str, dict[str, Any]]:

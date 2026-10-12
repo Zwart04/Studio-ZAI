@@ -12,8 +12,10 @@ call ".venv-build\Scripts\activate.bat"
 
 echo [2/4] Memasang dependensi...
 python -m pip install --quiet --upgrade pip
-python -m pip install --quiet -e "core[media,asr,tts,desktop]"
+python -m pip install --quiet -e "core[media,asr,tts,desktop,face,translation]"
+if errorlevel 1 exit /b 1
 python -m pip install --quiet pyinstaller
+if errorlevel 1 exit /b 1
 
 echo [3/4] Mendeteksi ffmpeg untuk dibundel...
 set "STUDIOZAI_FFMPEG_DIR="
@@ -27,6 +29,7 @@ if defined STUDIOZAI_FFMPEG_DIR (
 
 echo [4/4] Membangun aplikasi...
 pyinstaller desktop\packaging\studiozai.spec --noconfirm --distpath dist --workpath build
+if errorlevel 1 exit /b 1
 
 echo Selesai.
 echo   Aplikasi : dist\StudioZAI\StudioZAI.exe

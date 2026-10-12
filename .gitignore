@@ -7,6 +7,8 @@ venv/
 .venv-build/
 .pytest_cache/
 .tmp-pytest/
+tools/.e2e-tmp/
+tools/.cap-tmp/
 .mypy_cache/
 dist/
 build/
@@ -61,3 +63,5 @@ android/app/android/.kotlin/
 .test-fixtures/
 .ruff_cache/
 releases/
+/vendor/llama-cpu/
+/vendor/qjs.exe

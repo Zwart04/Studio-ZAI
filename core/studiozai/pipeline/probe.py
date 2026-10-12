@@ -58,11 +58,25 @@ def probe(path: str | Path) -> MediaInfo:
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     duration = float(fmt.get("duration") or (video or {}).get("duration") or 0.0)
+    width = int((video or {}).get("width") or 0)
+    height = int((video or {}).get("height") or 0)
+    rotation = (video or {}).get("tags", {}).get("rotate", 0)
+    for side in (video or {}).get("side_data_list", []):
+        if "rotation" in side:
+            rotation = side["rotation"]
+            break
+    try:
+        quarter_turn = round(float(rotation) / 90) % 2 == 1
+    except (TypeError, ValueError, OverflowError):
+        quarter_turn = False
+    # FFmpeg autorotates before filtering, so crop coordinates use display dimensions.
+    if quarter_turn:
+        width, height = height, width
     return MediaInfo(
         path=str(path),
         duration=duration,
-        width=int((video or {}).get("width") or 0),
-        height=int((video or {}).get("height") or 0),
+        width=width,
+        height=height,
         fps=_fraction_to_float((video or {}).get("avg_frame_rate")),
         has_video=video is not None,
         has_audio=audio is not None,

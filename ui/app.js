@@ -1,5 +1,14 @@
 const I18N = {
   id: {
+    "settings.asrDevice": "Perangkat ASR",
+    "hybrid.localOnly": "Full Offline memerlukan berkas lokal, bukan link.",
+    "project.relink": "Tautkan ulang video", "project.sourcePath": "Lokasi video asli setelah dipindah",
+    "project.relinkHint": "Pilih video yang sama agar trim, subtitle, dan ekspor tetap sesuai.",
+    "hybrid.mode": "Mode pemrosesan", "hybrid.offline": "Full Offline · berkas lokal", "hybrid.online": "Online AI · opsional",
+    "hybrid.model": "Model LLM lokal terpasang", "hybrid.none": "Belum dipilih · fallback heuristik", "hybrid.detect": "Cari model lokal",
+    "hybrid.hint": "Caption diprioritaskan. Model tidak diunduh otomatis.", "hybrid.searching": "Mencari model terpasang...",
+    "hybrid.found": "{count} model runtime tersedia.", "hybrid.gguf": "Model GGUF di komputer", "hybrid.load": "Muat model GGUF",
+    "hybrid.stop": "Lepaskan model dari RAM", "hybrid.select": "Pilih model", "hybrid.stopped": "Model dilepas dari RAM.",
     "nav.gallery": "Galeri klip", "gallery.lead": "Semua klip dari proyekmu, siap diputar, diedit, dan diunduh kembali.",
     "gallery.empty": "Belum ada klip. Mulai dari video panjang di Beranda.", "gallery.draft": "Belum dirender",
     "gallery.search": "Cari judul klip atau proyek", "gallery.all": "Semua klip", "gallery.ready": "Sudah dirender",
@@ -18,6 +27,28 @@ const I18N = {
     "home.title": "Apa yang ingin kamu buat?",
     "home.lead": "Satu ruang untuk video, subtitle, suara, dan gambar. Mulai dengan video atau pilih alat studio.",
     "home.source": "Link atau lokasi berkas", "home.pick": "Pilih berkas", "home.count": "Jumlah klip",
+    "home.countAuto": "Otomatis · 3–10 momen",
+    "home.countHelp": "Otomatis menyesuaikan dengan durasi. Hasil bisa lebih sedikit jika sumber pendek.",
+    "home.length": "Durasi klip", "home.lenAuto": "Otomatis · ikut momen",
+    "home.len15": "Pendek · ±15 detik", "home.len30": "Sedang · ±30 detik", "home.len60": "Panjang · ±60 detik",
+    "home.lengthHelp": "Batas dipotong di jeda kalimat terdekat agar tidak terpotong aneh.",
+    "home.analysis": "Analisis momen",
+    "home.analysisHelp": "Lokal gratis dan privat memakai model di perangkat. AI online memakai provider pilihanmu dan membutuhkan API key.",
+    "home.localMode": "Analisis lokal", "home.localModeSub": "LLM terpasang / heuristik",
+    "home.aiMode": "AI online", "home.aiModeSub": "Butuh API key",
+    "home.aiProvider": "Provider AI", "home.aiProviderPick": "Pilih provider",
+    "home.aiKey": "API key", "home.aiKeyPick": "API key milikmu", "home.aiKeySaved": "Tersimpan",
+    "home.aiDetect": "Deteksi model", "home.aiModel": "Model AI", "home.aiModelAuto": "Otomatis · saran provider",
+    "home.aiNeedProvider": "Pilih provider AI dulu.",
+    "home.aiDetecting": "Memuat model dari provider…",
+    "home.asrSpeed": "Kecepatan transkrip",
+    "home.asrFast": "Cepat · model tiny", "home.asrBalanced": "Seimbang · model base", "home.asrAccurate": "Akurat · model small",
+    "home.asrHelp": "Tiny memakai lebih sedikit RAM. Waktu dan ketepatan bergantung audio, bahasa, serta perangkat. Pilih model yang sudah terpasang.",
+    "home.online": "Mode online",
+    "home.onlineHelp": "Hybrid memeriksa caption dahulu; audio hanya jika diperlukan. Video segmen diambil saat preview atau render. Unduhan penuh hanya pada strategi online yang dipilih terpisah.",
+    "home.linkMode": "Tautan video", "home.linkModeSub": "YouTube · TikTok · Instagram",
+    "home.fileMode": "Berkas lokal", "home.fileModeSub": "MP4 dari perangkat",
+    "home.onlineBadge": "video per segmen",
     "home.lang": "Bahasa konten",
     "home.transcript": "Subtitle AI dari audio (offline)", "home.transcriptHelp": "Studio ZAI mentranskrip audio video dengan model lokal, lalu membuat subtitle bertiming. Teks subtitle bawaan dari link tidak dipakai.", "home.llm": "Pilih momen dengan AI dari Pengaturan",
     "home.start": "Mulai buat klip", "home.doctor": "Cek perangkat", "home.recent": "Proyek terakhir",
@@ -29,6 +60,9 @@ const I18N = {
     "clips.deleteConfirm": "Hapus klip ini? Berkas hasil rendernya ikut dihapus.",
     "clips.deleted": "Klip dihapus.",
     "editor.timeline": "Timeline", "editor.addText": "Tambah teks", "editor.addMedia": "Tambah media", "editor.addMusic": "Tambah musik",
+    "editor.preparingPreview": "Menyiapkan pratinjau…",
+    "editor.updatingPreview": "Memperbarui pratinjau…",
+    "editor.previewFailed": "Pratinjau belum diperbarui",
     "editor.template": "Template teks", "editor.deleteItem": "Hapus item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Teks", "timeline.audio": "Audio",
     "voice.title": "Suara otomatis",
@@ -55,6 +89,15 @@ const I18N = {
     "toast.done": "Selesai", "toast.error": "Terjadi kesalahan", "toast.saved": "Tersimpan",
   },
   en: {
+    "settings.asrDevice": "ASR device",
+    "hybrid.localOnly": "Full Offline requires a local file, not a link.",
+    "project.relink": "Relink video", "project.sourcePath": "Original video's path after moving it",
+    "project.relinkHint": "Choose the same video to keep trims, subtitles and exports consistent.",
+    "hybrid.mode": "Processing mode", "hybrid.offline": "Full Offline · local file", "hybrid.online": "Online AI · optional",
+    "hybrid.model": "Installed local LLM", "hybrid.none": "Not selected · heuristic fallback", "hybrid.detect": "Find local models",
+    "hybrid.hint": "Captions first. Models are never downloaded automatically.", "hybrid.searching": "Finding installed models...",
+    "hybrid.found": "{count} runtime models available.", "hybrid.gguf": "GGUF model on this computer", "hybrid.load": "Load GGUF model",
+    "hybrid.stop": "Unload model from RAM", "hybrid.select": "Select model", "hybrid.stopped": "Model unloaded from RAM.",
     "nav.gallery": "Clip gallery", "gallery.lead": "All your project clips, ready to play, edit, and download again.",
     "gallery.empty": "No clips yet. Start with a long video on Home.", "gallery.draft": "Not rendered yet",
     "gallery.search": "Search clip or project title", "gallery.all": "All clips", "gallery.ready": "Rendered",
@@ -73,6 +116,28 @@ const I18N = {
     "home.title": "What will you create?",
     "home.lead": "Paste a YouTube / TikTok / Instagram link or pick a local video file. 9:16 clips, automatic subtitles and voiceover — all local.",
     "home.source": "Link or file path", "home.pick": "Pick file", "home.count": "Number of clips",
+    "home.countAuto": "Auto · 3–10 moments",
+    "home.countHelp": "Auto adapts to duration. Results may be fewer for short sources.",
+    "home.length": "Clip length", "home.lenAuto": "Auto · follow moments",
+    "home.len15": "Short · ±15 sec", "home.len30": "Medium · ±30 sec", "home.len60": "Long · ±60 sec",
+    "home.lengthHelp": "Bounds snap to the nearest sentence pause so cuts sound natural.",
+    "home.analysis": "Moment analysis",
+    "home.analysisHelp": "Local is free and private using on-device models. Online AI uses your chosen provider and needs an API key.",
+    "home.localMode": "Local analysis", "home.localModeSub": "Installed LLM / heuristics",
+    "home.aiMode": "Online AI", "home.aiModeSub": "Needs API key",
+    "home.aiProvider": "AI provider", "home.aiProviderPick": "Pick a provider",
+    "home.aiKey": "API key", "home.aiKeyPick": "Your API key", "home.aiKeySaved": "Saved",
+    "home.aiDetect": "Detect models", "home.aiModel": "AI model", "home.aiModelAuto": "Auto · provider suggestion",
+    "home.aiNeedProvider": "Pick an AI provider first.",
+    "home.aiDetecting": "Loading models from provider…",
+    "home.asrSpeed": "Transcription speed",
+    "home.asrFast": "Fast · tiny model", "home.asrBalanced": "Balanced · base model", "home.asrAccurate": "Accurate · small model",
+    "home.asrHelp": "Tiny uses less RAM. Speed and accuracy depend on the audio, language and device. Choose an installed model.",
+    "home.online": "Online mode",
+    "home.onlineHelp": "Hybrid checks captions first and fetches audio only when needed. Video segments are fetched for preview or rendering. Full downloads use the separately selected online strategy.",
+    "home.linkMode": "Link video", "home.linkModeSub": "YouTube · TikTok · Instagram",
+    "home.fileMode": "Local file", "home.fileModeSub": "MP4 from your device",
+    "home.onlineBadge": "selected segments",
     "home.lang": "Content language",
     "home.transcript": "AI subtitles from audio (offline)", "home.transcriptHelp": "Studio ZAI transcribes the video's audio with a local model and creates timed subtitles. Captions supplied by the link are not used.", "home.llm": "Use local LLM to pick moments",
     "home.start": "Start clipping", "home.doctor": "Check device", "home.recent": "Recent projects",
@@ -84,6 +149,9 @@ const I18N = {
     "clips.deleteConfirm": "Delete this clip? Its rendered file is removed too.",
     "clips.deleted": "Clip deleted.",
     "editor.timeline": "Timeline", "editor.addText": "Add text", "editor.addMedia": "Add media", "editor.addMusic": "Add music",
+    "editor.preparingPreview": "Preparing preview…",
+    "editor.updatingPreview": "Updating preview…",
+    "editor.previewFailed": "Preview not updated",
     "editor.template": "Text template", "editor.deleteItem": "Delete item",
     "timeline.video": "Video", "timeline.media": "Media", "timeline.text": "Text", "timeline.audio": "Audio",
     "voice.title": "Voice",
@@ -127,6 +195,9 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 function applyI18n() {
   $$("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
+  });
+  $$("[data-i18n-ph]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh);
   });
   document.documentElement.lang = state.lang;
   $$("#langSeg button").forEach((button) => {
@@ -240,6 +311,7 @@ function trackJob(job) {
   showProcessing(job.title);
 
   const source = new EventSource(`/api/jobs/${job.id}/events`);
+  let completedExports = 0;
   source.onmessage = (event) => {
     const data = JSON.parse(event.data);
     // Progress MONOTON: angka yang tampil tidak pernah mundur. Backend
@@ -259,7 +331,13 @@ function trackJob(job) {
     const pct = $("#jobPercent");
     if (pct) pct.textContent = `${percent}%`;
     if (data.type === "progress") {
-      const stageText = data.stage ? `${data.stage} — ${data.message || ""}` : (data.message || "");
+      if (job.kind === 'batch-render' && data.result?.exports?.length > completedExports) {
+        completedExports = data.result.exports.length;
+        if (state.project?.id === data.result.project) api(`/api/projects/${data.result.project}`).then(project => {
+          state.project = project; renderProjects();
+        }).catch(error => toast(error.message, 'error'));
+      }
+      const stageText = data.stage ? `${data.stage}: ${data.message || ""}` : (data.message || "");
       const stageEl = $("#jobStage");
       if (stageEl) stageText && (stageEl.textContent = stageText);
       const ps = $("#procStage");
@@ -281,7 +359,12 @@ function trackJob(job) {
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
       else if (data.status === "cancelled") toast(t("common.cancel"));
       else if (data.result?.zip) { const link=$('#batchZipDownload'); link.href=mediaUrl(data.result.zip);link.hidden=false;link.click();toast('ZIP klip siap'); }
+      else if (data.result?.failures?.length) toast(`${data.result.exports?.length || 0} video selesai; ${data.result.failures.length} gagal: ${data.result.failures[0].error}`, "error");
       else if (data.result?.exports) toast(t("batch.done").replace("{total}", data.result.exports.length));
+      else if (data.result?.failures && data.result.failures.length) {
+        const first = data.result.failures[0];
+        toast(`${t("toast.error")}: klip ${first.index + 1} · ${first.error}`, "error");
+      }
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
       if (data.result?.image && window.renderImages) { setPage("images"); renderImages(); }
@@ -380,6 +463,7 @@ function showLinkPreview(info) {
     .join("  ·  ") || `${info.title} · ${fmtDuration(info.duration)}`;
   box.innerHTML = `
     <div class="row settings">
+      ${info.thumbnail ? `<img class="link-thumb" src="${escapeHtml(info.thumbnail)}" alt="" loading="lazy" />` : ""}
       <div style="display:grid;gap:2px;min-width:0">
         <span style="font-weight:600"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M20 6 9 17l-5-5"/></svg> ${t("home.linkReady")}</span>
         <span class="muted">${escapeHtml(info.title)} · ${fmtDuration(info.duration)}${info.uploader ? " · " + escapeHtml(info.uploader) : ""}</span>
@@ -409,6 +493,7 @@ function onSourceChanged() {
   clearTimeout(linkInfoTimer);
   if (!value) { hideLinkPreview(); return; }
   const isUrl = /^https?:\/\//i.test(value);
+  if (isUrl && $('#processingMode')?.value === 'offline') { hideLinkPreview(); return; }
   if (!isUrl) {
     // berkas lokal: tampilkan siap langsung
     const wrap = $("#linkPreviewWrap");
@@ -442,27 +527,54 @@ async function startClipping() {
     return;
   }
   try {
+    const useAiAnalysis = analysisSource() === 'ai';
+    const processingMode = document.querySelector('#processingMode').value;
+    if (processingMode === 'offline' && /^https?:\/\//i.test(source)) {
+      toast(t('hybrid.localOnly'), 'error'); return;
+    }
+    if (useAiAnalysis) {
+      const provider = $("#aiProvider").value;
+      if (!provider) {
+        toast(t("home.aiNeedProvider"), "error");
+        return;
+      }
+      const aiValues = { ai_provider: provider };
+      aiValues.ai_base_url = homeProviderBases[provider] || '';
+      const typedKey = $("#aiKey").value.trim();
+      if (typedKey) aiValues.ai_api_key = typedKey;
+      const aiModel = $("#aiModel").value;
+      if (aiModel && aiModel !== 'auto') aiValues.ai_model = aiModel;
+      await api("/api/settings", { method: "POST", body: JSON.stringify({ values: aiValues }) });
+      homeAiKeySaved = homeAiKeySaved || Boolean(typedKey);
+      refreshAiKeyBadge();
+    }
     const project = await api("/api/projects", {
       method: "POST",
       body: JSON.stringify({ title: fileName(source) || "proyek", source: "", lang: $("#lang").value }),
     });
+    const [minLen, maxLen] = CLIP_LENGTHS[$("#clipLength").value] || CLIP_LENGTHS.auto;
+    const aiModelPick = useAiAnalysis ? $("#aiModel").value : 'auto';
     const job = await api(`/api/projects/${project.id}/process`, {
       method: "POST",
       body: JSON.stringify({
         source,
+        processing_mode: useAiAnalysis ? 'online_ai' : processingMode,
         count: Number($("#count").value),
         analysis_mode: $("#analysisMode").value,
         review_first: $("#reviewFirst").checked,
         formats: [...document.querySelectorAll("[name=outputFormat]:checked")].map(x => x.value),
-        min_len: 0,
-        max_len: 0,
+        min_len: minLen,
+        max_len: maxLen,
         use_transcript: $("#useTranscript").checked,
-        use_llm: $("#useLlm").checked,
+        use_llm: true,
+        model: useAiAnalysis ? (aiModelPick && aiModelPick !== 'auto' ? aiModelPick : null) : (document.querySelector('#localModel').value || null),
+        asr_model: ASR_SPEED_MODELS[$("#asrSpeed").value] || null,
         quality: $("#quality").value || "720p",
         subtitle_position: ($("#subPos") || {}).value || "bottom",
         canvas: ($("#canvasSize") || {}).value || "portrait",
         audio_mode: ($("#audioMode") || {}).value || "original",
         audio_lang: (($("#audioTrack") || {}).value || "") || null,
+        online: $("#onlineMode").checked,
       }),
     });
     trackJob(job);
@@ -676,6 +788,23 @@ function renderProjectDetail() {
   $("#projectDetail").style.display = "block";
   $("#detailTitle").textContent = project.title;
   $("#detailMeta").textContent = `${project.clips.length} klip · ${formatClock(project.duration)} · ${project.language || ""}`;
+  let execution = document.querySelector('#executionPath');
+  if (!execution) { execution = document.createElement('p'); execution.id = 'executionPath'; execution.className = 'field-help'; $('#detailMeta').after(execution); }
+  execution.textContent = [project.execution?.transcript, project.execution?.ranking, project.notes].filter(Boolean).join(' · ');
+  let relink = document.querySelector('#relinkSource');
+  if(!relink){
+    relink=document.createElement('details'); relink.id='relinkSource'; relink.className='field';
+    relink.innerHTML=`<summary>${t('project.relink')}</summary><label for="relinkPath">${t('project.sourcePath')}</label><input id="relinkPath" type="text"><p class="field-help">${t('project.relinkHint')}</p><div class="actions"><button type="button" id="pickRelink">${t('home.pick')}</button><button type="button" id="applyRelink">${t('project.relink')}</button></div><p id="relinkStatus" role="status"></p>`;
+    $('#detailMeta').after(relink);
+    $('#pickRelink').hidden=!window.pywebview?.api;
+    $('#pickRelink').onclick=async()=>{const path=await window.pywebview.api.pick_file();if(path)$('#relinkPath').value=path;};
+    $('#applyRelink').onclick=async()=>{
+      if(state.jobId){$('#relinkStatus').textContent=t('batch.busy');return;}
+      try{state.project=await api(`/api/projects/${state.project.id}/relink`,{method:'POST',body:JSON.stringify({source:$('#relinkPath').value.trim()})});renderProjectDetail();}
+      catch(error){$('#relinkStatus').textContent=error.message;}
+    };
+  }
+  relink.hidden=project.online;
   let sourceAction = $("#sourceAction");
   if (!sourceAction) {
     sourceAction = document.createElement("button"); sourceAction.id = "sourceAction";
@@ -1015,6 +1144,7 @@ async function renderSettings() {
   if (!state.voices.piper) await loadVoices();
   const settings = state.settings;
   $("#setLang").value = state.lang;
+  $("#setAsrDevice").value = settings.asr_device || 'auto';
   const asrIds = ["whisper-tiny-int8", "whisper-base-int8", "whisper-small-int8", "whisper-medium-int8"];
   $("#setAsr").innerHTML = asrIds
     .map((id) => `<option value="${id}" ${settings.asr_model === id ? "selected" : ""}>${voiceLabel(id)}</option>`).join("");
@@ -1038,6 +1168,7 @@ async function saveSettings() {
   const values = {
     lang: $("#setLang").value,
     asr_model: $("#setAsr").value,
+    asr_device: $("#setAsrDevice").value,
     tts_voice_id: $("#setTts").value,
     clone_model: $("#setClone").value,
     crop: $("#setCrop").value,
@@ -1346,6 +1477,7 @@ async function boot() {
   }
   await loadVoices();
   await renderHomeProjects();
+  await initHomeAnalysis();
 
   $("#nav").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-page]");
@@ -1357,6 +1489,7 @@ async function boot() {
     state.lang = button.dataset.lang;
     localStorage.setItem("studiozai.lang", state.lang);
     applyI18n();
+    refreshAiKeyBadge();
     refreshAll();
   });
   $("#startBtn").addEventListener("click", startClipping);
@@ -1417,7 +1550,11 @@ boot();
 
 // Explicit source modes keep the path visible and explain the next action.
 document.querySelectorAll('[data-source-mode]').forEach(button => button.addEventListener('click', () => {
-  document.querySelectorAll('[data-source-mode]').forEach(node => node.classList.toggle('active', node === button));
+  document.querySelectorAll('[data-source-mode]').forEach(node => {
+    const on = node === button;
+    node.classList.toggle('active', on);
+    node.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
   const local = button.dataset.sourceMode === 'file';
   document.querySelector('#source').placeholder = local ? 'D:\\Video\\podcast.mp4' : 'https://youtube.com/watch?v=…';
   document.querySelector('#sourceHelp').textContent = local ? 'Pilih video dari perangkat, atau tempel lokasi lengkap berkas. Video lokal tidak perlu diunduh.' : 'Tempel tautan YouTube, TikTok, atau Instagram. Kualitas dan track audio muncul setelah tautan terbaca.';
@@ -1425,10 +1562,224 @@ document.querySelectorAll('[data-source-mode]').forEach(button => button.addEven
   document.querySelector('#source').focus();
 }));
 
+// Home analysis controls: local vs AI online, provider/key/model, ASR speed.
+const ASR_SPEED_MODELS = { fast: 'whisper-tiny-int8', balanced: 'whisper-base-int8', accurate: 'whisper-small-int8' };
+const CLIP_LENGTHS = { auto: [0, 0], s15: [10, 20], s30: [20, 40], s60: [45, 75] };
+let homeAiKeySaved = false;
+let homeDiscoveryGeneration = 0;
+let homeProviderBases = {};
+
+function analysisSource() {
+  return document.querySelector('[data-analysis-source].active')?.dataset.analysisSource || 'local';
+}
+
+function refreshAiKeyBadge() {
+  const badge = document.querySelector('#aiKeyState');
+  if (!badge) return;
+  badge.hidden = !homeAiKeySaved;
+  if (homeAiKeySaved) badge.textContent = t('home.aiKeySaved');
+}
+
+function syncAnalysisSourceUI() {
+  const ai = analysisSource() === 'ai';
+  const mode = document.querySelector('#processingMode');
+  if (mode && ai) mode.value = 'online_ai';
+  else if (mode && mode.value === 'online_ai') mode.value = 'hybrid';
+  document.querySelector('#aiPanel').hidden = !ai;
+  const llm = document.querySelector('#useLlm');
+  if (llm) llm.checked = ai;
+}
+
+document.querySelectorAll('[data-analysis-source]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-analysis-source]').forEach(node => {
+    const on = node === button;
+    node.classList.toggle('active', on);
+    node.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  syncAnalysisSourceUI();
+}));
+
+async function initHomeAnalysis() {
+  const control = document.createElement('div');
+  control.className = 'field';
+  control.innerHTML = `<label for="processingMode" data-i18n="hybrid.mode">${t('hybrid.mode')}</label><select id="processingMode"><option value="hybrid">Hybrid Local AI</option><option value="offline" data-i18n="hybrid.offline">${t('hybrid.offline')}</option><option value="online_ai" data-i18n="hybrid.online">${t('hybrid.online')}</option></select><label for="localModel" data-i18n="hybrid.model">${t('hybrid.model')}</label><select id="localModel"><option value="" data-i18n="hybrid.none">${t('hybrid.none')}</option></select><button type="button" id="detectLocalModel" class="ghost" data-i18n="hybrid.detect">${t('hybrid.detect')}</button><label for="ggufModel" data-i18n="hybrid.gguf">${t('hybrid.gguf')}</label><select id="ggufModel"><option value="">${t('hybrid.select')}</option></select><div class="actions"><button type="button" id="loadGguf" data-i18n="hybrid.load">${t('hybrid.load')}</button><button type="button" id="stopGguf" class="ghost" data-i18n="hybrid.stop">${t('hybrid.stop')}</button></div><p id="localModelStatus" role="status" data-i18n="hybrid.hint">${t('hybrid.hint')}</p>`;
+  document.querySelector('#aiPanel').before(control);
+  document.querySelector('.analysis-modes').hidden = true;
+  const localFields = document.createElement('div'); localFields.id = 'localLlmFields'; localFields.className = 'local-llm-controls';
+  Array.from(control.children).slice(2).forEach(node => localFields.append(node)); control.append(localFields);
+  document.querySelector('#processingMode').addEventListener('change', () => {
+    const cloud = document.querySelector('#processingMode').value === 'online_ai';
+    localFields.hidden = cloud;
+    onSourceChanged();
+    document.querySelectorAll('[data-analysis-source]').forEach(node => {
+      const selected = (node.dataset.analysisSource === 'ai') === cloud;
+      node.classList.toggle('active', selected);
+      node.setAttribute('aria-selected', String(selected));
+    });
+    syncAnalysisSourceUI();
+  });
+  document.querySelector('#detectLocalModel').onclick = async () => {
+    const status = document.querySelector('#localModelStatus');
+    status.textContent = t('hybrid.searching');
+    try {
+      const data = await api('/api/local-llm/models');
+      document.querySelector('#localModel').innerHTML = `<option value="">${t('hybrid.select')}</option>` + data.models.map(row => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.id)}</option>`).join('');
+      status.textContent = t('hybrid.found', {count:data.models.length});
+    } catch (error) { status.textContent = error.message; }
+  };
+  try {
+    const data = await api('/api/local-llm/gguf');
+    document.querySelector('#ggufModel').innerHTML += data.models.map(row => `<option value="${escapeHtml(row.path)}">${escapeHtml(row.name)} · ${row.size_mb} MB</option>`).join('');
+    document.querySelector('#loadGguf').disabled = !data.runtime_available || !data.models.length;
+  } catch (error) { document.querySelector('#localModelStatus').textContent = error.message; }
+  document.querySelector('#loadGguf').onclick = async () => {
+    const button = document.querySelector('#loadGguf'), status = document.querySelector('#localModelStatus');
+    const path = document.querySelector('#ggufModel').value;
+    if (!path || state.jobId) { status.textContent = t('hybrid.select'); return; }
+    button.disabled = true;
+    try {
+      const started = await api('/api/local-llm/start', {method:'POST', body:JSON.stringify({path})});
+      trackJob(started);
+      for (;;) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const job = await api(`/api/jobs/${started.id}`);
+        status.textContent = job.message || job.stage;
+        if (job.status === 'error' || job.status === 'cancelled') throw new Error(job.error || job.message);
+        if (job.status === 'done') {
+          const select = document.querySelector('#localModel');
+          select.replaceChildren(new Option(job.result.model, job.result.model));
+          status.textContent = job.result.model;
+          break;
+        }
+      }
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  };
+  document.querySelector('#stopGguf').onclick = async () => {
+    try { await api('/api/local-llm/stop', {method:'POST'}); document.querySelector('#localModelStatus').textContent = t('hybrid.stopped'); }
+    catch (error) { document.querySelector('#localModelStatus').textContent = error.message; }
+  };
+  document.querySelector('#localModel').onchange = async () => {
+    try { await api('/api/settings', {method:'POST', body:JSON.stringify({values:{llm_model:document.querySelector('#localModel').value}})}); }
+    catch (error) { document.querySelector('#localModelStatus').textContent = error.message; }
+  };
+  document.querySelector('#aiProvider').addEventListener('change', () => {
+    homeDiscoveryGeneration++;
+    document.querySelector('#aiKey').value = '';
+    document.querySelector('#aiModel').innerHTML = `<option value="auto">${t('home.aiModelAuto')}</option>`;
+    document.querySelector('#aiStatus').textContent = '';
+    homeAiKeySaved = false;
+    refreshAiKeyBadge();
+  });
+  const llmBox = document.querySelector('#useLlm');
+  if (llmBox) llmBox.addEventListener('change', () => {
+    const wantAi = llmBox.checked;
+    document.querySelectorAll('[data-analysis-source]').forEach(node => {
+      const on = (node.dataset.analysisSource === 'ai') === wantAi;
+      node.classList.toggle('active', on);
+      node.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    syncAnalysisSourceUI();
+  });
+  document.querySelector('#aiDetect').addEventListener('click', detectHomeAiModel);
+  document.querySelector('#aiKey').addEventListener('blur', () => {
+    if (document.querySelector('#aiKey').value.trim() && document.querySelector('#aiProvider').value) detectHomeAiModel();
+  });
+  document.querySelector('#aiKey').addEventListener('input', () => { homeDiscoveryGeneration++; homeAiKeySaved = false; refreshAiKeyBadge(); });
+  try {
+    const [{ providers }, saved] = await Promise.all([api('/api/ai/providers'), api('/api/settings')]);
+    const prov = document.querySelector('#aiProvider');
+    if (saved.llm_model) {
+      const option = document.createElement('option'); option.value = saved.llm_model; option.textContent = saved.llm_model;
+      document.querySelector('#localModel').append(option); document.querySelector('#localModel').value = saved.llm_model;
+    }
+    homeProviderBases = Object.fromEntries(Object.entries(providers).map(([id, p]) => [id, p.url]));
+    if (saved.ai_provider && saved.ai_base_url) homeProviderBases[saved.ai_provider] = saved.ai_base_url;
+    Object.entries(providers).filter(([, p]) => p.text).forEach(([id, p]) => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = p.label;
+      prov.append(opt);
+    });
+    prov.value = saved.ai_provider || '';
+    homeAiKeySaved = Boolean(saved.ai_api_key);
+    refreshAiKeyBadge();
+    const model = document.querySelector('#aiModel');
+    if (saved.ai_model) {
+      const opt = document.createElement('option');
+      opt.value = saved.ai_model;
+      opt.textContent = saved.ai_model + ' · tersimpan';
+      model.append(opt);
+      model.value = saved.ai_model;
+    }
+    const speed = document.querySelector('#asrSpeed');
+    const current = saved.asr_model || 'whisper-small-int8';
+    speed.value = current.includes('tiny') ? 'fast' : current.includes('base') ? 'balanced' : 'accurate';
+  } catch (error) { /* beranda tetap bisa dipakai lokal tanpa provider */ }
+  syncAnalysisSourceUI();
+}
+
+async function detectHomeAiModel() {
+  const generation = ++homeDiscoveryGeneration;
+  const status = document.querySelector('#aiStatus');
+  const provider = document.querySelector('#aiProvider').value;
+  const key = document.querySelector('#aiKey').value;
+  if (!provider) { status.textContent = t('home.aiNeedProvider'); return; }
+  status.textContent = t('home.aiDetecting');
+  try {
+    const result = await api('/api/ai/models', { method: 'POST', body: JSON.stringify({ kind: 'ai', provider, base_url: homeProviderBases[provider] || '', api_key: key, use_saved_key: !key }) });
+    if (generation !== homeDiscoveryGeneration) return;
+    const model = document.querySelector('#aiModel');
+    model.innerHTML = `<option value="auto">${t('home.aiModelAuto')}</option>` + result.models.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label)}${m.id === result.recommended ? ' · disarankan' : ''}</option>`).join('');
+    model.value = result.recommended || 'auto';
+    status.textContent = `${result.models.length} model terdeteksi. ${result.note || ''}`;
+  } catch (error) { if (generation === homeDiscoveryGeneration) status.textContent = error.message; }
+}
+
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+// Di dalam jendela aplikasi (pywebview) tautan apa pun ikut membuka jendela
+// sistem baru — itu yang terasa seperti "aplikasi kebuka lagi". Buka di
+// browser luar melalui API native bila ada; di web biasa biarkan default.
+function openExternalUrl(url) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.open_external) {
+      window.pywebview.api.open_external(url);
+      return true;
+    }
+  } catch { /* jatuh ke perilaku normal */ }
+  return false;
+}
+
+(function guardLinkNavigation() {
+  const isAppWindow = () => !!(window.pywebview && window.pywebview.api);
+  window.open = (url) => {
+    if (typeof url === 'string' && url && !openExternalUrl(url)) {
+      location.href = url;
+    }
+    return null;
+  };
+  document.addEventListener('click', (event) => {
+    if (!isAppWindow()) return;
+    const link = event.target.closest && event.target.closest('a[href]');
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
+    if (link.hasAttribute('download') || new URL(link.href, location.href).pathname.startsWith('/api/media')) return;
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+    event.preventDefault();
+    if (openExternalUrl(link.href)) return;
+    const anchor = document.createElement('a');
+    anchor.href = link.href;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  }, true);
+})();
 
 async function confirmAction(message) {
   const dialog = document.createElement('dialog'); dialog.className = 'studio-dialog';

@@ -26,11 +26,14 @@ class TimelineRender {
     String? voicePath,
     double originalVolume = 1.0,
     double voiceVolume = 1.0,
+    double sourceOffset = 0.0,
   }) async {
     final videoItems =
         timeline.trackOf('video')?.items ?? const <TimelineItem>[];
     final base = videoItems.isEmpty ? null : videoItems.first;
-    final offset = base?.srcStart ?? 0;
+    // Saat render dari segmen yang diunduh (mode online), file dimulai pada
+    // [sourceOffset] sebelum timeline-nya; geser srcStart agar -ss akurat.
+    final offset = (base?.srcStart ?? 0) - sourceOffset;
     var duration = (base?.end ?? 0) - (base?.start ?? 0);
     if (duration <= 0.2) duration = timeline.duration;
     if (duration <= 0.2) duration = 0.2;
@@ -170,6 +173,7 @@ class TimelineRender {
     String? voicePath,
     double originalVolume = 1.0,
     double voiceVolume = 1.0,
+    double sourceOffset = 0.0,
   }) async {
     final command = await buildCommand(
       source: source,
@@ -181,6 +185,7 @@ class TimelineRender {
       voicePath: voicePath,
       originalVolume: originalVolume,
       voiceVolume: voiceVolume,
+      sourceOffset: sourceOffset,
     );
     final session = await FFmpegKit.execute(command);
     final code = await session.getReturnCode();
@@ -206,6 +211,8 @@ class TimelineRender {
     String? subtitlesPath,
     String? voicePath,
     double originalVolume = 1.0,
+    double voiceVolume = 1.0,
+    double sourceOffset = 0.0,
   }) async {
     final command = await buildCommand(
       source: source,
@@ -216,6 +223,8 @@ class TimelineRender {
       subtitlesPath: subtitlesPath,
       voicePath: voicePath,
       originalVolume: originalVolume,
+      voiceVolume: voiceVolume,
+      sourceOffset: sourceOffset,
     );
     // `-s` adalah opsi keluaran dan tetap berlaku bersama -filter_complex,
     // jadi cukup memperkecil hasil akhir tanpa menyentuh graf filternya.

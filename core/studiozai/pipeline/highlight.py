@@ -54,6 +54,50 @@ WEIGHT_LOUDNESS_PEAK = 0.22
 WEIGHT_DENSITY = 0.30
 WEIGHT_SILENCE = 0.10
 WEIGHT_BOUNDARY = 0.10
+# Bonus di luar bobot dasar (tidak menormalkan ulang skor lama):
+# retensi penonton YouTube bila tersedia, dan ciri hook dari teks.
+WEIGHT_HEATMAP = 0.20
+WEIGHT_HOOK = 0.15
+
+# Kata hook Indonesia + Inggris: janji, larangan, angka, rasa ingin tahu.
+HOOK_WORDS = frozenset(
+    ["jangan", "rahasia", "gratis", "salah", "berhenti", "awas", "terbukti", "cara", "trik", "error", "gagal", "luar", "biasa", "wajib", "penting", "akhirnya", "ternyata", "stop", "secret", "free", "mistake", "never", "always", "why", "how", "warning", "proven", "best", "worst"]
+)
+
+
+def hook_score(text: str) -> float:
+    """Ciri hook dari teks jendela (0..1): tanya/seru, angka, kata hook."""
+    words = re.findall(r"[^\W\d_]+|\d+", (text or "").lower())
+    if not words:
+        return 0.0
+    score = 0.0
+    joined = " ".join(words)
+    if re.search(r"[?!]", text or ""):
+        score += 0.4
+    if re.search(r"\d", joined):
+        score += 0.3
+    hits = sum(1 for w in words if w in HOOK_WORDS)
+    score += min(0.6, 0.3 * hits)
+    return round(min(1.0, score), 3)
+
+
+def heat_average(heatmap: Sequence[dict[str, Any]], start: float, end: float) -> float:
+    """Rata-rata retensi penonton pada rentang (0..1); kosong berarti 0."""
+    if not heatmap or end <= start:
+        return 0.0
+    total = weight = 0.0
+    for point in heatmap:
+        try:
+            ps = float(point.get("start", 0.0))
+            pe = float(point.get("end", ps))
+            value = float(point.get("value", 0.0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        overlap = max(0.0, min(end, pe) - max(start, ps))
+        if overlap > 0:
+            total += value * overlap
+            weight += overlap
+    return round(total / weight, 4) if weight else 0.0
 
 ProgressCb = Callable[[float, str], None]
 
@@ -652,8 +696,14 @@ def score_windows(
     windows: Sequence[dict[str, Any]],
     envelope: tuple[np.ndarray, np.ndarray] | None,
     silences: Sequence[tuple[float, float]],
+    heatmap: Sequence[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
-    """Attach normalised loudness / word-density / silence / boundary features and a score."""
+    """Attach normalised loudness / word-density / silence / boundary features and a score.
+
+    Bila heatmap retensi tersedia, jendela yang sering ditonton ulang mendapat
+    bonus; bila jendela punya teks, ciri hook (tanya/angka/kata hook) menambah
+    bonus. Tanpa keduanya, skor identik seperti sebelumnya.
+    """
     if envelope is not None:
         times, rms = envelope
         peak_rms = float(np.max(rms)) if rms.size else 1.0
@@ -691,6 +741,9 @@ def score_windows(
             + WEIGHT_SILENCE * (1.0 - silence_ratio)
             + WEIGHT_BOUNDARY * boundary
         )
+        heat = heat_average(heatmap, window["start"], window["end"])
+        hook = hook_score(str(window.get("text", "")))
+        score += WEIGHT_HEATMAP * heat + WEIGHT_HOOK * hook
         scored.append(
             {
                 **window,
@@ -700,6 +753,8 @@ def score_windows(
                 "density": round(density_norm, 4),
                 "silence_ratio": round(silence_ratio, 4),
                 "boundary": round(boundary, 4),
+                "heat": heat,
+                "hook": hook,
             }
         )
     return scored
@@ -713,6 +768,10 @@ def _reason(window: dict[str, Any]) -> str:
         parts.append(f"kata padat {window['density']:.2f}")
     if window.get("boundary"):
         parts.append(f"potongan rapi {window['boundary']:.2f}")
+    if window.get("heat"):
+        parts.append(f"retensi {window['heat']:.2f}")
+    if window.get("hook"):
+        parts.append(f"hook {window['hook']:.2f}")
     if window.get("silence_ratio"):
         parts.append(f"sunyi {window['silence_ratio'] * 100:.0f}%")
     return ", ".join(parts)
@@ -755,6 +814,7 @@ def pick_clips(
     count: int = 5,
     min_len: float = DEFAULT_MIN_LEN,
     max_len: float = DEFAULT_MAX_LEN,
+    heatmap: Sequence[dict[str, Any]] = (),
 ) -> list[ClipCandidate]:
     """Pick top-N non-overlapping clip candidates (deterministic, no AI required)."""
     # Zero means that the editor decides the duration from topical and speech
@@ -764,7 +824,7 @@ def pick_clips(
         windows = _adaptive_transcript_windows(transcript) if transcript else []
         if not windows:
             windows = _adaptive_audio_windows(duration, silences)
-        scored = score_windows(windows, envelope, silences)
+        scored = score_windows(windows, envelope, silences, heatmap)
         for window in scored:
             if window.get("topic_intro"):
                 window["score"] += 0.3
@@ -796,7 +856,7 @@ def pick_clips(
         # Catatan: top_windows sengaja diurut waktu (bukan skor) supaya cakupan
         # video merata — kalau hanya window skor tertinggi, kandidat menumpuk
         # di satu bagian video saja (bug yang baru saja direproduksi).
-        scored_windows = score_windows(windows, envelope, silences)
+        scored_windows = score_windows(windows, envelope, silences, heatmap)
         ranked = sorted(scored_windows, key=lambda w: (-w["score"], w["start"]))
         keep_n = max(count * 3, 3)
         top_windows = sorted(ranked[:keep_n], key=lambda w: w["start"])
@@ -805,7 +865,7 @@ def pick_clips(
     if not candidates_pool:
         windows = slide_windows(duration, min_len, max_len)
         candidates_pool = list(windows)
-    scored = score_windows(candidates_pool, envelope, silences)
+    scored = score_windows(candidates_pool, envelope, silences, heatmap)
     chosen = select_top(scored, count, video_duration=duration)
     candidates: list[ClipCandidate] = []
     for window in chosen:
@@ -840,22 +900,72 @@ def analyze_media(
     max_len: float = 0.0,
     video_duration: float = 0.0,
     progress_cb: ProgressCb | None = None,
+    heatmap: Sequence[dict[str, Any]] = (),
 ) -> list[ClipCandidate]:
     """End-to-end heuristic analysis of a media file (no AI unless transcript is given)."""
     if progress_cb:
         progress_cb(5.0, "mendekode audio")
-    samples = decode_pcm(media_path)
-    duration = samples.size / 16000.0
+    duration, envelope, silences = cached_audio_features(media_path, progress_cb)
     if video_duration > 0:
         duration = video_duration
     if progress_cb:
         progress_cb(45.0, "mengukur loudness & jeda")
-    envelope = rms_envelope(samples, 16000)
-    silences = silent_intervals(samples, 16000)
-    clips = pick_clips(duration, envelope, silences, transcript, count, min_len, max_len)
+    clips = pick_clips(duration, envelope, silences, transcript, count, min_len, max_len, heatmap)
     if progress_cb:
         progress_cb(100.0, f"{len(clips)} kandidat klip")
     return clips
+
+
+def cached_audio_features(path, progress_cb=None):
+    import threading
+
+    from .. import cache
+    identifier = cache.key("acoustic-features-v1", cache.file_identity(path))
+    previous = cache.read(identifier)
+    if previous is None:
+        values, samples = [], 0
+        with ffmpeg._ENCODER_SLOT:
+            child = proc.spawn([ffmpeg.ffmpeg_path(), "-nostdin", "-v", "error", "-i", str(path),
+                                "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            timer = threading.Timer(600, child.kill)
+            timer.start()
+            try:
+                while True:
+                    raw = child.stdout.read(4000 * 4)
+                    if not raw:
+                        break
+                    vector = np.frombuffer(raw, dtype=np.float32)
+                    samples += vector.size
+                    values.append(float(np.sqrt(np.mean(vector * vector) + 1e-12)))
+                    if progress_cb:
+                        progress_cb(20, "mengukur audio dengan buffer terbatas")
+                child.wait()
+                if child.returncode:
+                    raise RuntimeError("Audio tidak dapat dibaca atau timeout")
+            finally:
+                timer.cancel()
+                if child.poll() is None:
+                    child.kill()
+                child.wait()
+                child.stdout.close()
+                proc.forget(child)
+        previous = {"duration": samples / 16000, "rms": values}
+        cache.write(identifier, previous)
+    rms = np.asarray(previous["rms"], dtype=np.float64)
+    times = np.arange(rms.size) * .25
+    silent = 20 * np.log10(np.maximum(rms, 1e-9) / max(float(np.max(rms)) if rms.size else 0, 1e-9)) < -38
+    intervals, start = [], None
+    for i, flag in enumerate(silent):
+        if flag and start is None:
+            start = float(times[i])
+        elif not flag and start is not None:
+            if times[i] - start >= .4:
+                intervals.append((start, float(times[i])))
+            start = None
+    if start is not None and previous["duration"] - start >= .4:
+        intervals.append((start, previous["duration"]))
+    return previous["duration"], (times, rms), intervals
 
 
 # --------------------------------------------------------------------------- optional LLM
@@ -869,6 +979,8 @@ def _rank_chunk(
     api_key: str | None = None,
     timeout: int = 120,
     provider: str | None = None,
+    min_len: float = 0,
+    max_len: float = 0,
 ) -> list[dict[str, Any]]:
     """Ask a local OpenAI-compatible server to pick moments from the transcript text."""
     segments = transcript.get("segments", [])
@@ -889,7 +1001,7 @@ def _rank_chunk(
     )
     if provider:
         from .. import ai
-        content = ai.text(prompt)
+        content = ai.text(prompt, model_override=model or None)
     else:
         from .. import ai
         try:
@@ -918,7 +1030,7 @@ def _rank_chunk(
         except (KeyError, TypeError, ValueError):
             continue
         max_end = max((float(s.get("end", 0)) for s in segments), default=0)
-        if not math.isfinite(begin) or not math.isfinite(finish) or begin < float(segments[0].get("start", 0)) or not 3 <= finish - begin <= 180 or finish > max_end + 1:
+        if not math.isfinite(begin) or not math.isfinite(finish) or begin < float(segments[0].get("start", 0)) or not (min_len or 3) <= finish - begin <= (max_len or 180) or finish > max_end + 1:
             continue
         try:
             score = float(item.get("score", .8))
@@ -936,7 +1048,10 @@ def _rank_chunk(
     return results[:count]
 
 
-def rank_with_llm(transcript: dict[str, Any], count: int = 5, **kwargs) -> list[dict[str, Any]]:
+def rank_with_llm(transcript: dict[str, Any], count: int = 5, candidates=None, **kwargs) -> list[dict[str, Any]]:
+    if candidates is not None:
+        from ..local_llm import rank_shortlist
+        return rank_shortlist(transcript, candidates, count=count, **kwargs)
     """Bound input size for long podcasts, then deduplicate overlapping results."""
     segments = _valid_segments(transcript)
     if not segments:

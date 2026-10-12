@@ -66,6 +66,12 @@ def slice_framing(data: dict, offset: float, duration: float) -> dict:
         {"time": duration, **last}]}
 
 
+def smooth_center(previous: tuple, center: tuple, follow: float = .35) -> tuple:
+    """Haluskan posisi crop ke arah wajah terdeteksi (tetap dekat jangkar)."""
+    keep = 1.0 - follow
+    return tuple(keep * old + follow * new for old, new in zip(previous, center))
+
+
 def follow_face(path: str, start: float, end: float, x: float = .5, progress=None, y: float = .4) -> dict:
     """Track the face nearest the previous center. No speaker identity inference."""
     import sys
@@ -99,7 +105,10 @@ def follow_face(path: str, start: float, end: float, x: float = .5, progress=Non
                 centers = [(float((a + w / 2) / small.shape[1]), float((b + h / 2) / small.shape[0])) for a, b, w, h in faces]
                 center = select_face(centers, previous)
                 if center is not None:
-                    previous = center if not frames else tuple(.65 * old + .35 * new for old, new in zip(previous, center))
+                    # Selalu haluskan dari posisi sebelumnya (termasuk frame
+                    # pertama dari jangkar klik pengguna) agar tidak melompat
+                    # ke orang lain saat ada beberapa wajah dalam bingkai.
+                    previous = smooth_center(previous, center)
                 # Keep a stationary key when the selected face disappears: never
                 # interpolate across the gap towards an unrelated person's face.
                 frames.append({"time": round(t, 3), "x": round(previous[0], 4), "y": round(previous[1], 4), "detected": center is not None})

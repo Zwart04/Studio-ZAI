@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../i18n/strings.dart';
 import '../models.dart';
 import '../services/downloader.dart';
+import '../services/youtube_source.dart';
 import '../services/media_tools.dart';
 import '../services/model_manager.dart';
 import '../services/model_registry.dart';
@@ -18,6 +19,7 @@ import '../services/speech.dart';
 import '../services/timeline.dart';
 import '../services/subtitle_builder.dart';
 import '../services/clip_edits.dart';
+import '../services/stage_cache.dart';
 
 enum JobState { idle, running, done, error }
 
@@ -172,7 +174,14 @@ class AppState extends ChangeNotifier {
 
   Future<void> saveProject(Project project) async {
     final file = File('${projectsDir.path}/${project.id}.json');
-    file.writeAsStringSync(project.encode());
+    final temporary =
+        File('${file.path}.${DateTime.now().microsecondsSinceEpoch}.tmp');
+    try {
+      temporary.writeAsStringSync(project.encode(), flush: true);
+      temporary.renameSync(file.path);
+    } finally {
+      if (temporary.existsSync()) temporary.deleteSync();
+    }
     loadProjects();
   }
 
@@ -238,9 +247,14 @@ class AppState extends ChangeNotifier {
     String? audioLanguage,
     String canvas = 'portrait',
     String audioMode = 'original',
+    bool online = true,
+    String processingMode = 'hybrid',
   }) async {
     if (count < 0) {
       throw ArgumentError.value(count, 'count', 'Jumlah tidak boleh negatif.');
+    }
+    if (processingMode == 'offline' && Downloader.isUrl(source)) {
+      throw ArgumentError('Full Offline memerlukan berkas lokal.');
     }
     if (audioMode != 'original') {
       throw ArgumentError.value(audioMode, 'audioMode',
@@ -255,29 +269,77 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     currentProject = project;
+    project.processingMode = processingMode;
+    project.audioLanguage = audioLanguage ?? '';
+    project.execution = {};
     setJob(JobState.running, progress: 1, stage: 'menyiapkan');
 
     try {
       final warnings = <String>[];
       final directory = projectDir(project);
-      File media;
+      File? media;
       if (project.sourceIsUrl) {
-        media = await Downloader.download(
-            source, directory, (p, m) => _report(1 + p * .18, m),
-            audioLanguage: audioLanguage,
-            onTitle: (title) => project.title = title);
+        var captionReady = false;
+        if (online && useTranscript && Downloader.isYoutube(source)) {
+          try {
+            _report(2, 'mengambil caption sebelum audio');
+            final cache = StageCache(Directory('${dataDir.path}/cache'));
+            final cacheKey = StageCache.key(['captions-v2', source, language]);
+            Map<String, dynamic>? data =
+                cache.read(cacheKey, ttl: const Duration(hours: 24));
+            data ??= await YoutubeSource.captionMetadata(source, language);
+            await cache.write(cacheKey, data);
+            project.title = data['title'] as String;
+            project.duration = (data['duration'] as num).toDouble();
+            project.transcript =
+                List<Map<String, dynamic>>.from(data['segments'] as List);
+            project.online = true;
+            project.sourceUrl = source;
+            project.source = '';
+            project.execution['transcript'] = 'platform captions';
+            captionReady = true;
+          } catch (error) {
+            warnings.add(
+                'Caption tidak tersedia; memakai audio: ${_shortError(error)}');
+          }
+        }
+        if (captionReady) {
+          media = null;
+        } else if (online && Downloader.isYoutube(source)) {
+          // Mode online: audio dulu. Video diunduh hanya per-segmen saat render.
+          media = await Downloader.downloadAudio(
+              source, directory, (p, m) => _report(1 + p * .18, m),
+              audioLanguage: audioLanguage,
+              onTitle: (title) => project.title = title);
+          project.online = true;
+          project.sourceUrl = source;
+          project.audioPath = media.path;
+          project.source = '';
+        } else {
+          media = await Downloader.download(
+              source, directory, (p, m) => _report(1 + p * .18, m),
+              audioLanguage: audioLanguage,
+              onTitle: (title) => project.title = title);
+          project.source = media.path;
+        }
       } else {
         media = File(source);
         if (!media.existsSync()) {
           throw Exception('Berkas tidak ditemukan: $source');
         }
-        final copy = File('${directory.path}/${media.uri.pathSegments.last}');
-        if (copy.path != media.path) media.copySync(copy.path);
-        media = copy;
+        project.source = media.path;
       }
-      project.source = media.path;
       await saveProject(project); // Keep the download even if probing fails.
-      project.duration = await MediaTools.duration(media.path);
+      if (media != null) {
+        project.duration = await MediaTools.duration(media.path);
+      }
+      if (!project.sourceIsUrl && useTranscript && media != null) {
+        project.transcript = await MediaTools.localCaptions(
+            media.path, directory, project.duration);
+        if (project.transcript.isNotEmpty) {
+          project.execution['transcript'] = 'local captions';
+        }
+      }
       if (!project.duration.isFinite || project.duration < 1) {
         throw Exception(
             'Durasi video tidak terbaca. Video sumber disimpan untuk dicoba lagi.');
@@ -288,16 +350,46 @@ class AppState extends ChangeNotifier {
 
       final pipeline =
           Pipeline(models: models, speech: speech, projectDir: directory);
+      final stageCache = StageCache(Directory('${dataDir.path}/cache'));
+      String? transcriptKey;
+      if (media != null && useTranscript && project.transcript.isEmpty) {
+        final revision = models
+            .dirFor(asrModelId)
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((file) =>
+                file.path.endsWith('.onnx') || file.path.endsWith('tokens.txt'))
+            .map(StageCache.identity)
+            .toList()
+          ..sort((a, b) => '${a[0]}'.compareTo('${b[0]}'));
+        transcriptKey = StageCache.key([
+          'asr-v2',
+          StageCache.identity(media),
+          asrModelId,
+          language,
+          revision
+        ]);
+        final cached = stageCache.read(transcriptKey);
+        if (cached != null) {
+          project.transcript = (cached['segments'] as List)
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+          project.execution['transcript'] = 'cached local ASR · $asrModelId';
+        }
+      }
       File? wav;
       try {
-        wav = await MediaTools.extractAudio(
-            media.path, '${pipeline.workDir.path}/audio.wav');
+        if (media != null && project.transcript.isEmpty) {
+          wav = await MediaTools.extractAudio(
+              media.path, '${pipeline.workDir.path}/audio.wav');
+        }
       } catch (error) {
         warnings.add('Audio sumber tidak dapat dibaca: ${_shortError(error)}');
       }
 
-      var segments = <TranscriptSegment>[];
-      if (useTranscript) {
+      var segments =
+          project.transcript.map(TranscriptSegment.fromJson).toList();
+      if (useTranscript && segments.isEmpty) {
         if (wav == null) {
           warnings.add(
               'Subtitle otomatis dilewati karena audio sumber tidak tersedia.');
@@ -309,6 +401,11 @@ class AppState extends ChangeNotifier {
                 onProgress: (seconds) => _report(
                     30 + 29 * (seconds / project.duration).clamp(0, 1),
                     'Audio ${seconds.toInt()}/${project.duration.toInt()} detik ditranskripsi'));
+            project.execution['transcript'] = 'local ASR · $asrModelId';
+            if (transcriptKey != null) {
+              await stageCache.write(transcriptKey,
+                  {'segments': segments.map((s) => s.toJson()).toList()});
+            }
             if (segments.isEmpty) {
               warnings.add(
                   'Tidak ada ucapan yang terbaca; klip dipilih dari audio.');
@@ -333,10 +430,17 @@ class AppState extends ChangeNotifier {
       _report(60, 'mencari momen terbaik');
       List<ClipCandidate> candidates;
       try {
-        candidates = wav == null
-            ? Pipeline.pickClipsWithoutAudio(project.duration, count)
-            : await Pipeline.pickClipsFromWav(
-                wav.path, project.duration, segments, count);
+        candidates = segments.isNotEmpty
+            ? Pipeline.pickClips(
+                samples: Float32List(0),
+                sampleRate: 16000,
+                duration: project.duration,
+                segments: segments,
+                count: count)
+            : wav == null
+                ? Pipeline.pickClipsWithoutAudio(project.duration, count)
+                : await Pipeline.pickClipsFromWav(
+                    wav.path, project.duration, segments, count);
       } catch (error) {
         warnings.add(
             'Analisis audio gagal (${_shortError(error)}); memakai rentang video sumber.');
@@ -352,7 +456,13 @@ class AppState extends ChangeNotifier {
               .toList();
         }
       }
-      if (useAi) {
+      if (wav != null && wav.existsSync()) await wav.delete();
+      project.execution['ranking'] = 'heuristic-only';
+      if (!useAi && processingMode != 'online_ai') {
+        warnings.add(
+            'Analisis lokal ringan memakai heuristik. LLM on-device belum diaktifkan; tidak memerlukan PC.');
+      }
+      if (useAi && processingMode == 'online_ai') {
         if (segments.isEmpty) {
           warnings.add('AI online dilewati karena transkrip tidak tersedia.');
         } else {
@@ -360,6 +470,7 @@ class AppState extends ChangeNotifier {
             _report(62, 'AI sedang memilih momen dari transkrip');
             final rows = await CreatorTools.rankAi(
                 project.transcript, project.duration, count);
+            project.execution['ranking'] = 'online AI';
             candidates = rows
                 .map((r) => ClipCandidate(
                     r['start'], r['end'], r['score'], r['reason'], r['title']))
@@ -457,10 +568,11 @@ class AppState extends ChangeNotifier {
 
   Future<Clip> addSourceClip(double start, double end, String canvas) async {
     final project = currentProject!;
-    if (start < 0 ||
-        end <= start ||
-        end > project.duration ||
-        !File(project.source).existsSync()) {
+    // Mode online: video penuh boleh belum ada; selama masih dalam durasi,
+    // klip bisa dibuat dari transkrip dan dirender per-segmen nanti.
+    final hasMedia = File(project.source).existsSync() ||
+        (project.online && project.sourceUrl.isNotEmpty);
+    if (start < 0 || end <= start || end > project.duration || !hasMedia) {
       throw Exception('Pilih rentang di dalam durasi video sumber.');
     }
     final index =
@@ -482,6 +594,60 @@ class AppState extends ChangeNotifier {
     project.clips = [...project.clips, clip];
     await saveProject(project);
     return clip;
+  }
+
+  Future<void> relinkSource(String source) async {
+    final project = currentProject!;
+    if (project.online ||
+        source.startsWith('http') ||
+        jobState == JobState.running) {
+      throw StateError(
+          'Tunggu pekerjaan selesai dan pilih video lokal yang sama.');
+    }
+    if (!File(source).existsSync()) {
+      throw StateError('Video lokal tidak ditemukan.');
+    }
+    final duration = await MediaTools.duration(source);
+    final maxEnd = project.clips
+        .fold<double>(0, (value, clip) => value > clip.end ? value : clip.end);
+    if (!duration.isFinite ||
+        duration <= 0 ||
+        duration < maxEnd ||
+        (duration - project.duration).abs() > .5) {
+      throw StateError(
+          'Durasi berbeda. Pilih video yang sama; buat proyek baru untuk video lain.');
+    }
+    final old = project.source;
+    project.source = source;
+    project.audioPath = '';
+    project.sourceUrl = '';
+    for (final clip in project.clips) {
+      for (final track in (clip.timeline?['tracks'] as List? ?? [])) {
+        if (track['kind'] == 'video') {
+          for (final item in (track['items'] as List? ?? [])) {
+            if (item['src'] == old ||
+                item['src'] == null ||
+                item['src'] == '') {
+              item['src'] = source;
+            }
+          }
+        }
+      }
+    }
+    project.processingWarning =
+        'Video ditautkan ulang. Trim, subtitle, dan ekspor tetap disimpan; pastikan ini video yang sama.';
+    await saveProject(project);
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> sourceForClip(Clip clip) async {
+    final project = currentProject;
+    if (project == null) throw StateError('Tidak ada proyek aktif');
+    final pipeline = Pipeline(
+        models: models, speech: speech, projectDir: projectDir(project));
+    final result = await pipeline.sourceForPreview(project, clip, (p, m) {});
+    await saveProject(project);
+    return result;
   }
 
   Future<void> renderClip(Clip clip) async {
@@ -510,7 +676,19 @@ class AppState extends ChangeNotifier {
       throw Exception(
           'Model transkripsi $asrModelId belum terpasang. Unduh di tab Model.');
     }
-    if (!File(project.source).existsSync()) {
+    // Mode online: video penuh boleh belum diunduh — ekstrak audio rentang
+    // dari berkas audio yang sudah ada (garis waktu sama, mulai dari 0).
+    if (project.online && project.audioPath.isEmpty && project.source.isEmpty) {
+      final audio = await Downloader.downloadAudio(
+          project.sourceUrl, projectDir(project), (p, m) {},
+          audioLanguage:
+              project.audioLanguage.isEmpty ? null : project.audioLanguage);
+      project.audioPath = audio.path;
+      await saveProject(project);
+    }
+    final mediaSource =
+        File(project.source).existsSync() ? project.source : project.audioPath;
+    if (!File(mediaSource).existsSync()) {
       throw Exception('Video sumber tidak ditemukan. Periksa proyek ini.');
     }
     if (clip.duration <= 0) {
@@ -521,7 +699,7 @@ class AppState extends ChangeNotifier {
     final path = '${projectDir(project).path}/captions-${clip.index}.wav';
     try {
       await MediaTools.extractAudioRange(
-          project.source, path, clip.start, clip.end);
+          mediaSource, path, clip.start, clip.end);
       _report(20, 'menyiapkan transkripsi');
       var lastSeconds = -2.0;
       final segments = await speech.transcribeFile(

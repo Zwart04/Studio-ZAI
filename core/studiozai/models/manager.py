@@ -45,7 +45,7 @@ def models_by_kind(kind: str) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- hardware
 
 
-def _ram_gb() -> float | None:
+def _ram_gb(available: bool = False) -> float | None:
     try:
         if sys.platform == "win32":
             class MemoryStatus(ctypes.Structure):
@@ -64,7 +64,7 @@ def _ram_gb() -> float | None:
             status = MemoryStatus()
             status.dwLength = ctypes.sizeof(MemoryStatus)
             if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):  # type: ignore[attr-defined]
-                return round(status.ullTotalPhys / 1024**3, 1)
+                return round((status.ullAvailPhys if available else status.ullTotalPhys) / 1024**3, 1)
         elif sys.platform == "darwin":
             out = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=False
@@ -73,7 +73,7 @@ def _ram_gb() -> float | None:
         else:
             with open("/proc/meminfo", encoding="utf-8") as fh:
                 for line in fh:
-                    if line.startswith("MemTotal:"):
+                    if line.startswith("MemAvailable:" if available else "MemTotal:"):
                         return round(int(line.split()[1]) / 1024**2, 1)
     except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
         return None

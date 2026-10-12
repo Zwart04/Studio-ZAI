@@ -12,16 +12,17 @@ class Tokens {
 
   static const text = Color(0xFFFFFFFF);
   static const text2 = Color(0xFFEBEBF5);
-  static const textDim = Color(0xFF8E8E93);
-  static const textDim2 = Color(0xFF636366);
+  static const textDim = Color(0xFFB0B0B5);
+  static const textDim2 = Color(0xFFB0B0B5);
 
-  static const accent = Color(0xFF0A84FF);
-  static const accentPress = Color(0xFF0071E3);
+  static const accent = Color(0xFF61AFFF);
+  static const action = Color(0xFF006AD3);
+  static const accentPress = Color(0xFF005BB5);
   // Aksen kedua (merah) dipakai hemat: rekam, hapus, peringatan.
   static const accent2 = Color(0xFFFF453A);
   static const green = Color(0xFF30D158);
   static const orange = Color(0xFFFF9F0A);
-  static const red = Color(0xFFFF453A);
+  static const red = Color(0xFFFF8D88);
   static const purple = Color(0xFFBF5AF2);
 
   // aliases kept for readability in screens
@@ -75,20 +76,24 @@ ThemeData buildTheme() {
       color: Tokens.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Tokens.radius)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radius)),
     ),
     listTileTheme: const ListTileThemeData(
       textColor: Tokens.text,
       iconColor: Tokens.textDim,
-      contentPadding: EdgeInsets.symmetric(horizontal: Tokens.space4, vertical: Tokens.space1),
+      contentPadding: EdgeInsets.symmetric(
+          horizontal: Tokens.space4, vertical: Tokens.space1),
     ),
-    dividerTheme: const DividerThemeData(color: Tokens.separator, thickness: 1, space: 1),
+    dividerTheme:
+        const DividerThemeData(color: Tokens.separator, thickness: 1, space: 1),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: Tokens.surface2,
       hintStyle: const TextStyle(color: Tokens.textDim2),
       labelStyle: const TextStyle(color: Tokens.textDim, fontSize: 13),
-      contentPadding: const EdgeInsets.symmetric(horizontal: Tokens.space3, vertical: Tokens.space3),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: Tokens.space3, vertical: Tokens.space3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Tokens.radiusSm),
         borderSide: BorderSide.none,
@@ -104,11 +109,12 @@ ThemeData buildTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: Tokens.accent,
+        backgroundColor: Tokens.action,
         foregroundColor: Colors.white,
         minimumSize: const Size(0, 44),
         textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Tokens.radiusSm)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -118,7 +124,8 @@ ThemeData buildTheme() {
         side: BorderSide.none,
         minimumSize: const Size(0, 44),
         textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Tokens.radiusSm)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -127,12 +134,19 @@ ThemeData buildTheme() {
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
       ),
     ),
-    textTheme: base.textTheme.apply(bodyColor: Tokens.text, displayColor: Tokens.text).copyWith(
-          bodyLarge: const TextStyle(fontSize: 15, color: Tokens.text, height: 1.4),
-          bodyMedium: const TextStyle(fontSize: 14, color: Tokens.text2, height: 1.4),
-          bodySmall: const TextStyle(fontSize: 13, color: Tokens.textDim, height: 1.35),
-          titleLarge: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.5),
-          titleMedium: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.3),
+    textTheme: base.textTheme
+        .apply(bodyColor: Tokens.text, displayColor: Tokens.text)
+        .copyWith(
+          bodyLarge:
+              const TextStyle(fontSize: 15, color: Tokens.text, height: 1.4),
+          bodyMedium:
+              const TextStyle(fontSize: 14, color: Tokens.text2, height: 1.4),
+          bodySmall: const TextStyle(
+              fontSize: 13, color: Tokens.textDim, height: 1.35),
+          titleLarge: const TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.5),
+          titleMedium: const TextStyle(
+              fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.3),
         ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Tokens.bgElevated,
@@ -142,31 +156,43 @@ ThemeData buildTheme() {
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           size: 22,
-          color: states.contains(WidgetState.selected) ? Tokens.accent : Tokens.textDim,
+          color: states.contains(WidgetState.selected)
+              ? Tokens.accent
+              : Tokens.textDim,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           fontSize: 11,
-          fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
-          color: states.contains(WidgetState.selected) ? Tokens.accent : Tokens.textDim,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w600
+              : FontWeight.w400,
+          color: states.contains(WidgetState.selected)
+              ? Tokens.accent
+              : Tokens.textDim,
         ),
       ),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected) ? Colors.white : const Color(0xFF8E8E93),
+        (states) => states.contains(WidgetState.selected)
+            ? Colors.white
+            : const Color(0xFF8E8E93),
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected) ? Tokens.green : Tokens.surface3,
+        (states) => states.contains(WidgetState.selected)
+            ? Tokens.green
+            : Tokens.surface3,
       ),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(color: Tokens.accent),
+    progressIndicatorTheme:
+        const ProgressIndicatorThemeData(color: Tokens.accent),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: Tokens.surface2,
       contentTextStyle: const TextStyle(color: Tokens.text, fontSize: 14),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Tokens.radius)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radius)),
     ),
   );
 }

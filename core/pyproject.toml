@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "studiozai"
-version = "1.11.0"
+version = "1.12.0"
 description = "Studio ZAI - cross-platform auto clip, subtitle and voiceover studio (local-first)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-media = ["yt-dlp>=2025.1.1"]
+media = ["yt-dlp[default]>=2026.8.19", "youtube-transcript-api>=1.2.0", "requests>=2.31"]
 asr = ["faster-whisper>=1.1.0"]
 tts = ["piper-tts>=1.2.0", "sherpa-onnx==1.13.8"]
 clone = ["chatterbox-tts", "torch", "torchaudio", "safetensors", "huggingface_hub"]
@@ -28,7 +28,9 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 all = [
   "opencv-python-headless>=4.10,<5",
   "sentencepiece>=0.2", "sacremoses>=0.1", "subword-nmt>=0.3",
-  "yt-dlp>=2025.1.1",
+  "yt-dlp[default]>=2026.8.19",
+  "youtube-transcript-api>=1.2.0",
+  "requests>=2.31",
   "faster-whisper>=1.1.0",
   "piper-tts>=1.2.0",
   "sherpa-onnx==1.13.8",

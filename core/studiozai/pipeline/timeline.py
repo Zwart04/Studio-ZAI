@@ -20,7 +20,7 @@ from typing import Any
 
 from ..utils import ffmpeg
 from . import crop as crop_mod
-from .render import AUDIO_ENCODE_ARGS, can_copy_audio, encoder_args, escape_filter_path
+from .render import AUDIO_ENCODE_ARGS, can_copy_audio, encoder_args, escape_filter_path, thread_args
 
 ProgressCb = Callable[[float, str], None]
 
@@ -221,6 +221,7 @@ def render_timeline(
     args += [
         *(["-c:a", "copy"] if copy_source_audio else AUDIO_ENCODE_ARGS),
         *encoder_args(encoder),
+        *thread_args(),
         "-t",
         f"{duration:.3f}",
         "-movflags",
@@ -232,9 +233,8 @@ def render_timeline(
         if progress_cb:
             progress_cb(min(99.0, max(0.0, fraction)), "merender klip")
 
-    result = ffmpeg.run_ffmpeg(args, duration, report, timeout=7200)
-    if not result.ok:
-        raise RuntimeError(f"render timeline gagal: {result.stderr[-400:]}")
+    ffmpeg.finalize_video(args, out, duration, report, size=scale_to or (out_w, out_h),
+                          require_audio=_has_audio(source) or bool(audio_labels))
     if progress_cb:
         progress_cb(100.0, "klip selesai")
     return out

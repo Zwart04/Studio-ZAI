@@ -100,7 +100,7 @@ def test_cached_transcript_guides_clips_when_asr_model_is_unavailable(monkeypatc
         seen.append(kwargs.get("transcript"))
         return [highlight.ClipCandidate(10, 30, 1.0, "awal topik")]
 
-    monkeypatch.setattr(highlight, "analyze_media", analyze)
+    monkeypatch.setattr(highlight, "pick_clips", analyze)
     clips = service.generate_clips(project, count=1)
     assert seen == [project.transcript]
     assert clips[0].captions[0]["text"] == "Speaker pertama ini bagus"

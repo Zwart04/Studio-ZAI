@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import config, credentials, models, projects
+from . import cache, config, credentials, models, projects
 from .jobs import Job
 from .pipeline import crop as crop_mod
 from .pipeline import download, highlight, probe, render, subtitle, transcribe, voice
@@ -40,6 +40,7 @@ def doctor() -> dict[str, Any]:
     tier = models.manager.resolve_tier(hw, config.load_settings().get("lang", "id"))
     optional = {
         "yt_dlp": _module_ok("yt_dlp"),
+        "youtube_transcript_api": _module_ok("youtube_transcript_api"),
         "faster_whisper": transcribe.asr_available(),
         "piper": voice.piper_available(),
         "chatterbox": voice.chatterbox_available(),
@@ -52,6 +53,12 @@ def doctor() -> dict[str, Any]:
         problems.append("FFmpeg/FFprobe tidak ditemukan di PATH (wajib untuk semua fitur media).")
     if not optional["yt_dlp"]:
         problems.append("yt-dlp belum terpasang: pip install -e \"core[media]\"")
+    if not optional["youtube_transcript_api"]:
+        # Bukan penghalang: jalur yt-dlp tetap bekerja; ini lapis cadangan
+        # yang bertahan bila jalur player YouTube diblokir.
+        problems.append(
+            "youtube-transcript-api belum terpasang (cadangan caption YouTube mati): "
+            "pip install -e \"core[media]\"")
     if not optional["faster_whisper"]:
         problems.append("faster-whisper belum terpasang (subtitle otomatis mati): pip install -e \"core[asr]\"")
     if not optional["piper"]:
@@ -131,10 +138,66 @@ def ingest(
     job: Job | None = None,
     format_id: str | None = None,
     audio_lang: str | None = None,
-) -> Path:
-    """Bring the source video into the project (download for URLs, copy for local files)."""
+    online: bool = False,
+    captions_first: bool = False,
+) -> Path | None:
+    """Bring the source video into the project (download for URLs, copy for local files).
+
+    Dengan ``online=True`` dan sumber URL, hanya track audio yang
+    diunduh: transkripsi dan pemilihan klip jalan tanpa video.
+    Video diunduh per-rentang klip saat render.
+    """
     project.source_dir.mkdir(parents=True, exist_ok=True)
+    project.execution["audio_language"] = audio_lang or ""
+    if project.language == "auto" and audio_lang:
+        project.language = audio_lang
     if download.is_url(source):
+        if online and captions_first:
+            project.execution["caption_attempted"] = True
+            from .pipeline.captions import fetch_captions
+            project.source_kind, project.source_url, project.online = "url", source, True
+            metadata_key = cache.key("metadata", source)
+            info = cache.read(metadata_key, max_age=1800)
+            if not info:
+                info = download.fetch_info(source, cookies=cookies)
+                cache.write(metadata_key, info)
+            project.title = info["title"]
+            project.duration = info.get("duration") or 0.0
+            project.heatmap = list(info.get("heatmap") or [])
+            caption_key = cache.key("platform-caption-v2", source, project.language)
+            try:
+                transcript = cache.read(caption_key, max_age=86400)
+                if not transcript:
+                    transcript = fetch_captions(source, project.source_dir, lang=project.language, cookies=cookies)
+                transcript = validate_transcript(transcript, project.duration, project.language)
+                cache.write(caption_key, transcript)
+                project.transcript = transcript
+                project.execution["transcript"] = "platform captions"
+                project.save()
+                _report(job, 40, "caption siap", "tanpa unduh audio/video atau ASR")
+                return None
+            except (RuntimeError, ValueError) as exc:
+                _report(job, 10, "caption tidak tersedia", str(exc)[:180])
+        if online:
+            _report(job, 2, "mengunduh", "track audio saja (mode online)")
+            info = download.download_audio(
+                source,
+                project.source_dir,
+                cookies=cookies or None,
+                progress_cb=lambda p, m: _report(job, 3 + p * 0.32, "mengunduh audio", m),
+                audio_lang=audio_lang,
+            )
+            project.source = ""
+            project.source_kind = "url"
+            project.source_url = source
+            project.audio_path = info["path"]
+            project.online = True
+            project.title = info["title"]
+            project.duration = info.get("duration") or 0.0
+            project.heatmap = list(info.get("heatmap") or [])
+            project.save()
+            _report(job, 40, "siap", "audio tersimpan; video diunduh saat render klip")
+            return Path(info["path"])
         _report(job, 2, "mengunduh", "menghubungi sumber")
         info = download.download(
             source,
@@ -147,30 +210,82 @@ def ingest(
         project.source = info["path"]
         project.source_kind = "url"
         project.title = info["title"]
+        project.heatmap = list(info.get("heatmap") or [])
     else:
         src_path = Path(source)
         if not src_path.exists():
             raise FileNotFoundError(f"berkas tidak ditemukan: {source}")
-        _report(job, 5, "menyalin", "menyalin berkas lokal")
-        target = project.source_dir / src_path.name
-        if src_path.resolve() != target.resolve():
-            shutil.copy2(src_path, target)
-        project.source = str(target)
+        _report(job, 5, "membuka", "memakai berkas lokal asli")
+        project.source = str(src_path.resolve())
         project.source_kind = "local"
         if not project.title:
             project.title = src_path.stem
-
-    _report(job, 36, "memeriksa", "membersihkan subtitle bawaan bila ada")
-    project.source = str(_strip_embedded_subtitles(Path(project.source)))
 
     _report(job, 38, "memeriksa", "membaca metadata media")
     info = probe.probe(project.source)
     project.duration = info.duration
     project.width = info.width
     project.height = info.height
+    project.execution["has_audio"] = info.has_audio
+    project.execution["source_identity"] = cache.file_identity(project.source)
+    if project.source_kind == "local":
+        project.transcript = _local_captions(project)
+        if project.transcript:
+            project.execution["transcript"] = "local captions"
     project.save()
     _report(job, 40, "siap", f"durasi {clock(info.duration)}")
     return Path(project.source)
+
+
+def validate_transcript(transcript, duration: float = 0, language: str = "auto"):
+    import math
+    actual = str(transcript.get("language") or "auto").split("-")[0]
+    if language not in {"auto", "unknown", ""} and actual not in {language.split("-")[0], "auto"}:
+        raise ValueError("Bahasa caption tidak sesuai pilihan")
+    rows = []
+    for row in transcript.get("segments", []):
+        start, end = float(row["start"]), float(row["end"])
+        if not math.isfinite(start + end) or start < 0 or end <= start:
+            raise ValueError("Timestamp caption tidak valid")
+        if duration > 0 and end > duration + 2:
+            raise ValueError("Caption melewati durasi sumber")
+        if str(row.get("text", "")).strip():
+            valid_words = []
+            for word in row.get("words") or []:
+                try:
+                    ws, we = float(word["start"]), float(word["end"])
+                    if math.isfinite(ws + we) and start <= ws < we <= end:
+                        valid_words.append(word)
+                except (KeyError, ValueError, TypeError):
+                    continue
+            row = {**row, "words": valid_words}
+            rows.append(row)
+    if not rows:
+        raise ValueError("Caption kosong")
+    rows.sort(key=lambda row: row["start"])
+    return {**transcript, "segments": rows}
+
+
+def _local_captions(project):
+    from .pipeline.captions import parse_subtitle_file
+    source = Path(project.source)
+    options = [source.with_suffix(".vtt"), source.with_suffix(".srt")]
+    try:
+        data = ffmpeg.ffprobe_json(source)
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "subtitle" and stream.get("codec_name") in {"subrip", "ass", "webvtt", "mov_text", "ssa"}:
+                target = project.source_dir / "embedded.srt"
+                result = ffmpeg.run_ffmpeg(["-i", str(source), "-map", f"0:{stream['index']}", str(target)], timeout=60)
+                if result.ok:
+                    options.append(target)
+                break
+        for path in options:
+            if path.is_file():
+                rows = parse_subtitle_file(path)
+                return validate_transcript({"source": "local-caption", "language": project.language, "segments": rows}, project.duration, project.language)
+    except (OSError, RuntimeError, ValueError):
+        pass
+    return {}
 
 
 def ensure_transcript(
@@ -179,24 +294,101 @@ def ensure_transcript(
     lang: str | None = None,
     job: Job | None = None,
 ) -> dict[str, Any]:
+    _refresh_source_identity(project)
     if project.transcript.get("segments"):
         return project.transcript
-    media = project.media_path()
+    media = project.audio_media_path()
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
     settings = config.load_settings()
     model_id = model_id or settings.get("asr_model", "whisper-small-int8")
     _report(job, 45, "menranskripsi", f"model {model_id}")
-    transcript = transcribe.transcribe(
+    identifier = cache.key("asr-v3", cache.file_identity(media), model_id, transcribe.model_revision(model_id), lang or project.language)
+    transcript = cache.read(identifier)
+    if not transcript:
+        transcript = transcribe.transcribe(
         media,
         model_id=model_id,
         lang=lang or project.language,
         progress_cb=lambda p, m: _report(job, 45 + p * 0.3, "menranskripsi", m),
+        )
+        cache.write(identifier, transcript)
+    project.transcript = transcript
+    project.execution["transcript"] = f"local ASR · {model_id}"
+    project.execution["asr_device"] = transcript.get("device", "unknown")
+    if transcript.get("language"):
+        project.language = str(transcript["language"])[:5]
+    project.save()
+    return transcript
+
+
+def _refresh_source_identity(project):
+    media = project.audio_media_path()
+    identity = project.execution.get("source_identity")
+    if project.source_kind == "local" and media is not None and identity and cache.file_identity(media) != identity:
+        project.transcript = {}
+        project.execution["source_identity"] = cache.file_identity(media)
+        project.notes = "Sumber berubah; transkrip dan kandidat dibuat ulang."
+
+
+def relink_source(project, source):
+    """Relink the same local video while preserving the user's clip edits and exports."""
+    if project.online or download.is_url(source):
+        raise ValueError("Penautan ulang ini hanya untuk video lokal yang sama")
+    path = Path(source).resolve()
+    if not path.is_file():
+        raise ValueError("Video lokal tidak ditemukan")
+    info = probe.probe(path)
+    import math
+    if not info.width or not info.height or not math.isfinite(info.duration) or info.duration <= 0 or info.duration < max((clip.end for clip in project.clips), default=0):
+        raise ValueError("Video tidak valid atau lebih pendek dari klip tersimpan")
+    if project.duration and abs(info.duration-project.duration) > max(.5, project.duration*.01):
+        raise ValueError("Durasi berbeda. Pilih video yang sama; buat proyek baru untuk video lain.")
+    if project.width and (info.width,info.height)!=(project.width,project.height):
+        raise ValueError("Ukuran berbeda. Pilih video yang sama agar framing tetap sesuai.")
+    old = project.source
+    project.source = str(path)
+    project.source_kind = "local"
+    project.audio_path = ""
+    project.preview_path = ""
+    project.execution["source_identity"] = cache.file_identity(path)
+    for clip in project.clips:
+        for item in timeline_mod.track(clip.timeline, "video"):
+            if not item.get("src") or item.get("src") == old:
+                item["src"] = str(path)
+    project.notes = "Video ditautkan ulang. Trim, subtitle, dan ekspor dipertahankan. Pastikan berkas ini video yang sama."
+    project.save()
+    return project
+
+
+def ensure_transcript_from_captions(
+    project: projects.Project,
+    lang: str | None = None,
+    job: Job | None = None,
+) -> dict[str, Any]:
+    """Transkrip instan dari caption YouTube (tanpa unduh/transkripsi).
+
+    Pola cheat-clip-pro: teks ber-timing diambil langsung (detik, KB),
+    Whisper lokal hanya cadangan bila caption tidak ada. Hasil dicatat
+    dengan source="youtube" agar UI tahu asalnya.
+    """
+    from .pipeline import captions as captions_mod
+
+    if not project.online or not project.source_url:
+        raise RuntimeError("caption hanya untuk proyek online dari tautan")
+    _report(job, 42, "caption", "mengambil subtitle YouTube")
+    transcript = captions_mod.fetch_captions(
+        project.source_url,
+        project.source_dir,
+        lang=lang or project.language,
+        cookies=config.load_settings().get("cookies_path") or None,
+        progress_cb=lambda p, m: _report(job, 42 + p * 0.03, "caption", m),
     )
     project.transcript = transcript
     if transcript.get("language"):
         project.language = str(transcript["language"])[:5]
     project.save()
+    _report(job, 45, "caption", f"{len(transcript.get('segments', []))} baris caption siap")
     return transcript
 
 
@@ -230,7 +422,8 @@ def captions_for_range(
                         "end": max(0.0, float(segment["end"]) - start),
                     }
                 )
-    return [c.as_dict() for c in subtitle.group_words(words)]
+    measured = any(s.get("words") for s in transcript.get("segments", []) if s.get("end", 0) > start and s.get("start", 0) < end)
+    return [{**c.as_dict(), "timing_quality": "measured" if measured else "estimated"} for c in subtitle.group_words(words)]
 
 
 def generate_clips(
@@ -242,9 +435,15 @@ def generate_clips(
     use_transcript: bool = True,
     job: Job | None = None,
     analysis_mode: str = "auto",
+    asr_model: str | None = None,
+    model: str | None = None,
+    processing_mode: str = "legacy",
+    settings_override=None,
+    connection_override=None,
 ) -> list[projects.Clip]:
-    media = project.media_path()
-    if media is None:
+    _refresh_source_identity(project)
+    media = project.audio_media_path()
+    if media is None and not project.transcript.get("segments"):
         raise FileNotFoundError("media sumber tidak ditemukan")
     if count <= 0:
         import math
@@ -252,24 +451,42 @@ def generate_clips(
     _floor, _ceiling = highlight.clip_count_targets(project.duration or 0, count)
 
     transcript = project.transcript if use_transcript and project.transcript.get("segments") else None
-    if use_transcript and transcript is None and transcribe.asr_available():
+    if use_transcript and transcript is None and not project.execution.get("caption_attempted") and project.online and project.source_url:
         try:
-            transcript = ensure_transcript(project, job=job)
+            transcript = ensure_transcript_from_captions(project, lang=project.language, job=job)
+        except RuntimeError as exc:
+            _report(job, 45, "caption kosong", f"lanjut Whisper lokal: {exc}")
+    if use_transcript and transcript is None and project.execution.get("has_audio") is not False and transcribe.asr_available():
+        try:
+            transcript = ensure_transcript(project, model_id=asr_model, job=job)
         except RuntimeError as exc:
             _report(job, 75, "transkripsi gagal", f"memakai analisis audio saja: {exc}")
     if use_transcript and transcript is None and not transcribe.asr_available():
         _report(job, 75, "model transkrip belum siap", "memakai analisis audio saja")
 
     _report(job, 78, "menganalisis", "mencari momen terbaik")
-    candidates = highlight.analyze_media(
+    if transcript and not transcript.get("segments"):
+        transcript = None
+        project.notes = "Tidak ada ucapan yang terbaca. Kandidat dari aktivitas audio perlu ditinjau manual."
+    if transcript:
+        candidates = highlight.pick_clips(project.duration or max(s["end"] for s in transcript["segments"]),
+            transcript=transcript, count=max(count * 3, count) if use_llm else count,
+            min_len=min_len, max_len=max_len, heatmap=project.heatmap)
+    else:
+        try:
+            candidates = highlight.analyze_media(
         media,
         transcript=transcript if use_transcript else None,
         count=count,
         min_len=min_len,
         max_len=max_len,
         video_duration=project.duration or 0,
+        heatmap=project.heatmap,
         progress_cb=lambda p, m: _report(job, 78 + p * 0.12, "menganalisis", m),
-    )
+            )
+        except (RuntimeError, ValueError, OSError) as exc:
+            project.notes = f"Audio tidak tersedia; rentang ini perlu dipilih manual: {str(exc)[:100]}"
+            candidates = highlight.pick_clips(project.duration, count=count, min_len=min_len, max_len=max_len)
 
     if transcript and analysis_mode == "podcast":
         from .pipeline.podcast import moments
@@ -277,24 +494,46 @@ def generate_clips(
         if rows:
             candidates = highlight.to_candidates(rows)
 
-    settings = config.load_settings()
+    heuristic_candidates = candidates
+    project.execution.pop("ranking_model", None)
+    settings = settings_override or config.load_settings()
+    llm_rows = []
     if use_llm and transcript:
         try:
             llm_rows = highlight.rank_with_llm(
                 transcript,
                 count=count,
                 base_url=settings.get("llm_base_url") or "http://127.0.0.1:11434/v1",
-                model=settings.get("llm_model") or "qwen2.5:7b",
-                api_key=credentials.read().get("llm_api_key") or settings.get("llm_api_key") or None,
-                provider=settings.get("ai_provider") or None,
+                model=model or (settings.get("ai_model") if processing_mode in {"legacy", "online_ai"} else None) or settings.get("llm_model") or "",
+                api_key=settings.get("llm_api_key") if settings_override is not None else credentials.read().get("llm_api_key") or settings.get("llm_api_key") or None,
+                provider=(settings.get("ai_provider") or None) if processing_mode in {"legacy", "online_ai"} else None,
+                candidates=candidates,
+                min_len=min_len, max_len=max_len,
+                connection_override=connection_override,
+                check_cancel=getattr(job, "check_cancel", None),
             )
         except (RuntimeError, ValueError, OSError) as exc:
             llm_rows = []
             project.notes = f"AI tidak tersedia; memakai deteksi lokal: {str(exc)[:200]}"
             _report(job, 89, "pilihan lokal", project.notes)
         if llm_rows:
+            project.execution["ranking"] = llm_rows[0].get("engine", "online AI" if processing_mode == "online_ai" else "local LLM")
+            project.execution["ranking_model"] = llm_rows[0].get("model", model or settings.get("llm_model"))
             words = [w for s in transcript.get("segments", []) for w in s.get("words") or []]
             candidates = highlight.to_candidates(llm_rows, words)
+            candidates = [c for c in candidates if (min_len or 3) <= c.end - c.start <= (max_len or 180)
+                          and c.start >= 0 and c.end <= (project.duration or c.end)]
+            if not candidates:
+                llm_rows = []
+                candidates = heuristic_candidates
+                project.execution["ranking"] = "heuristic-only"
+                project.notes = "Batas hasil LLM tidak sesuai durasi pilihan; memakai kandidat heuristik."
+        else:
+            project.execution["ranking"] = "heuristic-only"
+            project.notes = "LLM belum siap atau hasilnya tidak valid; kandidat ini memakai heuristik. Atur model lokal untuk analisis LLM."
+    else:
+        project.execution["ranking"] = "heuristic-only"
+    candidates = candidates[:count]
 
     clips: list[projects.Clip] = []
     for position, candidate in enumerate(candidates):
@@ -305,6 +544,8 @@ def generate_clips(
             title=f"{project.title} · {candidate.title or f'Klip {position + 1}'}",
             score=candidate.score,
             reason=("tanpa transkrip; " if use_transcript and transcript is None else "") + candidate.reason,
+            analysis_metadata=next(({k: row[k] for k in ("hook_assessment", "context_completeness", "model") if k in row}
+                                    for row in llm_rows if row.get("title") == candidate.title), {}),
             crop=settings.get("crop", projects.DEFAULT_CROP),
         )
         if transcript:
@@ -340,11 +581,18 @@ def generate_captions_for_clip(
     stuck. Extract only the selected range in that case. Existing project
     transcripts are already local ASR results and can be reused directly.
     """
-    if project.transcript.get("segments"):
+    if project.transcript.get("segments") and (project.transcript.get("source") not in {"youtube", "local-caption"}
+            or all(row.get("words") for row in project.transcript["segments"] if row["end"] > clip.start and row["start"] < clip.end)):
         _report(job, 90, "subtitle", "memakai transkrip AI proyek")
         return refresh_captions(project, clip)
 
-    media = project.media_path()
+    media = project.media_path() or project.audio_media_path()
+    if media is None and project.online and project.transcript.get("segments"):
+        data = download.download_audio(project.source_url, project.source_dir,
+            audio_lang=project.execution.get("audio_language") or None,
+            cookies=config.load_settings().get("cookies_path") or None)
+        project.audio_path = data["path"]
+        media = Path(data["path"])
     if media is None:
         raise FileNotFoundError("media sumber tidak ditemukan")
     if clip.duration <= 0:
@@ -389,6 +637,101 @@ def generate_captions_for_clip(
 # --------------------------------------------------------------------------- render
 
 
+SEGMENT_PAD = 2.0
+
+
+def _shift_source_times(timeline: dict[str, Any], delta: float) -> dict[str, Any]:
+    """Geser srcStart item video agar -ss mengarah ke segmen yang diunduh."""
+    import copy
+
+    shifted = copy.deepcopy(timeline)
+    for item in timeline_mod.track(shifted, "video"):
+        if "srcStart" in item:
+            item["srcStart"] = max(0.0, float(item["srcStart"]) - delta)
+    return shifted
+
+
+def _resolve_render_media(
+    project: projects.Project,
+    clip: projects.Clip,
+    job: Job | None = None,
+) -> tuple[Path, float]:
+    with projects.project_lock(f"media:{project.id}:{clip.storage_id}"):
+        project.segments = projects.load_project(project.id).segments
+        return _resolve_render_media_unlocked(project, clip, job)
+
+
+def _resolve_render_media_unlocked(project, clip, job=None):
+    """Media untuk render klip.
+
+    Mode online: unduh hanya rentang klip dari URL (dengan padding
+    kecil) dan cache per-klip. Mengembalikan (path, seg_start);
+    bila seg_start > 0, garis waktu berkas dimulai seg_start detik
+    sebelum garis waktu sumber, jadi pemanggil harus menggeser
+    stempel waktu sumber sebesar -seg_start.
+    """
+    media = project.media_path()
+    if media is not None:
+        identity = project.execution.get("source_identity")
+        if identity and cache.file_identity(media) != identity:
+            raise ValueError("Berkas sumber berubah. Analisis ulang sebelum merender klip lama.")
+        return media, 0.0
+    if not project.online or not project.source_url:
+        raise FileNotFoundError("media sumber tidak ditemukan")
+    # Cache per-klip (storage_id stabil walau index berubah);
+    # unduh ulang bila klip diedit melampaui segmen yang ada.
+    key = clip.storage_id
+    seg = project.segment_path(key)
+    seg_start, seg_end = project.segment_bounds(key)
+    if seg is not None and seg_start <= clip.start and clip.end <= seg_end + 0.5:
+        return seg, seg_start
+    if project.processing_mode == "offline":
+        raise ValueError("Full Offline memerlukan sumber atau segmen video yang sudah tersedia di perangkat")
+    seg_start = max(0.0, clip.start - SEGMENT_PAD)
+    seg_end = clip.end + SEGMENT_PAD
+    if project.duration:
+        seg_end = min(seg_end, project.duration)
+    _report(job, 55, "mengunduh", f"rentang klip {seg_start:.0f}–{seg_end:.0f}s")
+    local_audio: str | None = None
+    if project.audio_path and Path(project.audio_path).exists():
+        # Audio lengkap sudah ada (mode online): potong lokal agar segmen bersuara.
+        local_audio = project.audio_path
+    if local_audio is None:
+        _report(job, 52, "audio preview", "mengambil audio saat video klip diperlukan")
+        audio = download.download_audio(project.source_url, project.source_dir,
+            cookies=config.load_settings().get("cookies_path") or None,
+            audio_lang=project.execution.get("audio_language") or None)
+        project.audio_path = local_audio = audio["path"]
+    result = download.download_range(
+        project.source_url,
+        seg_start,
+        seg_end,
+        project.source_dir / clip.storage_id,
+        cookies=config.load_settings().get("cookies_path") or None,
+        audio_path=local_audio,
+        progress_cb=lambda p, m: _report(job, 55 + p * 0.04, "mengunduh klip", m),
+    )
+    actual_start = float(result["start"] if result.get("start") is not None else seg_start)
+    project.store_segment(key, result["path"], actual_start, float(result.get("end") or seg_end))
+    # Probe sekali: kanvas render butuh dimensi video asli.
+    info = probe.probe(result["path"])
+    if info.width <= 0 or info.height <= 0:
+        raise RuntimeError("Segmen video tidak valid; cache tidak disimpan")
+    if not project.width:
+        project.width = info.width
+    if not project.height:
+        project.height = info.height
+    # Cache writes must not publish the caller's preview draft or stale render snapshot.
+    with projects.project_lock(project.id):
+        fresh = projects.load_project(project.id)
+        fresh.segments[key] = project.segments[key]
+        fresh.width = fresh.width or project.width
+        fresh.height = fresh.height or project.height
+        fresh.audio_path = fresh.audio_path or project.audio_path
+        fresh.save()
+    return Path(result["path"]), actual_start
+
+
 def render_clip(
     project: projects.Project,
     clip: projects.Clip,
@@ -399,15 +742,14 @@ def render_clip(
 ) -> dict[str, str]:
     if canvas_override is not None and canvas_override not in {"portrait", "square", "landscape"}:
         raise ValueError("Format kanvas tidak valid")
-    media = project.media_path()
-    if media is None:
-        raise FileNotFoundError("media sumber tidak ditemukan")
+    import copy
+    import uuid
+    initial = next((row for row in projects.load_project(project.id).clips if row.storage_id == clip.storage_id), clip)
+    expected = copy.deepcopy({k: v for k, v in initial.as_dict().items() if k not in {"files", "status", "index", "title", "score", "reason"}})
+    media, seg_start = _resolve_render_media(project, clip, job)
     directory = project.clip_dir(clip.index)
-    if canvas_override:
-        import uuid
-
-        directory = directory / "exports" / uuid.uuid4().hex[:12]
-        directory.mkdir(parents=True, exist_ok=True)
+    directory = directory / "exports" / uuid.uuid4().hex[:12]
+    directory.mkdir(parents=True, exist_ok=True)
 
     captions = clip.captions or refresh_captions(project, clip)
     files: dict[str, str] = {}
@@ -471,6 +813,8 @@ def render_clip(
     )
     _report(job, 60, "merender", f"klip {clip.index + 1}")
     if timeline:
+        if seg_start:
+            timeline = _shift_source_times(timeline, seg_start)
         # Volume audio asli: penuh saat "original", dikecilkan saat dicampur,
         # nol saat hanya narasi.
         base_volume = 1.0 if clip.audio_mode == "original" else clip.original_volume
@@ -491,8 +835,8 @@ def render_clip(
         render.render_clip(
             media,
             out_path,
-            clip.start,
-            clip.end,
+            clip.start - seg_start,
+            clip.end - seg_start,
             crop_mode=base_item.get("crop") or clip.crop,
             src_size=(src_w, src_h),
             out_size=canvas,
@@ -516,7 +860,18 @@ def render_clip(
         clip.files = {**clip.files, **files}
         clip.status = "rendered"
     if persist:
-        project.save()
+        with projects.project_lock(project.id):
+            fresh = projects.load_project(project.id)
+            target = next((row for row in fresh.clips if row.storage_id == clip.storage_id), None)
+            actual = {k: v for k, v in target.as_dict().items() if k not in {"files", "status", "index", "title", "score", "reason"}} if target else None
+            if actual != expected:
+                raise RuntimeError("Klip berubah selama render. Hasil lama tidak dipasang; render ulang perubahan terbaru.")
+            target.files.update(files)
+            target.status = clip.status
+            for field in expected:
+                if field in projects.Clip.__dataclass_fields__ and field != "storage_id":
+                    setattr(target, field, copy.deepcopy(getattr(clip, field)))
+            fresh.save()
     _report(job, 100, "selesai", f"klip {clip.index + 1} selesai")
     return files
 
@@ -527,9 +882,7 @@ def render_preview(project: projects.Project, clip: projects.Clip, job: Job | No
     Hasilnya disimpan sebagai ``preview.mp4`` dan TIDAK menimpa klip final,
     jadi pengguna bisa mengutak-atik timeline tanpa menunggu render penuh.
     """
-    media = project.media_path()
-    if media is None:
-        raise FileNotFoundError("media sumber tidak ditemukan")
+    media, seg_start = _resolve_render_media(project, clip, job)
     directory = project.clip_dir(clip.index)
     src_w = project.width or 1920
     src_h = project.height or 1080
@@ -543,6 +896,8 @@ def render_preview(project: projects.Project, clip: projects.Clip, job: Job | No
             crop=clip.crop,
             canvas=getattr(clip, "canvas", "portrait"),
         )
+    if seg_start:
+        timeline = _shift_source_times(timeline, seg_start)
     text_items = timeline_mod.track(timeline, "text")
     base_item = (timeline_mod.track(timeline, "video") or [{}])[0]
     canvas = crop_mod.canvas_size(
@@ -591,6 +946,7 @@ def render_preview(project: projects.Project, clip: projects.Clip, job: Job | No
         original_volume=base_volume,
         voice_volume=clip.voice_volume,
         scale_to=tuple(max(2, int(side * min(1.0, 960 / max(canvas))) // 2 * 2) for side in canvas),
+        encoder="preview",
         progress_cb=lambda p, m: _report(job, 20 + p * 0.75, "pratinjau", m),
     )
     _report(job, 100, "pratinjau siap")

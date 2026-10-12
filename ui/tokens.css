@@ -13,19 +13,20 @@
   /* text */
   --text: #ffffff;
   --text-2: #ebebf5;
-  --text-dim: #8e8e93;
-  --text-dim-2: #636366;
+  --text-dim: #b0b0b5;
+  --text-dim-2: #b0b0b5;
 
   /* accents (iOS system colors, dark variants) */
   /* aksen utama tetap biru; merah dipakai hemat (rekam/hapus/brand) */
-  --accent: #0a84ff;
-  --accent-press: #0071e3;
+  --accent: #61afff;
+  --action: #006ad3;
+  --accent-press: #005bb5;
   --accent-soft: rgba(10, 132, 255, 0.16);
   --accent-2: #ff453a;
   --accent-2-soft: rgba(255, 69, 58, 0.12);
   --green: #30d158;
   --orange: #ff9f0a;
-  --red: #ff453a;
+  --red: #ff8d88;
   --purple: #bf5af2;
   --teal: #40c8e0;
 

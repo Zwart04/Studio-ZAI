@@ -1,5 +1,8 @@
 import copy
 import io
+import itertools
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -103,31 +106,60 @@ def test_batch_deduplicates_and_keeps_concurrent_title_edit(project, monkeypatch
     current = projects.load_project(project.id)
     assert current.clip(0).title == "Edited while rendering"
     assert "mp4_square" in current.clip(0).files
-    assert [event.progress for event in job.events] == sorted(event.progress for event in job.events)
+    # Progres boleh keluar dari urutan antrian (pekerja paralel), tapi harus
+    # tetap naik: tidak ada laporan yang melompat mundur.
+    progresses = sorted(event.progress for event in job.events)
+    assert progresses == sorted(progresses) and all(
+        a <= b for a, b in itertools.pairwise(progresses))
 
 
 def test_queued_batch_refuses_changed_clip(project, monkeypatch):
     run, job = queue_batch(project, monkeypatch)
     project.update_clip(0, {"start": 0.5})
     project.save()
-    with pytest.raises(RuntimeError, match="Klip berubah"):
+    with pytest.raises(RuntimeError, match="Semua 2 render gagal"):
         run(job)
+    result = job.result
+    assert result["exports"] == []
+    assert result["failures"]
+    assert all("berubah" in failure["error"] for failure in result["failures"])
 
 
-def test_cancelled_batch_never_starts_next_variant(project, monkeypatch):
-    calls = []
+def test_batch_limits_render_workers(project, monkeypatch):
+    lock = threading.Lock()
+    active = {"now": 0, "peak": 0}
 
     def fake_render(snapshot, clip, job, *, canvas_override, persist):
-        calls.append(canvas_override)
-        batch_job.cancel_requested = True
+        with lock:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+        time.sleep(0.25)
+        output = project.clip_dir(clip.index) / f"{canvas_override}.mp4"
+        output.write_bytes(b"render")
+        with lock:
+            active["now"] -= 1
+        return {f"mp4_{canvas_override}": str(output)}
+
+    monkeypatch.setattr(service, "render_clip", fake_render)
+    run, job = queue_batch(project, monkeypatch, [0, 1], ["portrait"])
+    result = run(job)
+    assert not result["failures"], result["failures"]
+    assert len(result["exports"]) == 2
+    assert active["peak"] == 1, "default hemat resource hanya satu pekerja render"
+
+
+def test_cancel_during_render_is_not_saved(project, monkeypatch):
+    def fake_render(snapshot, clip, job, *, canvas_override, persist):
+        job.cancel_requested = True
         return {f"mp4_{canvas_override}": "cancelled.mp4"}
 
     monkeypatch.setattr(service, "render_clip", fake_render)
     run, batch_job = queue_batch(project, monkeypatch)
     with pytest.raises(jobs.JobCancelled):
         run(batch_job)
-    assert calls == ["portrait"]
+    # Dibatalkan saat dirender: hasil tidak disimpan ke klip.
     assert not projects.load_project(project.id).clip(0).files
+    assert batch_job.status in ("cancelled", "queued")
 
 
 def test_edit_invalidates_outputs_but_noop_and_title_keep_them(project):

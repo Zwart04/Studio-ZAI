@@ -39,7 +39,8 @@ class TimelineView extends StatelessWidget {
   Widget build(BuildContext context) {
     final duration = timeline.duration <= 0 ? 1.0 : timeline.duration;
     final tracks = <TimelineTrack>[
-      for (final kind in _kindOrder) timeline.trackOf(kind) ?? TimelineTrack(id: kind, kind: kind),
+      for (final kind in _kindOrder)
+        timeline.trackOf(kind) ?? TimelineTrack(id: kind, kind: kind),
     ];
 
     return Column(
@@ -56,7 +57,8 @@ class TimelineView extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 14),
                   child: Text(_kindLabel(track.kind),
-                      style: const TextStyle(fontSize: 11, color: Tokens.textDim)),
+                      style:
+                          const TextStyle(fontSize: 11, color: Tokens.textDim)),
                 ),
               ),
               Expanded(
@@ -152,13 +154,16 @@ class _TrackRow extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Padding(
                       padding: EdgeInsets.only(left: 10),
-                      child: Text('—', style: TextStyle(color: Tokens.textDim2, fontSize: 11)),
+                      child: Text('—',
+                          style:
+                              TextStyle(color: Tokens.textDim2, fontSize: 11)),
                     ),
                   ),
                 for (final item in track.items)
                   Positioned(
                     left: (item.start / duration * width).clamp(0.0, width),
-                    width: ((item.end - item.start) / duration * width).clamp(28.0, width),
+                    width: ((item.end - item.start) / duration * width)
+                        .clamp(28.0, width),
                     top: 4,
                     bottom: 4,
                     child: _TimelineBlock(
@@ -229,9 +234,11 @@ class _TimelineBlockState extends State<_TimelineBlock> {
     if (origin == null) return;
     final updated = origin.copy();
     if (fromStart) {
-      updated.start = (origin.start + deltaSeconds).clamp(0.0, origin.end - 0.3);
+      updated.start =
+          (origin.start + deltaSeconds).clamp(0.0, origin.end - 0.3);
     } else {
-      updated.end = (origin.end + deltaSeconds).clamp(origin.start + 0.3, 3600.0);
+      updated.end =
+          (origin.end + deltaSeconds).clamp(origin.start + 0.3, 3600.0);
     }
     widget.onChange(updated);
   }
@@ -247,7 +254,8 @@ class _TimelineBlockState extends State<_TimelineBlock> {
         _showActions(context);
       },
       onHorizontalDragStart: (_) => _begin(),
-      onHorizontalDragUpdate: (details) => _move((details.primaryDelta ?? 0) / widget.pixelsPerSecond),
+      onHorizontalDragUpdate: (details) =>
+          _move((details.primaryDelta ?? 0) / widget.pixelsPerSecond),
       onHorizontalDragEnd: (_) => _origin = null,
       child: Stack(
         children: [
@@ -273,14 +281,16 @@ class _TimelineBlockState extends State<_TimelineBlock> {
           Align(
             alignment: Alignment.centerLeft,
             child: _Handle(
-              onDrag: (delta) => _resize(delta / widget.pixelsPerSecond, fromStart: true),
+              onDrag: (delta) =>
+                  _resize(delta / widget.pixelsPerSecond, fromStart: true),
               onBegin: _begin,
             ),
           ),
           Align(
             alignment: Alignment.centerRight,
             child: _Handle(
-              onDrag: (delta) => _resize(delta / widget.pixelsPerSecond, fromStart: false),
+              onDrag: (delta) =>
+                  _resize(delta / widget.pixelsPerSecond, fromStart: false),
               onBegin: _begin,
             ),
           ),
@@ -300,14 +310,16 @@ class _TimelineBlockState extends State<_TimelineBlock> {
       context: context,
       backgroundColor: Tokens.bgElevated,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
       ),
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: Tokens.danger),
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: Tokens.danger),
               title: const Text('Hapus item'),
               onTap: () => Navigator.of(sheetContext).pop(true),
             ),
@@ -340,7 +352,8 @@ class _Handle extends StatelessWidget {
         width: 14,
         color: Colors.transparent,
         alignment: Alignment.center,
-        child: Container(width: 2, height: 16, color: Colors.white.withValues(alpha: 0.55)),
+        child: Container(
+            width: 2, height: 16, color: Colors.white.withValues(alpha: 0.55)),
       ),
     );
   }

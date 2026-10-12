@@ -236,7 +236,7 @@ button.primary, button.ghost, button.danger, button.mini, button.link, .icon-btn
   transition: background var(--motion), opacity var(--motion), transform 120ms ease;
 }
 
-button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+button.primary { background: var(--action); color: #fff; font-weight: 600; }
 button.primary:hover { background: var(--accent-press); }
 button.primary:active { transform: scale(.985); }
 button.primary:disabled, button.ghost:disabled, button.danger:disabled { opacity: .38; cursor: not-allowed; }

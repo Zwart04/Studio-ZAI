@@ -9,6 +9,7 @@ import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'source_captions.dart';
 
 /// FFmpeg/FFprobe helpers running fully on-device (ffmpeg-kit maintained fork).
 class MediaTools {
@@ -55,13 +56,30 @@ class MediaTools {
     final streams = session.getMediaInformation()?.getStreams() ?? [];
     for (final stream in streams) {
       if (stream.getType() == 'video') {
-        return {
-          'width': int.tryParse(stream.getWidth()?.toString() ?? '0') ?? 0,
-          'height': int.tryParse(stream.getHeight()?.toString() ?? '0') ?? 0,
-        };
+        return displayResolution(stream.getAllProperties() ?? {});
       }
     }
     return {'width': 0, 'height': 0};
+  }
+
+  static Map<String, int> displayResolution(Map<dynamic, dynamic> stream) {
+    var width = int.tryParse('${stream['width'] ?? 0}') ?? 0;
+    var height = int.tryParse('${stream['height'] ?? 0}') ?? 0;
+    final tags = stream['tags'] as Map?;
+    dynamic rotation = tags?['rotate'] ?? 0;
+    for (final side in (stream['side_data_list'] as List? ?? [])) {
+      if (side is Map && side.containsKey('rotation')) {
+        rotation = side['rotation'];
+        break;
+      }
+    }
+    final angle = double.tryParse('$rotation') ?? 0;
+    if (angle.isFinite && (angle / 90).round().abs() % 2 == 1) {
+      final originalWidth = width;
+      width = height;
+      height = originalWidth;
+    }
+    return {'width': width, 'height': height};
   }
 
   /// Apakah berkas punya stream audio (filter `[0:a]` gagal bila tidak ada).
@@ -82,6 +100,28 @@ class MediaTools {
     );
     if (!ok) throw Exception('Gagal mengekstrak audio.');
     return File(outputWav);
+  }
+
+  static Future<List<Map<String, dynamic>>> localCaptions(
+      String source, Directory directory, double duration) async {
+    final sidecar = await SourceCaptions.sidecar(source, duration);
+    if (sidecar.isNotEmpty) return sidecar;
+    final info = await FFprobeKit.getMediaInformation(source);
+    final tracks = info.getMediaInformation()?.getStreams() ?? [];
+    for (final stream in tracks) {
+      if (stream.getType() == 'subtitle' &&
+          ['subrip', 'ass', 'ssa', 'mov_text', 'webvtt']
+              .contains(stream.getCodec())) {
+        final file = File('${directory.path}/embedded.srt');
+        if (await _run(
+            '-y -i ${_quote(source)} -map 0:${stream.getIndex()} ${_quote(file.path)}')) {
+          return SourceCaptions.parse(await file.readAsString(),
+              duration: duration);
+        }
+        break;
+      }
+    }
+    return [];
   }
 
   /// Ukuran kanvas keluaran (mirror `core/pipeline/crop.py:canvas_size`).

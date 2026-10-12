@@ -40,6 +40,13 @@ binaries = [
 ]
 
 ff_dir = os.environ.get("STUDIOZAI_FFMPEG_DIR")
+if os.name == "nt" and (ROOT / "vendor" / "qjs.exe").is_file():
+    binaries.append((str(ROOT / "vendor" / "qjs.exe"), "bin"))
+native_runtime = ROOT / "vendor" / "llama-cpu"
+if os.name == "nt" and native_runtime.is_dir():
+    for candidate in native_runtime.iterdir():
+        if candidate.suffix in {".dll", ".exe"}:
+            binaries.append((str(candidate), "bin"))
 if ff_dir:
     for name in ("ffmpeg.exe", "ffprobe.exe", "ffmpeg", "ffprobe"):
         candidate = Path(ff_dir) / name
@@ -59,7 +66,8 @@ hiddenimports = [
 ]
 
 # Binary-heavy packages that PyInstaller cannot infer on its own.
-for package in ("cv2", "sentencepiece", "sacremoses", "subword_nmt", "ctranslate2", "faster_whisper", "av", "tokenizers", "onnxruntime", "piper", "yt_dlp", "sherpa_onnx", "sherpa_onnx_core"):
+# "requests" dipakai jalur cadangan InnerTube (youtube-transcript-api).
+for package in ("cv2", "sentencepiece", "sacremoses", "subword_nmt", "ctranslate2", "faster_whisper", "av", "tokenizers", "onnxruntime", "piper", "yt_dlp", "yt_dlp_ejs", "youtube_transcript_api", "requests", "urllib3", "sherpa_onnx", "sherpa_onnx_core"):
     try:
         pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
     except Exception:  # package not installed in this build environment

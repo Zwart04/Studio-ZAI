@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config, credentials
+from .jobs import bounded_inference
 
 PROVIDERS = {
     "sdxs_local": {"label": "Di perangkat · SDXS-512", "url": "", "image": True},
@@ -71,7 +72,7 @@ def discover_models(provider: str, base: str = "", key: str = "", kind: str = "a
     if cached and time.monotonic() - cached[0] < 300:
         return cached[1]
     route = "/models?limit=1000" if provider == "anthropic" else "/models"
-    result = request(base, route, key, anthropic=provider == "anthropic")
+    result = request(base, route, key, anthropic=provider == "anthropic", timeout=8)
     rows = result.get("data", []) if isinstance(result, dict) else None
     if not isinstance(rows, list):
         raise ValueError("Daftar model penyedia tidak valid")  # noqa: TRY004
@@ -97,7 +98,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise RuntimeError("Alamat API dialihkan. Isi alamat resmi penyedia di Pengaturan.")
 
 
-def request(base: str, route: str, key: str, payload: dict | None = None, *, anthropic: bool = False, binary: bool = False) -> Any:
+def request(base: str, route: str, key: str, payload: dict | None = None, *, anthropic: bool = False, binary: bool = False, timeout: float = 90, check_cancel=None) -> Any:
+    from .execution_policy import check_network
+    check_network(base, inference=True)
     from urllib.parse import urlparse
     url = urlparse(base)
     if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password:
@@ -107,10 +110,12 @@ def request(base: str, route: str, key: str, payload: dict | None = None, *, ant
     headers = {"Content-Type": "application/json"}
     if key:
         headers.update({"x-api-key": key, "anthropic-version": "2023-06-01"} if anthropic else {"Authorization": f"Bearer {key}"})
+    if check_cancel:
+        return _cancellable_request(base, route, headers, payload, binary, timeout, check_cancel)
     req = urllib.request.Request(base.rstrip("/") + route,
         data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
     try:
-        with urllib.request.build_opener(_NoRedirect).open(req, timeout=180) as response:
+        with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as response:
             raw = response.read(32 * 1024 * 1024 + 1)
         if len(raw) > 32 * 1024 * 1024:
             raise ValueError("Respons AI terlalu besar")
@@ -120,6 +125,54 @@ def request(base: str, route: str, key: str, payload: dict | None = None, *, ant
         raise RuntimeError(hints.get(exc.code, f"Penyedia AI gagal (HTTP {exc.code})")) from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise RuntimeError("Penyedia AI tidak merespons. Periksa alamat dan koneksi.") from exc
+
+
+def _cancellable_request(base, route, headers, payload, binary, timeout, check_cancel):
+    import http.client
+    import queue
+    import socket
+    import threading
+    from urllib.parse import urlparse
+    parsed = urlparse(base)
+    cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+    connection = cls(parsed.hostname, parsed.port, timeout=timeout)
+    responses = queue.Queue(maxsize=1)
+    def send():
+        try:
+            connection.request("POST" if payload is not None else "GET", parsed.path.rstrip("/") + route,
+                               body=json.dumps(payload).encode() if payload is not None else None, headers=headers)
+            response = connection.getresponse()
+            if response.status != 200:
+                raise RuntimeError(f"Penyedia AI gagal (HTTP {response.status})")
+            raw = response.read(32 * 1024 * 1024 + 1)
+            if len(raw) > 32 * 1024 * 1024:
+                raise ValueError("Respons AI terlalu besar")
+            responses.put((True, raw if binary else json.loads(raw)))
+        except Exception as exc:  # noqa: BLE001 - transport errors cross the worker boundary
+            responses.put((False, exc))
+    thread = threading.Thread(target=send, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            check_cancel()
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Inference melewati batas waktu")
+            try:
+                ok, value = responses.get(timeout=.1)
+            except queue.Empty:
+                continue
+            if not ok:
+                raise RuntimeError("Inference tidak merespons; periksa runtime atau penyedia") from value
+            return value
+    finally:
+        if connection.sock:
+            try:
+                connection.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        connection.close()
+        thread.join(timeout=1)
 
 
 def connection(kind: str) -> tuple[str, str, str, str]:
@@ -138,20 +191,22 @@ def connection(kind: str) -> tuple[str, str, str, str]:
     return provider, base, model, key
 
 
-def text(prompt: str) -> str:
-    provider, base, model, key = connection("ai")
+def text(prompt: str, model_override: str | None = None, connection_override=None, check_cancel=None) -> str:
+    provider, base, model, key = connection_override or connection("ai")
+    model = model_override or model
     if not model:
         raise ValueError("Isi nama model teks di Pengaturan")
     messages = [{"role": "user", "content": prompt}]
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if provider == "anthropic":
         payload["max_tokens"] = 2048
-        response = request(base, "/messages", key, payload, anthropic=True)
+        response = request(base, "/messages", key, payload, anthropic=True, check_cancel=check_cancel)
         return "".join(p.get("text", "") for p in response.get("content", []) if p.get("type") == "text")
-    response = request(base, "/chat/completions", key, payload)
+    response = request(base, "/chat/completions", key, payload, check_cancel=check_cancel)
     return str(response["choices"][0]["message"]["content"])
 
 
+@bounded_inference
 def image(prompt: str, provider: str | None = None) -> Path:
     if not prompt.strip():
         raise ValueError("Deskripsi gambar kosong")
@@ -188,6 +243,7 @@ def image(prompt: str, provider: str | None = None) -> Path:
     return target
 
 
+@bounded_inference
 def speech(text: str, voice: str, language: str) -> Path:
     _, base, model, key = connection("speech")
     if voice not in VOICES or not text.strip():

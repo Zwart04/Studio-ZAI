@@ -194,6 +194,13 @@ class Project {
     this.createdAt,
     this.transcript = const [],
     this.processingWarning = '',
+    this.online = false,
+    this.sourceUrl = '',
+    this.audioPath = '',
+    this.segments = const {},
+    this.processingMode = 'legacy',
+    this.audioLanguage = '',
+    this.execution = const {},
   });
 
   final String id;
@@ -206,6 +213,22 @@ class Project {
   DateTime? createdAt;
   List<Map<String, dynamic>> transcript;
   String processingWarning;
+  String processingMode;
+  String audioLanguage;
+  Map<String, dynamic> execution;
+
+  /// Mode online: audio diunduh dulu; video klip hanya diunduh saat render.
+  bool online;
+
+  /// Tautan asli (YouTube) bila [online] aktif dan video belum diunduh penuh.
+  String sourceUrl;
+
+  /// Berkas audio lokal yang diunduh untuk transkrip.
+  String audioPath;
+
+  /// Cache segmen video per clip, dipakai saat render di mode online.
+  /// Nilainya peta {"path": String, "start": double, "end": double}.
+  Map<String, dynamic> segments;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -216,8 +239,15 @@ class Project {
         'sourceIsUrl': sourceIsUrl,
         'transcript': transcript,
         'processingWarning': processingWarning,
+        'processingMode': processingMode,
+        'audioLanguage': audioLanguage,
+        'execution': execution,
         'clips': clips.map((c) => c.toJson()).toList(),
         'createdAt': (createdAt ?? DateTime.now()).toIso8601String(),
+        'online': online,
+        'sourceUrl': sourceUrl,
+        'audioPath': audioPath,
+        'segments': segments,
       };
 
   static Project fromJson(Map<String, dynamic> json) => Project(
@@ -231,11 +261,36 @@ class Project {
             (json['transcript'] as List? ?? [])
                 .map((e) => Map<String, dynamic>.from(e as Map))),
         processingWarning: json['processingWarning'] as String? ?? '',
+        processingMode: json['processingMode'] as String? ?? 'legacy',
+        audioLanguage: json['audioLanguage'] as String? ?? '',
+        execution: Map<String, dynamic>.from(json['execution'] as Map? ?? {}),
         clips: (json['clips'] as List? ?? const [])
             .map((e) => Clip.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        online: json['online'] as bool? ?? false,
+        sourceUrl: json['sourceUrl'] as String? ?? '',
+        audioPath: json['audioPath'] as String? ?? '',
+        segments: Map<String, dynamic>.from(json['segments'] as Map? ?? {}),
       );
+
+  /// Cache segmen video untuk [index]. Mengembalikan peta
+  /// {"path", "start", "end"} atau null bila belum ada.
+  Map<String, dynamic>? segmentFor(int index) {
+    final entry = segments['$index'];
+    if (entry is! Map) return null;
+    return Map<String, dynamic>.from(entry);
+  }
+
+  /// Simpan/memperbarui cache segmen untuk [index].
+  void storeSegment(int index, String path, double start, double end) {
+    segments = Map<String, dynamic>.from(segments)
+      ..['$index'] = {'path': path, 'start': start, 'end': end};
+  }
+
+  void clearSegment(int index) {
+    segments = Map<String, dynamic>.from(segments)..remove('$index');
+  }
 
   String encode() => jsonEncode(toJson());
 }
