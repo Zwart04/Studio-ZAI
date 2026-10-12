@@ -72,7 +72,10 @@ for package in ("cv2", "sentencepiece", "sacremoses", "subword_nmt", "ctranslate
         pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
     except Exception:  # package not installed in this build environment
         continue
-    datas += pkg_datas
+    datas += [
+        entry for entry in pkg_datas
+        if not entry[1].replace("\\", "/").startswith("youtube_transcript_api/test")
+    ]
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
 
