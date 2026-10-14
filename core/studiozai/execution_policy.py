@@ -8,7 +8,7 @@ MODE = ContextVar("processing_mode", default="legacy")
 
 @contextmanager
 def processing(mode: str):
-    if mode not in {"hybrid", "offline", "online_ai", "legacy"}:
+    if mode not in {"local", "hybrid", "offline", "online_ai", "legacy"}:
         raise ValueError("Mode pemrosesan tidak dikenal")
     token = MODE.set(mode)
     try:
@@ -23,5 +23,5 @@ def check_network(url: str, *, inference: bool = False):
     mode = MODE.get()
     if mode == "offline" and not (inference and local):
         raise ValueError("Full Offline tidak mengizinkan akses jaringan")
-    if inference and mode == "hybrid" and not local:
-        raise ValueError("Hybrid Local AI memakai runtime lokal. Aktifkan Online AI untuk cloud/LAN.")
+    if inference and mode in {"local", "hybrid"} and not local:
+        raise ValueError("Model offline memakai runtime lokal. Pilih model online untuk cloud/LAN.")

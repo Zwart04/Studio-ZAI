@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -56,7 +56,8 @@ class NewProject(BaseModel):
 
 class ProcessRequest(BaseModel):
     source: str
-    processing_mode: Literal["hybrid", "offline", "online_ai", "legacy"] = "hybrid"
+    processing_mode: Literal["local", "hybrid", "offline", "online_ai", "legacy"] = "local"
+    task: Literal["moments", "transcript"] = "moments"
     count: int = Field(default=0, ge=0, le=20)
     analysis_mode: Literal["auto", "podcast"] = "auto"
     review_first: bool = True
@@ -70,7 +71,8 @@ class ProcessRequest(BaseModel):
     quality: str = "720p"
     format_id: str | None = None
     subtitle_position: str = "bottom"  # bottom | middle | top | off
-    canvas: str = "portrait"  # portrait | original | square | landscape
+    canvas: Literal["portrait", "original", "square", "landscape", "classic"] = "portrait"
+    crop: Literal["center", "fit", "blur"] = "center"
     audio_lang: str | None = None  # pilih track audio multi-bahasa (mis. "id")
     audio_mode: str = "original"  # original | voice (ganti) | mix (campur)
     voice_id: str | None = None  # model suara untuk sulih suara TTS
@@ -191,7 +193,7 @@ class AssetRequest(BaseModel):
 class ManualClip(BaseModel):
     start: float
     end: float
-    canvas: Literal["portrait", "original", "square", "landscape"] = "portrait"
+    canvas: Literal["portrait", "original", "square", "landscape", "classic"] = "portrait"
 
 
 class BatchRenderRequest(BaseModel):
@@ -600,6 +602,17 @@ def relink_project(project_id: str, payload: RelinkRequest):
         raise HTTPException(400, str(exc)) from None
 
 
+@app.get("/api/projects/{project_id}/transcript.srt")
+def download_transcript(project_id: str):
+    project = _project(project_id)
+    rows = project.transcript.get("segments", [])
+    if not rows:
+        raise HTTPException(404, "Transkrip belum tersedia")
+    from .utils.text import srt_timestamp
+    content = "\n\n".join(f"{index}\n{srt_timestamp(row['start'])} --> {srt_timestamp(row['end'])}\n{row['text']}" for index, row in enumerate(rows, 1)) + "\n"
+    return Response(content, media_type="application/x-subrip", headers={"Content-Disposition": 'attachment; filename="transcript.srt"'})
+
+
 def _narration_text(project: Any, clip: Any) -> str:
     """Gabungkan transkrip yang jatuh di rentang klip -> teks narasi sulih suara."""
     parts: list[str] = []
@@ -670,15 +683,23 @@ def _process_task(project_id: str, payload: ProcessRequest):
                 job=job,
                 format_id=fmt,
                 audio_lang=payload.audio_lang,
-                online=payload.online or payload.processing_mode == "hybrid",
-                captions_first=payload.use_transcript,
+                online=payload.online or payload.processing_mode in {"hybrid", "local"},
+                captions_first=payload.use_transcript or payload.task == "transcript",
             )
+        if payload.task == "transcript":
+            transcript = service.ensure_transcript(project, model_id=payload.asr_model, job=job)
+            if not transcript.get("segments"):
+                raise ValueError("Tidak ada ucapan yang terbaca. Periksa audio atau pilih bahasa konten yang sesuai.")
+            project.execution["task"] = "transcript"
+            project.save()
+            return {"clips": len(project.clips), "project": projects.load_project(project_id).as_dict()}
+        project.execution["task"] = "moments"
         service.generate_clips(
             project,
             count=payload.count,
             min_len=payload.min_len,
             max_len=payload.max_len,
-            use_llm=payload.use_llm or payload.processing_mode in {"hybrid", "offline"},
+            use_llm=payload.use_llm,
             use_transcript=payload.use_transcript,
             analysis_mode=payload.analysis_mode,
             asr_model=payload.asr_model,
@@ -691,6 +712,7 @@ def _process_task(project_id: str, payload: ProcessRequest):
         for clip in list(project.clips):
             clip.subtitle_position = payload.subtitle_position
             clip.canvas = payload.canvas
+            clip.crop = payload.crop
             if payload.audio_mode != "original":
                 # Sulih suara: buat narasi TTS dari transkrip klip lalu ganti/campur audio.
                 text = _narration_text(project, clip)
@@ -737,7 +759,7 @@ def create_manual_clip(project_id: str, payload: ManualClip) -> dict[str, Any]:
     project = _project(project_id)
     if project.media_path() is None and not project.online:
         raise HTTPException(400, "Video sumber belum tersimpan")
-    if not 0 <= payload.start < payload.end <= project.duration or payload.canvas not in {"original", "portrait", "landscape", "square"}:
+    if not 0 <= payload.start < payload.end <= project.duration:
         raise HTTPException(400, "Rentang harus berada di dalam durasi video dan kanvas harus valid")
     clip = project.add_clip(projects.Clip(index=0, start=payload.start, end=payload.end,
         title=f"{project.title} · {clock(payload.start)}–{clock(payload.end)}", canvas=payload.canvas, crop="fit"))

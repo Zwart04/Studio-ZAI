@@ -107,7 +107,7 @@ def test_cached_transcript_guides_clips_when_asr_model_is_unavailable(monkeypatc
 
 
 @pytest.mark.skipif(not ffmpeg.ffmpeg_available(), reason="FFmpeg required")
-@pytest.mark.parametrize("shape", ["original", "square", "landscape"])
+@pytest.mark.parametrize("shape", ["original", "square", "classic", "landscape"])
 def test_canvas_keeps_square_geometry(tmp_path: Path, shape):
     import subprocess
     source = tmp_path / "source.mp4"

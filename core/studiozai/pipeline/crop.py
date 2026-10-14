@@ -80,12 +80,13 @@ def blur_background_graph(src_w: int, out_w: int, out_h: int, sigma: int = 24) -
     )
 
 
-CANVAS_SHAPES = ("portrait", "original", "square", "landscape")
+CANVAS_SHAPES = ("portrait", "original", "square", "landscape", "classic")
 CANVAS_LABELS = {
     "portrait": "Potrait 9:16",
     "original": "Ukuran asli video",
     "square": "Kotak 1:1",
     "landscape": "Landscape 16:9",
+    "classic": "Standar 4:3",
 }
 
 
@@ -111,6 +112,8 @@ def canvas_size(shape: str, src_w: int, src_h: int) -> tuple[int, int]:
         return 1080, 1080
     if shape == "landscape":
         return 1920, 1080
+    if shape == "classic":
+        return 1440, 1080
     return target_size(src_w, src_h)
 
 

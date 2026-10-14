@@ -86,6 +86,25 @@ class ClipsScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
+        if (project.transcript.isNotEmpty)
+          ExpansionTile(
+            initiallyExpanded: project.execution['task'] == 'transcript',
+            title: Text('Transkrip · ${project.transcript.length} bagian'),
+            children: [
+              SizedBox(
+                  height: 320,
+                  child: ListView.builder(
+                    itemCount: project.transcript.length,
+                    itemBuilder: (context, index) {
+                      final row = project.transcript[index];
+                      return ListTile(
+                          title: SelectableText(row['text'] as String? ?? ''),
+                          subtitle: Text(
+                              formatClock((row['start'] as num).toDouble())));
+                    },
+                  )),
+            ],
+          ),
         FilledButton.icon(
             onPressed: () => Navigator.push(
                 context,

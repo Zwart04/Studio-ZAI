@@ -41,7 +41,7 @@ const I18N = {
     "home.aiDetect": "Deteksi model", "home.aiModel": "Model AI", "home.aiModelAuto": "Otomatis · saran provider",
     "home.aiNeedProvider": "Pilih provider AI dulu.",
     "home.aiDetecting": "Memuat model dari provider…",
-    "home.asrSpeed": "Kecepatan transkrip",
+    "home.asrSpeed": "Model transkrip offline (Whisper)",
     "home.asrFast": "Cepat · model tiny", "home.asrBalanced": "Seimbang · model base", "home.asrAccurate": "Akurat · model small",
     "home.asrHelp": "Tiny memakai lebih sedikit RAM. Waktu dan ketepatan bergantung audio, bahasa, serta perangkat. Pilih model yang sudah terpasang.",
     "home.online": "Mode online",
@@ -130,7 +130,7 @@ const I18N = {
     "home.aiDetect": "Detect models", "home.aiModel": "AI model", "home.aiModelAuto": "Auto · provider suggestion",
     "home.aiNeedProvider": "Pick an AI provider first.",
     "home.aiDetecting": "Loading models from provider…",
-    "home.asrSpeed": "Transcription speed",
+    "home.asrSpeed": "Offline transcription model (Whisper)",
     "home.asrFast": "Fast · tiny model", "home.asrBalanced": "Balanced · base model", "home.asrAccurate": "Accurate · small model",
     "home.asrHelp": "Tiny uses less RAM. Speed and accuracy depend on the audio, language and device. Choose an installed model.",
     "home.online": "Online mode",
@@ -354,7 +354,7 @@ function trackJob(job) {
       if (bar2) bar2.classList.remove("visible");
       state.jobId = null;
       hideProcessing();
-      if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
+      if (startBtn) { startBtn.disabled = false; syncAnalysisSourceUI(); }
       updateBatchSummary();
       if (data.status === "error") toast(data.error || t("toast.error"), "error");
       else if (data.status === "cancelled") toast(t("common.cancel"));
@@ -367,6 +367,7 @@ function trackJob(job) {
       }
       else toast(`${t("toast.done")}: ${data.title || ""}`);
       refreshAll();
+      if (data.status === 'done' && data.result?.project?.execution?.task === 'transcript') openProject(data.result.project.id).catch(error => toast(error.message, 'error'));
       if (data.result?.image && window.renderImages) { setPage("images"); renderImages(); }
       if (data.result && data.result.path) playAudio(data.result.path);
     }
@@ -376,7 +377,7 @@ function trackJob(job) {
     const bar3 = $("#jobbar");
     if (bar3) bar3.classList.remove("visible");
     hideProcessing();
-    if (startBtn) { startBtn.disabled = false; startBtn.textContent = t("home.start"); }
+    if (startBtn) { startBtn.disabled = false; syncAnalysisSourceUI(); }
     state.jobId = null;
     updateBatchSummary();
   };
@@ -521,13 +522,17 @@ function onSourceChanged() {
 }
 
 async function startClipping() {
+  if (state.jobId || homeSubmitting) return;
   const source = $("#source").value.trim();
   if (!source) {
     toast(t("home.source"), "error");
     return;
   }
+  homeSubmitting = true;
+  $('#startBtn').disabled = true;
   try {
-    const useAiAnalysis = analysisSource() === 'ai';
+    const task = document.querySelector('[name=creationTask]:checked').value;
+    const useAiAnalysis = task === 'moments' && analysisSource() === 'ai';
     const processingMode = document.querySelector('#processingMode').value;
     if (processingMode === 'offline' && /^https?:\/\//i.test(source)) {
       toast(t('hybrid.localOnly'), 'error'); return;
@@ -543,7 +548,7 @@ async function startClipping() {
       const typedKey = $("#aiKey").value.trim();
       if (typedKey) aiValues.ai_api_key = typedKey;
       const aiModel = $("#aiModel").value;
-      if (aiModel && aiModel !== 'auto') aiValues.ai_model = aiModel;
+      aiValues.ai_model = aiModel || 'auto';
       await api("/api/settings", { method: "POST", body: JSON.stringify({ values: aiValues }) });
       homeAiKeySaved = homeAiKeySaved || Boolean(typedKey);
       refreshAiKeyBadge();
@@ -558,28 +563,33 @@ async function startClipping() {
       method: "POST",
       body: JSON.stringify({
         source,
+        task,
         processing_mode: useAiAnalysis ? 'online_ai' : processingMode,
         count: Number($("#count").value),
         analysis_mode: $("#analysisMode").value,
         review_first: $("#reviewFirst").checked,
-        formats: [...document.querySelectorAll("[name=outputFormat]:checked")].map(x => x.value),
+        formats: [],
         min_len: minLen,
         max_len: maxLen,
         use_transcript: $("#useTranscript").checked,
-        use_llm: true,
+        use_llm: task === 'moments' && (useAiAnalysis || Boolean(document.querySelector('#localModel').value)),
         model: useAiAnalysis ? (aiModelPick && aiModelPick !== 'auto' ? aiModelPick : null) : (document.querySelector('#localModel').value || null),
         asr_model: ASR_SPEED_MODELS[$("#asrSpeed").value] || null,
         quality: $("#quality").value || "720p",
         subtitle_position: ($("#subPos") || {}).value || "bottom",
         canvas: ($("#canvasSize") || {}).value || "portrait",
+        crop: $('#frameFit').value,
         audio_mode: ($("#audioMode") || {}).value || "original",
         audio_lang: (($("#audioTrack") || {}).value || "") || null,
-        online: $("#onlineMode").checked,
+        online: true,
       }),
     });
     trackJob(job);
   } catch (error) {
     toast(error.message, "error");
+  } finally {
+    homeSubmitting = false;
+    if (!state.jobId) { $('#startBtn').disabled = false; syncAnalysisSourceUI(); }
   }
 }
 
@@ -624,6 +634,7 @@ async function renderHomeProjects() {
 function previewAspect(canvas, width = 0, height = 0) {
   if (canvas === "portrait") return "9 / 16";
   if (canvas === "square") return "1 / 1";
+  if (canvas === "classic") return "4 / 3";
   if (canvas === "original" && Number(width) > 0 && Number(height) > 0) return `${Math.min(8192, Number(width))} / ${Math.min(8192, Number(height))}`;
   return "16 / 9";
 }
@@ -814,6 +825,15 @@ function renderProjectDetail() {
   let execution = document.querySelector('#executionPath');
   if (!execution) { execution = document.createElement('p'); execution.id = 'executionPath'; execution.className = 'field-help'; $('#detailMeta').after(execution); }
   execution.textContent = [project.execution?.transcript, project.execution?.ranking, project.notes].filter(Boolean).join(' · ');
+  let transcriptPanel = $('#projectTranscript');
+  if (!transcriptPanel) {
+    transcriptPanel = document.createElement('details'); transcriptPanel.id = 'projectTranscript'; transcriptPanel.className = 'card transcript-panel';
+    $('#clipGrid').before(transcriptPanel);
+  }
+  const segments = project.transcript?.segments || [];
+  transcriptPanel.hidden = !segments.length;
+  transcriptPanel.open = project.execution?.task === 'transcript';
+  transcriptPanel.innerHTML = `<summary>Transkrip · ${segments.length} bagian</summary><a class="button" href="/api/projects/${encodeURIComponent(project.id)}/transcript.srt" download>Unduh SRT</a><div class="transcript-rows">${segments.map(s => `<p><time>${formatClock(s.start)}</time> ${escapeHtml(s.text || '')}</p>`).join('')}</div>`;
   let relink = document.querySelector('#relinkSource');
   if(!relink){
     relink=document.createElement('details'); relink.id='relinkSource'; relink.className='field';
@@ -846,7 +866,7 @@ function renderProjectDetail() {
   }
   scoreHelp.textContent = "Skor lebih tinggi menunjukkan rekomendasi potensi yang lebih kuat. Skor ini tidak menjamin viral.";
   if (!project.clips.length) {
-    grid.innerHTML = `<div class="empty">${t("projects.empty")}</div>`;
+    grid.innerHTML = `<div class="empty">${segments.length ? 'Transkrip siap. Belum ada klip yang dibuat dari proyek ini.' : 'Belum ada klip. Proses sumber dari Beranda atau pilih bagian video secara manual.'}</div>`;
     return;
   }
   grid.innerHTML = project.clips.map((clip) => {
@@ -1597,6 +1617,7 @@ document.querySelectorAll('[data-source-mode]').forEach(button => button.addEven
 const ASR_SPEED_MODELS = { fast: 'whisper-tiny-int8', balanced: 'whisper-base-int8', accurate: 'whisper-small-int8' };
 const CLIP_LENGTHS = { auto: [0, 0], s15: [10, 20], s30: [20, 40], s60: [45, 75] };
 let homeAiKeySaved = false;
+let homeSubmitting = false;
 let homeDiscoveryGeneration = 0;
 let homeProviderBases = {};
 
@@ -1612,11 +1633,22 @@ function refreshAiKeyBadge() {
 }
 
 function syncAnalysisSourceUI() {
-  const ai = analysisSource() === 'ai';
+  const transcriptOnly = document.querySelector('[name=creationTask]:checked')?.value === 'transcript';
+  const ai = !transcriptOnly && analysisSource() === 'ai';
   const mode = document.querySelector('#processingMode');
+  if (mode && transcriptOnly) mode.value = 'local';
   if (mode && ai) mode.value = 'online_ai';
-  else if (mode && mode.value === 'online_ai') mode.value = 'hybrid';
+  else if (mode && mode.value === 'online_ai') mode.value = 'local';
   document.querySelector('#aiPanel').hidden = !ai;
+  document.querySelector('#localLlmFields').hidden = ai || transcriptOnly;
+  document.querySelector('#momentModelControls').hidden = transcriptOnly;
+  document.querySelector('.analysis-modes').hidden = true;
+  document.querySelector('#clipResultSettings').hidden = transcriptOnly;
+  document.querySelector('#advDetails').hidden = transcriptOnly;
+  document.querySelector('#analysisHeading').textContent = transcriptOnly ? 'Model untuk transkrip' : 'Model untuk memilih momen';
+  document.querySelector('#analysisHelp').textContent = transcriptOnly ? 'Subtitle sumber dipakai jika tersedia. Whisper offline mengubah audio menjadi teks jika subtitle tidak tersedia. Tidak ada permintaan ke model pemilih momen.' : 'Model membaca transkrip untuk menyarankan bagian menarik. Tautan video tetap memerlukan internet meskipun modelnya offline.';
+  document.querySelector('#startBtn').removeAttribute('data-i18n');
+  document.querySelector('#startBtn').textContent = transcriptOnly ? 'Buat transkrip' : 'Cari momen';
   const llm = document.querySelector('#useLlm');
   if (llm) llm.checked = ai;
 }
@@ -1633,11 +1665,17 @@ document.querySelectorAll('[data-analysis-source]').forEach(button => button.add
 async function initHomeAnalysis() {
   const control = document.createElement('div');
   control.className = 'field';
-  control.innerHTML = `<label for="processingMode" data-i18n="hybrid.mode">${t('hybrid.mode')}</label><select id="processingMode"><option value="hybrid">Hybrid Local AI</option><option value="offline" data-i18n="hybrid.offline">${t('hybrid.offline')}</option><option value="online_ai" data-i18n="hybrid.online">${t('hybrid.online')}</option></select><label for="localModel" data-i18n="hybrid.model">${t('hybrid.model')}</label><select id="localModel"><option value="" data-i18n="hybrid.none">${t('hybrid.none')}</option></select><button type="button" id="detectLocalModel" class="ghost" data-i18n="hybrid.detect">${t('hybrid.detect')}</button><label for="ggufModel" data-i18n="hybrid.gguf">${t('hybrid.gguf')}</label><select id="ggufModel"><option value="">${t('hybrid.select')}</option></select><div class="actions"><button type="button" id="loadGguf" data-i18n="hybrid.load">${t('hybrid.load')}</button><button type="button" id="stopGguf" class="ghost" data-i18n="hybrid.stop">${t('hybrid.stop')}</button></div><p id="localModelStatus" role="status" data-i18n="hybrid.hint">${t('hybrid.hint')}</p>`;
+  control.innerHTML = `<div id="momentModelControls"><label for="processingMode">Model pemilih momen</label><select id="processingMode"><option value="local">Offline · model di komputer</option><option value="online_ai">Online · provider & API key</option><option value="offline">Offline penuh · hanya berkas lokal</option></select></div><div id="localLlmFields" class="local-llm-controls"><label for="localModel">Model pemilih momen lokal (LLM)</label><select id="localModel"><option value="">Tanpa LLM · rekomendasi heuristik</option></select><button type="button" id="detectLocalModel" class="ghost">Cari model lokal</button><label for="ggufModel">Model GGUF di komputer</label><select id="ggufModel"><option value="">Pilih model GGUF</option></select><div class="actions"><button type="button" id="loadGguf">Muat model GGUF</button><button type="button" id="stopGguf" class="ghost">Lepaskan dari RAM</button></div><p id="localModelStatus" role="status">Tanpa LLM, kandidat memakai pola transkrip dan aktivitas audio. Skor perlu ditinjau.</p></div>`;
   document.querySelector('#aiPanel').before(control);
   document.querySelector('.analysis-modes').hidden = true;
-  const localFields = document.createElement('div'); localFields.id = 'localLlmFields'; localFields.className = 'local-llm-controls';
-  Array.from(control.children).slice(2).forEach(node => localFields.append(node)); control.append(localFields);
+  const localFields = document.querySelector('#localLlmFields');
+  document.querySelectorAll('[name=creationTask]').forEach(input => input.addEventListener('change', syncAnalysisSourceUI));
+  document.querySelectorAll('[name=canvasPreset]').forEach(input => input.addEventListener('change', () => {
+    const preset = input.value;
+    $('#canvasSize').value = preset === 'letterbox' ? 'portrait' : preset;
+    $('#frameFit').value = ['letterbox', 'original'].includes(preset) ? 'fit' : 'center';
+    $('#canvasSizeHelp').textContent = {portrait:'Kanvas 9:16, hingga 1080 × 1920. Sumber kecil mengikuti tinggi sumber.',letterbox:'Kanvas 9:16. Seluruh frame sumber ditampilkan dengan margin hitam atau buram.',square:'Kanvas kotak 1080 × 1080.',classic:'Kanvas 4:3, 1440 × 1080.',landscape:'Kanvas landscape 1920 × 1080.',original:'Rasio sumber dipertahankan. Sisi terpanjang dibatasi 1920 piksel.'}[preset];
+  }));
   document.querySelector('#processingMode').addEventListener('change', () => {
     const cloud = document.querySelector('#processingMode').value === 'online_ai';
     localFields.hidden = cloud;

@@ -28,7 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _useTranscript = true;
   bool _useAi = false;
   bool _online = true;
-  String _processingMode = 'hybrid';
+  String _processingMode = 'local';
+  bool _transcriptOnly = false;
 
   @override
   void dispose() {
@@ -64,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
         canvas: _canvas,
         online: _online,
         processingMode: _processingMode,
+        transcriptOnly: _transcriptOnly,
       );
       if (mounted) widget.onOpenClips();
     } catch (error) {
@@ -90,6 +92,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(child: second),
                 ],
               ),
+      );
+
+  Widget _canvasPicker() => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final row in const [
+            ['portrait', '9:16 Portrait', 'TikTok / Reels'],
+            ['square', '1:1 Kotak', '1080 × 1080'],
+            ['landscape', '16:9 Landscape', '1920 × 1080'],
+            ['original', 'Rasio sumber', 'Ikuti video asli'],
+          ])
+            ChoiceChip(
+              selected: _canvas == row[0],
+              onSelected: (_) => setState(() => _canvas = row[0]),
+              label: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                    width: row[0] == 'portrait' ? 18 : 32,
+                    height: row[0] == 'landscape' ? 18 : 32,
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                        border: Border.all(color: Tokens.textDim),
+                        borderRadius: BorderRadius.circular(3))),
+                Text(row[1]),
+                Text(row[2], style: const TextStyle(fontSize: 11)),
+              ]),
+            ),
+        ],
       );
 
   @override
@@ -185,24 +215,42 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 1.5,
                 ),
               ),
-              DropdownButtonFormField<String>(
-                key: ValueKey(_processingMode),
-                initialValue: _processingMode,
-                decoration: const InputDecoration(labelText: 'Mode pemrosesan'),
+              DropdownButtonFormField<bool>(
+                isExpanded: true,
+                initialValue: _transcriptOnly,
+                decoration:
+                    const InputDecoration(labelText: 'Mau membuat apa?'),
                 items: const [
                   DropdownMenuItem(
-                      value: 'hybrid', child: Text('Hybrid Local AI')),
-                  DropdownMenuItem(
-                      value: 'offline',
-                      child: Text('Full Offline · berkas lokal')),
-                  DropdownMenuItem(
-                      value: 'online_ai', child: Text('Online AI · opsional')),
+                      value: false, child: Text('Cari momen untuk klip')),
+                  DropdownMenuItem(value: true, child: Text('Transkrip saja')),
                 ],
-                onChanged: (value) => setState(() {
-                  _processingMode = value ?? 'hybrid';
-                  _useAi = _processingMode == 'online_ai';
-                }),
+                onChanged: (value) =>
+                    setState(() => _transcriptOnly = value ?? false),
               ),
+              if (!_transcriptOnly)
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  key: ValueKey(_processingMode),
+                  initialValue: _processingMode,
+                  decoration:
+                      const InputDecoration(labelText: 'Mode pemrosesan'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'local',
+                        child: Text('Offline · heuristik di perangkat')),
+                    DropdownMenuItem(
+                        value: 'offline',
+                        child: Text('Full Offline · berkas lokal')),
+                    DropdownMenuItem(
+                        value: 'online_ai',
+                        child: Text('Online AI · opsional')),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _processingMode = value ?? 'local';
+                    _useAi = _processingMode == 'online_ai';
+                  }),
+                ),
               const Text(
                   'Android memakai heuristik lokal bila LLM on-device belum tersedia. ASR tetap di perangkat.'),
               SwitchListTile(
@@ -217,96 +265,83 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: Tokens.space5),
-        SectionCard(
-          title: 'Deteksi momen',
-          child: Column(
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _analysisMode,
-                decoration: const InputDecoration(labelText: 'Jenis konten'),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'auto',
-                    child: Text('Otomatis / ulasan'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'podcast',
-                    child: Text('Podcast · tanya jawab & cerita'),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _analysisMode = v!),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tinjau sebelum render'),
-                value: _reviewFirst,
-                onChanged: (v) => setState(() => _reviewFirst = v),
-              ),
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CloudSettingsScreen(),
-                  ),
-                ),
-                icon: const Icon(Icons.settings),
-                label: const Text('Penyedia AI · lokal / Groq / Gemini'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: 'Hasil klip',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'AI menentukan awal dan akhir momen. Ubah potongan kapan saja di editor.',
-                style: TextStyle(
-                  color: Tokens.textDim,
-                  fontSize: 12,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: Tokens.space4),
-              _fieldPair(
-                DropdownButtonFormField<int>(
-                  initialValue: _count,
-                  decoration: InputDecoration(
-                    labelText: state.translate('home.count'),
-                  ),
-                  items: const [0, 3, 5, 8, 12, 20]
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(value == 0 ? 'Otomatis' : '$value'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => _count = value ?? 5),
-                ),
+        if (!_transcriptOnly)
+          SectionCard(
+            title: 'Deteksi momen',
+            child: Column(
+              children: [
                 DropdownButtonFormField<String>(
-                  initialValue: _canvas,
-                  decoration: const InputDecoration(labelText: 'Ukuran video'),
+                  isExpanded: true,
+                  initialValue: _analysisMode,
+                  decoration: const InputDecoration(labelText: 'Jenis konten'),
                   items: const [
                     DropdownMenuItem(
-                      value: 'portrait',
-                      child: Text('Portrait 9:16'),
+                      value: 'auto',
+                      child: Text('Otomatis / ulasan'),
                     ),
-                    DropdownMenuItem(value: 'original', child: Text('Asli')),
-                    DropdownMenuItem(value: 'square', child: Text('Kotak 1:1')),
                     DropdownMenuItem(
-                      value: 'landscape',
-                      child: Text('Landscape 16:9'),
+                      value: 'podcast',
+                      child: Text('Podcast · tanya jawab & cerita'),
                     ),
                   ],
-                  onChanged: (value) =>
-                      setState(() => _canvas = value ?? 'portrait'),
+                  onChanged: (v) => setState(() => _analysisMode = v!),
                 ),
-              ),
-            ],
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Tinjau sebelum render'),
+                  value: _reviewFirst,
+                  onChanged: (v) => setState(() => _reviewFirst = v),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CloudSettingsScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.settings),
+                  label: const Text('Penyedia AI · lokal / Groq / Gemini'),
+                ),
+              ],
+            ),
           ),
-        ),
+        const SizedBox(height: 16),
+        if (!_transcriptOnly)
+          SectionCard(
+            title: 'Hasil klip',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'AI menentukan awal dan akhir momen. Ubah potongan kapan saja di editor.',
+                  style: TextStyle(
+                    color: Tokens.textDim,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: Tokens.space4),
+                _fieldPair(
+                  DropdownButtonFormField<int>(
+                    isExpanded: true,
+                    initialValue: _count,
+                    decoration: InputDecoration(
+                      labelText: state.translate('home.count'),
+                    ),
+                    items: const [0, 3, 5, 8, 12, 20]
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value == 0 ? 'Otomatis' : '$value'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() => _count = value ?? 5),
+                  ),
+                  _canvasPicker(),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: Tokens.space5),
         SectionCard(
           title: 'Bahasa & suara',
@@ -324,6 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: Tokens.space4),
               _fieldPair(
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _language,
                   decoration: InputDecoration(
                     labelText: state.translate('home.lang'),
@@ -349,6 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _language = value ?? 'id'),
                 ),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _audioLanguage,
                   decoration: const InputDecoration(
                     labelText: 'Track audio sumber',
@@ -410,49 +447,50 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: Tokens.space5),
-        SectionCard(
-          title: 'Subtitle & analisis',
-          child: Column(
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _useTranscript,
-                onChanged: (value) => setState(() => _useTranscript = value),
-                title: Text(
-                  state.translate('home.transcript'),
-                  style: const TextStyle(fontSize: 14),
+        if (!_transcriptOnly)
+          SectionCard(
+            title: 'Subtitle & analisis',
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _useTranscript,
+                  onChanged: (value) => setState(() => _useTranscript = value),
+                  title: Text(
+                    state.translate('home.transcript'),
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Transkrip menyimpan ucapan; subtitle menempatkannya di video. Audio tetap sama.',
+                  ),
                 ),
-                subtitle: const Text(
-                  'Transkrip menyimpan ucapan; subtitle menempatkannya di video. Audio tetap sama.',
+                const Divider(height: Tokens.space5),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _useAi,
+                  onChanged: (value) => setState(() {
+                    _useAi = value;
+                    _processingMode = value ? 'online_ai' : 'local';
+                    if (value) _useTranscript = true;
+                  }),
+                  title: const Text(
+                    'Pilih momen dengan AI online',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Opsional. Transkrip dikirim ke penyedia di Pengaturan jika diaktifkan.',
+                  ),
                 ),
-              ),
-              const Divider(height: Tokens.space5),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _useAi,
-                onChanged: (value) => setState(() {
-                  _useAi = value;
-                  _processingMode = value ? 'online_ai' : 'hybrid';
-                  if (value) _useTranscript = true;
-                }),
-                title: const Text(
-                  'Pilih momen dengan AI online',
-                  style: TextStyle(fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Opsional. Transkrip dikirim ke penyedia di Pengaturan jika diaktifkan.',
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: Tokens.space5),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             onPressed: state.jobState == JobState.running ? null : _start,
             icon: const Icon(Icons.auto_awesome_outlined, size: 19),
-            label: Text(state.translate('home.start')),
+            label: Text(_transcriptOnly ? 'Buat transkrip' : 'Cari momen'),
           ),
         ),
         if (state.jobState == JobState.running) ...[

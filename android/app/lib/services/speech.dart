@@ -289,6 +289,8 @@ class SpeechService {
   // ------------------------------------------------------------------- asr
 
   Future<void> loadAsr(String modelId, {String language = 'id'}) async {
+    language = language.toLowerCase().replaceAll('_', '-').split('-').first;
+    if (language == 'und' || language == 'unknown') language = 'auto';
     if (_loadedAsr == modelId &&
         _loadedLanguage == language &&
         _recognizer != null) {

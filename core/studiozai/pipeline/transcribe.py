@@ -43,6 +43,13 @@ MODEL_ALIASES = {
 }
 
 
+def normalize_language(lang: str | None) -> str | None:
+    value = str(lang or "").strip().lower().replace("_", "-").split("-")[0]
+    if value in {"", "auto", "unknown", "und"}:
+        return None
+    return {"iw": "he", "in": "id", "ji": "yi", "jv": "jw"}.get(value, value)
+
+
 def asr_available() -> bool:
     try:
         import importlib.util
@@ -117,6 +124,7 @@ def transcribe(
     progress_cb: ProgressCb | None = None,
     chunk_minutes: float = 1.5,
 ) -> dict[str, Any]:
+    lang = normalize_language(lang)
     from ..jobs import inference_slot
     with inference_slot((lambda: progress_cb(0, "menunggu inference")) if progress_cb else None):
         if _IDLE_TIMER:
@@ -316,7 +324,7 @@ def _transcribe_single(
     audio = _decode_audio_array(media_path)
     segments_iter, info = model.transcribe(
         audio,
-        language=None if lang in (None, "auto") else lang,
+        language=normalize_language(lang),
         word_timestamps=True,
         vad_filter=True,
         beam_size=1,

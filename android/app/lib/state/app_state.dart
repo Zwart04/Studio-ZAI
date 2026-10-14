@@ -248,8 +248,10 @@ class AppState extends ChangeNotifier {
     String canvas = 'portrait',
     String audioMode = 'original',
     bool online = true,
-    String processingMode = 'hybrid',
+    String processingMode = 'local',
+    bool transcriptOnly = false,
   }) async {
+    if (transcriptOnly) useTranscript = true;
     if (count < 0) {
       throw ArgumentError.value(count, 'count', 'Jumlah tidak boleh negatif.');
     }
@@ -428,6 +430,21 @@ class AppState extends ChangeNotifier {
       }
       await saveProject(project);
       _report(60, 'mencari momen terbaik');
+      if (transcriptOnly) {
+        if (wav != null && wav.existsSync()) await wav.delete();
+        if (segments.isEmpty) {
+          throw StateError(
+              'Tidak ada ucapan yang terbaca. Periksa audio atau model transkrip.');
+        }
+        project.execution['task'] = 'transcript';
+        await saveProject(project);
+        currentProject = project;
+        setJob(JobState.done,
+            progress: 100,
+            stage: 'Transkrip siap',
+            message: '${segments.length} bagian, tanpa membuat klip');
+        return project;
+      }
       List<ClipCandidate> candidates;
       try {
         candidates = segments.isNotEmpty

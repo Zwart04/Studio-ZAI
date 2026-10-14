@@ -2,9 +2,9 @@
 
 <p align="center">Studio video sederhana untuk Windows dan Android. Temukan momen dari video panjang, edit langsung, buat subtitle, suara, dan gambar dengan model lokal.</p>
 
-Versi 1.12.1 memperbaiki rasio kartu preview, badge skor dan pemulihan unduhan audio Windows. Hybrid Local AI, caption-first import, subtitle langsung dan render atomik tetap tersedia. [Perbaikan dan pengujian 1.12.1](docs/RELEASE-1.12.1.md).
+Versi 1.13.0 memperbaiki error bahasa `en-US` dan memperjelas beranda: cari momen atau transkrip saja, pilihan model offline/online, serta kanvas dengan bentuk rasio. Pilihan Hybrid dihapus dari beranda. [Perubahan, pengujian, dan batas fitur](docs/RELEASE-1.13.0.md).
 
-<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.12.1</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
+<p align="center"><a href="https://github.com/Zwart04/Studio-ZAI/releases/latest"><strong>Unduh v1.13.0</strong></a> · <a href="#mulai">Mulai</a> · <a href="docs/FEATURES.md">Fitur per perangkat</a> · <a href="docs/MODELS.md">Model & lisensi</a> · <a href="README.en.md">English</a></p>
 
 ![Editor Studio ZAI: video dapat diputar langsung, subtitle dan timeline di satu layar](docs/screenshots/creator-portrait.png)
 
@@ -30,10 +30,10 @@ Provider + API key kini dapat mendeteksi model dan memberi saran. Pelacakan mema
 
 | Perangkat | Paket | Catatan |
 | :-- | :-- | :-- |
-| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.1/StudioZAI-1.12.1-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model dipasang terpisah. |
-| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.1/StudioZAI-1.12.1-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
+| Windows 10/11 x64 | [ZIP Windows](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.13.0/StudioZAI-1.13.0-windows-x64.zip) | Ekstrak seluruh folder, jalankan **StudioZAI.exe**. FFmpeg dan runtime AI ikut; bobot model dipasang terpisah. |
+| Android 8+ | [Satu APK universal](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.13.0/StudioZAI-1.13.0-android.apk) | Editor dan suara mendukung ABI paket; gambar native offline tersedia pada **ARM64**. |
 
-[Catatan pengujian v1.12.1](docs/RELEASE-1.12.1.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.12.1/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
+[Catatan pengujian v1.13.0](docs/RELEASE-1.13.0.md) · [Checksum SHA-256](https://github.com/Zwart04/Studio-ZAI/releases/download/v1.13.0/SHA256SUMS.txt) · [Cara build](docs/BUILD.md)
 
 ## Mulai
 

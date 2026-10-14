@@ -44,14 +44,40 @@ async function main(){
     await wait(700);
     assert.equal(await page.locator('#aiModel').inputValue(),'auto');
     report.checks.push('provider switch clears key and ignores stale discovery; cloud discovery uses an explicit fixture');
-    await page.locator('#processingMode').selectOption('hybrid');
+    await page.locator('#processingMode').selectOption('local');
     assert.equal(await page.locator('#localLlmFields').isVisible(),true);
+    assert.equal(await page.locator('#processingMode option[value="hybrid"]').count(),0);
+    await page.locator('[name=creationTask][value=transcript]').check();
+    assert.equal(await page.locator('#aiPanel').isVisible(),false);
+    assert.equal(await page.locator('#localLlmFields').isVisible(),false);
+    assert.equal(await page.locator('#clipResultSettings').isVisible(),false);
+    assert.equal(await page.locator('#startBtn').innerText(),'Buat transkrip');
+    await page.locator('[name=creationTask][value=moments]').check();
+    for (const preset of ['portrait','square','classic','letterbox','landscape','original']) {
+      await page.locator(`[name=canvasPreset][value=${preset}]`).check();
+      assert.equal(await page.locator('#canvasSize').inputValue(),preset==='letterbox'?'portrait':preset);
+      assert.equal(await page.locator('#frameFit').inputValue(),['letterbox','original'].includes(preset)?'fit':'center');
+    }
+    await page.locator('[name=canvasPreset][value=portrait]').check();
+    report.checks.push('task switch, no Hybrid option, six canvas choices with crop/fit mapping');
     for(const width of [320,360,390,540,680,768,1024,1440]){
       await page.setViewportSize({width,height:950});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
       assert.equal(overflow,false,`Home overflow at ${width}`);report.widths.push(width);
     }
     await page.setViewportSize({width:1440,height:1000});
+    await page.screenshot({path:path.join(OUT,'home-redesign.png'),fullPage:true});
+    await page.locator('[name=creationTask][value=transcript]').check();
+    await page.locator('#source').fill(fixture.source);
+    await page.locator('#startBtn').click();
+    await page.locator('#projectTranscript[open]').waitFor();
+    assert.match(await page.locator('#projectTranscript').innerText(),/Caption fixture/);
+    const srt = await page.request.get(BASE + await page.locator('#projectTranscript a').getAttribute('href'));
+    assert.equal(srt.status(),200);
+    assert.match(await srt.text(),/00:00:00,000 --> 00:00:04,500/);
+    assert.equal(await page.locator('#clipGrid .clip').count(),0);
+    report.checks.push('real transcript-only API job, no clips, visible text and SRT download');
+    await page.locator('#backBtn').click();
     await page.locator('#nav [data-page="projects"]').click();
     await page.locator(`[data-open="${fixture.project_id}"]`).click();
     const card=await page.locator('#clipGrid .clip-open').first().boundingBox();
@@ -82,10 +108,10 @@ async function main(){
     const late=await page.locator('.live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
     assert.notEqual(early,late,'Active word updates after seek');
     await page.locator('[data-inspector="clip"]').click();
-    for(const canvas of ['square','landscape','portrait']){
+    for(const canvas of ['square','classic','landscape','portrait']){
       await page.locator('#tlCanvas').selectOption(canvas);await wait(250);
       const frame=await page.locator('#tlStage .output-frame').boundingBox();
-      const ratio={square:1,landscape:16/9,portrait:9/16}[canvas];
+      const ratio={square:1,classic:4/3,landscape:16/9,portrait:9/16}[canvas];
       assert.ok(Math.abs(frame.width/frame.height-ratio)<.03,canvas);
     }
     assert.equal(encodes,0,'Ordinary editor changes must not encode');
@@ -100,6 +126,7 @@ async function main(){
     await page.keyboard.press('Escape');
     await page.locator('[data-tl="close"]').click().catch(()=>{});
     await page.locator('#nav [data-page="home"]').click();
+    await page.locator('[name=creationTask][value=moments]').check();
     await page.locator('#processingMode').focus();await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#processingMode').evaluate(el=>el===document.activeElement),true);
     report.checks.push('keyboard select focus');

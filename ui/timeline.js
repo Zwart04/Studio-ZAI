@@ -303,8 +303,8 @@ const StudioTimeline = (() => {
       const path = this.previewPath || state.project.source;
       const base = this.items("video")[0] || {};
       const sw = state.project.width || 1920, sh = state.project.height || 1080;
-      const ratio = { portrait: 9 / 16, square: 1, landscape: 16 / 9, original: sw / sh }[base.canvas] || 9 / 16;
-      const badgeText = { portrait: "Portrait 9:16", square: "Kotak 1:1", landscape: "Landscape 16:9", original: "Rasio sumber" }[base.canvas] || "Portrait 9:16";
+      const ratio = { portrait: 9 / 16, square: 1, classic: 4 / 3, landscape: 16 / 9, original: sw / sh }[base.canvas] || 9 / 16;
+      const badgeText = { portrait: "Portrait 9:16", square: "Kotak 1:1", classic: "Standar 4:3", landscape: "Landscape 16:9", original: "Rasio sumber" }[base.canvas] || "Portrait 9:16";
       this.stageRatio = ratio;
       // Elemen yang sama di setiap cabang: bingkai, lencana rasio, baris status,
       // dan veil loading yang menutupi seluruh stage selama render draf.
@@ -635,7 +635,7 @@ const StudioTimeline = (() => {
       host.innerHTML = `<div class="inspector-tabs">${[['clip','Klip'],['subtitles','Subtitle'],['element','Elemen']].map(([id,label]) => `<button data-inspector="${id}" class="${this.inspectorTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
         <section class="inspector-section" ${this.inspectorTab !== 'clip' ? 'hidden' : ''}>
           <h3>Video & audio</h3><label>Judul / hook<input id="tlHook" value="${escapeHtml(clip.title || '')}"></label><button class="ghost" data-creator="crop">Atur crop & keyframe</button><button class="ghost" data-finishing="title">Judul pembuka & preset</button><button class="ghost" data-finishing="watermark">Watermark logo / tulisan</button><button class="ghost" data-creator="splitTop">Split gaming · area facecam</button><button class="ghost" data-creator="splitBottom">Split gaming · area gameplay</button><label>Bagian facecam (%)<input id="tlSplitFraction" type="number" min="20" max="80" value="${Math.round((base.framing?.fraction||.35)*100)}"></label><button data-tl="split" class="ghost">Pisahkan klip di posisi pemutar</button>
-          <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
+          <label>Ukuran video<select id="tlCanvas">${options([['original','Asli · pertahankan rasio'],['portrait','Portrait · 9:16'],['square','Kotak · 1:1'],['classic','Standar · 4:3'],['landscape','Landscape · 16:9']],base.canvas)}</select></label>
           <label>Penyesuaian gambar<select id="tlCrop">${options([['split','Split gaming · facecam + gameplay'],['manual','Manual · keyframe'],['fit','Fit · tampilkan seluruh gambar'],['center','Isi kanvas · potong tengah'],['blur','Isi latar dengan blur'],['none','Letterbox · bilah hitam']],base.crop)}</select></label>
           <p class="field-help">Fit mempertahankan seluruh gambar. Ukuran asli mengikuti rasio video sumber.</p>
           <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlClipStart" value="${clip.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlClipEnd" value="${clip.end}"></label></div>

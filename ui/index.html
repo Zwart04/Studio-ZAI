@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.12.1" />
-<link rel="stylesheet" href="/styles.css?v=1.12.1" />
-<link rel="stylesheet" href="/studio.css?v=1.12.1" />
+<link rel="stylesheet" href="/tokens.css?v=1.13.0" />
+<link rel="stylesheet" href="/styles.css?v=1.13.0" />
+<link rel="stylesheet" href="/studio.css?v=1.13.0" />
 </head>
 <body>
 <div id="app">
@@ -62,19 +62,36 @@
           <div class="card tight" id="linkPreview" style="width:100%"></div>
         </div>
 
+        <fieldset class="task-picker"><legend>Mau membuat apa?</legend>
+          <label><input type="radio" name="creationTask" value="moments" checked><span><strong>Cari momen untuk klip</strong><small>Pilih bagian menarik, tinjau, lalu render video.</small></span></label>
+          <label><input type="radio" name="creationTask" value="transcript"><span><strong>Transkrip saja</strong><small>Teks bertimestamp dan unduhan SRT, tanpa membuat klip.</small></span></label>
+        </fieldset>
         <div class="source-settings">
-          <section class="source-setting-section" aria-labelledby="clipResultHeading">
+          <section id="clipResultSettings" class="source-setting-section" aria-labelledby="clipResultHeading">
             <div class="setting-heading"><h3 id="clipResultHeading">Hasil klip</h3><p>AI memilih titik awal dan akhir tiap momen. Kamu dapat mengubah potongan di editor.</p></div>
             <div class="grid-2">
               <div class="field"><label for="count" data-i18n="home.count">Jumlah klip</label><select id="count" aria-describedby="countHelp"><option value="0" data-i18n="home.countAuto">Otomatis · 3–10 momen</option><option value="3">3 klip</option><option value="5">5 klip</option><option value="8">8 klip</option><option value="10">10 klip</option><option value="15">15 klip</option><option value="20">20 klip</option></select><p class="field-help" id="countHelp" data-i18n="home.countHelp">Otomatis menyesuaikan dengan durasi. Hasil bisa lebih sedikit jika sumber pendek.</p></div>
               <div class="field"><label for="clipLength" data-i18n="home.length">Durasi klip</label><select id="clipLength" aria-describedby="clipLengthHelp"><option value="auto" data-i18n="home.lenAuto">Otomatis · ikut momen</option><option value="s15" data-i18n="home.len15">Pendek · ±15 detik</option><option value="s30" data-i18n="home.len30">Sedang · ±30 detik</option><option value="s60" data-i18n="home.len60">Panjang · ±60 detik</option></select><p class="field-help" id="clipLengthHelp" data-i18n="home.lengthHelp">Batas dipotong di jeda kalimat terdekat agar tidak terpotong aneh.</p></div>
             </div>
-            <div class="field"><label for="canvasSize">Ukuran klip</label><select id="canvasSize" aria-describedby="canvasSizeHelp"><option value="portrait">Portrait 9:16 (TikTok/Reels)</option><option value="original">Ukuran asli video</option><option value="square">Kotak 1:1</option><option value="landscape">Landscape 16:9</option></select><p class="field-help" id="canvasSizeHelp">Asli mengikuti rasio sumber; portrait cocok untuk Shorts dan Reels.</p></div>
+            <fieldset class="canvas-picker"><legend>Kanvas &amp; rasio aspek</legend>
+              <div class="canvas-options">
+                <label><input type="radio" name="canvasPreset" value="portrait" checked><span><i class="shape portrait" aria-hidden="true"></i><strong>9:16 Portrait</strong><small>TikTok, Reels, Shorts</small></span></label>
+                <label><input type="radio" name="canvasPreset" value="square"><span><i class="shape square" aria-hidden="true"></i><strong>1:1 Kotak</strong><small>1080 × 1080</small></span></label>
+                <label><input type="radio" name="canvasPreset" value="classic"><span><i class="shape classic" aria-hidden="true"></i><strong>4:3 Standar</strong><small>1440 × 1080</small></span></label>
+                <label><input type="radio" name="canvasPreset" value="letterbox"><span><i class="shape portrait letterbox" aria-hidden="true"></i><strong>9:16 Letterbox</strong><small>Video utuh dalam portrait</small></span></label>
+                <label><input type="radio" name="canvasPreset" value="landscape"><span><i class="shape landscape" aria-hidden="true"></i><strong>16:9 Landscape</strong><small>1920 × 1080</small></span></label>
+                <label><input type="radio" name="canvasPreset" value="original"><span><i class="shape original" aria-hidden="true"></i><strong>Rasio sumber</strong><small>Ikuti video asli</small></span></label>
+              </div>
+              <input type="hidden" id="canvasSize" value="portrait">
+              <p id="canvasSizeHelp" class="field-help" role="status">Kanvas 9:16, hingga 1080 × 1920. Sumber kecil mengikuti tinggi sumber.</p>
+              <label for="frameFit">Isi video dalam kanvas</label><select id="frameFit"><option value="center">Penuhi kanvas · potong sisi video</option><option value="fit">Tampilkan utuh · margin hitam</option><option value="blur">Tampilkan utuh · latar video buram</option></select>
+              <p class="field-help">Pilih tampilkan utuh untuk menjaga wajah atau teks di tepi. Framing wajah dapat disesuaikan per klip di editor.</p>
+            </fieldset>
             <div id="qualityWrap" class="field" style="display:none"><label for="quality" data-i18n="home.quality">Kualitas video</label><select id="quality"><option value="720p">720p — disarankan (cepat, hemat)</option><option value="1080p">1080p — full HD</option><option value="480p">480p — paling cepat</option><option value="best">Terbaik — ukuran besar</option><option value="audio">Audio saja — tanpa gambar</option></select><p class="field-help" id="qualityHint"></p></div>
-            <div class="switch-group online-group"><label class="switch"><input type="checkbox" id="onlineMode" checked /><span class="track"></span><span class="switch-label"><span data-i18n="home.online">Mode online</span> <span class="save-badge" data-i18n="home.onlineBadge">hemat ~93%</span></span></label><p class="field-help" data-i18n="home.onlineHelp">Mengunduh audio terlebih dahulu untuk transkrip; video klip hanya diunduh saat dirender. Matikan untuk mengunduh video penuh dulu.</p></div>
+            <input type="hidden" id="onlineMode" value="true">
           </section>
           <section class="source-setting-section" aria-labelledby="analysisHeading">
-            <div class="setting-heading"><h3 id="analysisHeading" data-i18n="home.analysis">Analisis momen</h3><p data-i18n="home.analysisHelp">Lokal gratis dan privat memakai model di perangkat. AI online memakai provider pilihanmu dan membutuhkan API key.</p></div>
+            <div class="setting-heading"><h3 id="analysisHeading">Model untuk memilih momen</h3><p id="analysisHelp">Model membaca transkrip untuk menyarankan bagian menarik. Pilih model offline di komputer atau provider online.</p></div>
             <div class="source-modes analysis-modes" role="tablist" aria-label="Sumber analisis">
               <button type="button" data-analysis-source="local" class="active" role="tab" aria-selected="true">
                 <svg class="mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
@@ -96,7 +113,8 @@
               <div class="field"><label for="aiModel" data-i18n="home.aiModel">Model AI</label><select id="aiModel"><option value="auto" data-i18n="home.aiModelAuto">Otomatis · saran provider</option></select></div>
             </div>
             <div class="field"><label for="asrSpeed" data-i18n="home.asrSpeed">Kecepatan transkrip</label><select id="asrSpeed" aria-describedby="asrSpeedHelp"><option value="fast" data-i18n="home.asrFast">Cepat · model tiny</option><option value="balanced" data-i18n="home.asrBalanced">Seimbang · model base</option><option value="accurate" data-i18n="home.asrAccurate">Akurat · model small</option></select><p class="field-help" id="asrSpeedHelp" data-i18n="home.asrHelp">Model kecil mentranskrip video panjang dalam hitungan menit; model besar lebih teliti untuk bahasa Indonesia.</p></div>
-            <div class="switch-group"><label class="switch"><input type="checkbox" id="useTranscript" checked /><span class="track"></span><span class="switch-label" data-i18n="home.transcript">Subtitle AI dari audio (offline)</span></label><p class="field-help" data-i18n="home.transcriptHelp">Studio ZAI mentranskrip audio video dengan model lokal, lalu membuat subtitle bertiming. Teks subtitle bawaan dari link tidak dipakai.</p></div>
+            <input type="checkbox" id="useTranscript" checked hidden>
+            <p class="field-help">Transkrip memakai subtitle sumber jika tersedia. Jika tidak, model Whisper di perangkat mengubah audio menjadi teks. Model pemilih momen online menerima transkrip, bukan video penuh.</p>
             <div class="grid-2">
               <div class="field"><label for="lang" data-i18n="home.lang">Bahasa konten</label><select id="lang" aria-describedby="langHelp"><option value="auto">Deteksi otomatis</option><option value="id">Indonesia</option><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="zh">中文</option><option value="ru">Русский</option></select><p class="field-help" id="langHelp">Dipakai untuk transkripsi, bukan menerjemahkan suara.</p></div>
               <div class="field"><span class="field-label">Suara hasil klip</span><div class="audio-mode-info"><span class="audio-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><span>Suara asli dari video</span></div><input type="hidden" id="audioMode" value="original" /><p class="field-help" id="audioModeHelp">Narasi TTS dapat ditambahkan setelah klip dibuat, di editor.</p></div>
@@ -109,9 +127,9 @@
           <div class="advanced-content">
             <label>Jenis konten<select id="analysisMode"><option value="auto">Otomatis / ulasan</option><option value="podcast">Podcast · tanya jawab & cerita</option></select></label>
             <label><input id="reviewFirst" type="checkbox" checked> Tinjau momen & judul sebelum render</label>
-            <fieldset><legend>Format saat render otomatis</legend><label><input name="outputFormat" value="portrait" type="checkbox" checked> 9:16</label><label><input name="outputFormat" value="square" type="checkbox"> 1:1</label><label><input name="outputFormat" value="landscape" type="checkbox"> 16:9</label></fieldset>
+            <p class="field-help">Render otomatis mengikuti pilihan kanvas di atas. Ekspor beberapa rasio tersedia setelah momen dibuat.</p>
             <div class="field"><label for="subPos">Posisi subtitle</label><select id="subPos" aria-describedby="subPosHelp"><option value="bottom">Bawah (standar)</option><option value="middle">Tengah</option><option value="top">Atas</option><option value="off">Tanpa subtitle tambahan</option></select><p class="field-help" id="subPosHelp">Pilih tanpa subtitle jika video sumber sudah menampilkan teks permanen.</p></div>
-            <div class="switch-group"><label class="switch"><input type="checkbox" id="useLlm" /><span class="track"></span><span class="switch-label" data-i18n="home.llm">Pilih momen dengan AI dari Pengaturan</span></label><p class="field-help">Opsional. Pemilihan lokal tetap tersedia tanpa API key.</p></div>
+            <input type="checkbox" id="useLlm" hidden>
           </div>
         </details>
 
@@ -365,11 +383,11 @@
 </div>
 <div id="toast"></div>
 
-<script src="/app.js?v=1.12.1"></script>
-<script src="/finishing.js?v=1.12.1"></script>
-<script src="/creator.js?v=1.12.1"></script>
-<script src="/subtitle_overlay.js?v=1.12.1"></script>
-<script src="/timeline.js?v=1.12.1"></script>
-<script src="/studio.js?v=1.12.1"></script>
+<script src="/app.js?v=1.13.0"></script>
+<script src="/finishing.js?v=1.13.0"></script>
+<script src="/creator.js?v=1.13.0"></script>
+<script src="/subtitle_overlay.js?v=1.13.0"></script>
+<script src="/timeline.js?v=1.13.0"></script>
+<script src="/studio.js?v=1.13.0"></script>
 </body>
 </html>
