@@ -8,6 +8,27 @@ from typing import Any
 FONTS = ("Inter", "Anton", "Barlow Condensed", "DM Serif Display", "Kalam")
 ANIMATIONS = ("none", "pop", "bounce", "fade", "rise", "zoom", "type", "typewriter")
 
+MOTION_STYLES = {
+    "plain": {"mode": "line", "animation": "none"},
+    "pop": {"mode": "highlight", "animation": "pop"},
+    "elastic": {"mode": "highlight", "animation": "bounce"},
+    "karaoke": {"mode": "karaoke", "animation": "none"},
+    "typewriter": {"mode": "line", "animation": "typewriter"},
+    "word": {"mode": "word", "animation": "pop"},
+}
+
+
+def apply_motion(captions: list[dict], name: str) -> None:
+    motion = MOTION_STYLES.get(name)
+    if motion is None:
+        return
+    for caption in captions:
+        caption["style"] = {**caption.get("style", {}), **motion,
+                            "highlight": "#abff66", "bold": True}
+        for word in caption.get("words", []):
+            if word.get("style"):
+                word["style"] = {k: v for k, v in word["style"].items() if k != "animation"}
+
 # Mode "highlight" meniru animasi kata aktif dari cheat-clip-pro: kata dikemas
 # ke potongan pendek satu baris, lalu dipotong menjadi irisan waktu yang saling
 # bersambung sehingga sorotan tidak pernah berkedip di sela jeda bicara.
@@ -194,7 +215,7 @@ def _highlight_events(caption, words, event, copy) -> list[str]:
             row.text = " ".join(str(item.get("word", "")) for item in chunk)
             row.words = [
                 {**item, "style": {**(item.get("style") or {}), "nowrap": True,
-                                   **({"color": color} if index == active else {})}}
+                                   **({"color": color} if index == active else {"animation": "none"})}}
                 for index, item in enumerate(chunk)
             ]
             result.append(event(slice_start, slice_end, row))

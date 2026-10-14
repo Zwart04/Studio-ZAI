@@ -645,6 +645,7 @@ const StudioTimeline = (() => {
         <section class="inspector-section" ${this.inspectorTab !== 'subtitles' ? 'hidden' : ''}>
           <h3>Gaya subtitle</h3><button class="ghost" data-creator="words">Editor per kata & terjemahan</button><p class="field-help">${this.presets.length} gaya untuk semua subtitle. Perubahan diperbarui otomatis pada video.</p>
           <button class="caption-generate" data-tl="captions">Buat subtitle otomatis</button>
+          <div class="caption-motion-controls">${CaptionMotion.picker("tlCaptionMotion", Object.keys(CaptionMotion.presets).find(key => {const p=CaptionMotion.presets[key], s=clip.captions?.[0]?.style;return s?.mode===p.mode && s?.animation===p.animation;}) || "plain")}<label>Warna kata aktif<input id="tlHighlightColor" type="color" value="${/^#[0-9a-f]{6}$/i.test(clip.captions?.[0]?.style?.highlight || "") ? clip.captions[0].style.highlight : "#abff66"}"></label><button class="ghost" id="tlApplyMotion" ${clip.captions?.length ? "" : "disabled"}>Terapkan ke semua subtitle</button><p class="field-help">${clip.captions?.length ? "Teks dan timestamp tetap. Gaya gerak berlaku untuk seluruh klip." : "Buat subtitle otomatis terlebih dahulu."}</p></div>
           <label>Posisi subtitle<select id="tlSubtitlePosition">${options([['bottom','Bawah'],['middle','Tengah'],['top','Atas'],['off','Tanpa subtitle tambahan']],clip.subtitle_position || 'bottom')}</select></label>
           <p class="field-help">Subtitle yang sudah menyatu dengan gambar sumber tidak bisa dihapus. Pilih tanpa subtitle tambahan atau pindahkan posisi agar tidak bertumpuk.</p>
           ${this.presetGallery(clip.subtitle_preset, 'data-preset')}<button class="ghost" data-tl="custom">＋ Buat template sendiri</button>
@@ -665,6 +666,11 @@ const StudioTimeline = (() => {
 
     bindInspector() {
       const host = this.el.querySelector("#tlInspector");
+      host.querySelector('#tlApplyMotion')?.addEventListener('click', () => {
+        CaptionMotion.apply(this.clip.captions || [], host.querySelector('#tlCaptionMotion').value, host.querySelector('#tlHighlightColor').value);
+        this.schedulePreview();
+        toast('Animasi diterapkan. Putar video untuk melihat hasilnya; simpan untuk menyimpan perubahan.');
+      });
       const selected = this.selectedItem();
       // Dideklarasikan di awal: closure di bawah dievaluasi saat klik (setelah
       // bind selesai), tapi deklarasi di atas menghindari risiko TDZ saat refactor.

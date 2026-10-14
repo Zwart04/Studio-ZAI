@@ -7,6 +7,33 @@ import 'cloud_ai.dart';
 
 /// Local editorial cues. Scores help review; they do not predict virality.
 class CreatorTools {
+  static const motionPresets = {
+    'Sorot + Pop': {'mode': 'highlight', 'animation': 'pop'},
+    'Lentur': {'mode': 'highlight', 'animation': 'bounce'},
+    'Karaoke': {'mode': 'karaoke', 'animation': 'none'},
+    'Muncul per kata': {'mode': 'line', 'animation': 'typewriter'},
+    'Satu kata': {'mode': 'word', 'animation': 'pop'},
+    'Tanpa gerak': {'mode': 'line', 'animation': 'none'},
+  };
+  static void applyMotion(List<Map<String, dynamic>> rows, String name) {
+    final preset = motionPresets[name];
+    if (preset == null) return;
+    for (final row in rows) {
+      row['style'] = {
+        ...(row['style'] as Map? ?? {}),
+        ...preset,
+        'highlight': '#abff66',
+        'bold': true
+      };
+      for (final word in (row['words'] as List? ?? [])) {
+        if (word['style'] is Map) {
+          word['style'] = Map<String, dynamic>.from(word['style'])
+            ..remove('animation');
+        }
+      }
+    }
+  }
+
   static List<Map<String, dynamic>> trimRows(
     List<Map<String, dynamic>> rows,
     double offset,
@@ -636,7 +663,11 @@ class CreatorTools {
           final wordStyle =
               Map<String, dynamic>.from(chunk[i]['style'] as Map? ?? {})
                 ..['nowrap'] = true;
-          if (i == active) wordStyle['color'] = color;
+          if (i == active) {
+            wordStyle['color'] = color;
+          } else {
+            wordStyle['animation'] = 'none';
+          }
           chunkWords.add(
             Map<String, dynamic>.from(chunk[i])..['style'] = wordStyle,
           );

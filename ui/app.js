@@ -576,6 +576,7 @@ async function startClipping() {
         model: useAiAnalysis ? (aiModelPick && aiModelPick !== 'auto' ? aiModelPick : null) : (document.querySelector('#localModel').value || null),
         asr_model: ASR_SPEED_MODELS[$("#asrSpeed").value] || null,
         quality: $("#quality").value || "720p",
+        caption_motion: $("#homeCaptionMotion").value,
         subtitle_position: ($("#subPos") || {}).value || "bottom",
         canvas: ($("#canvasSize") || {}).value || "portrait",
         crop: $('#frameFit').value,
@@ -1529,6 +1530,8 @@ async function boot() {
   await loadVoices();
   await renderHomeProjects();
   await initHomeAnalysis();
+  $("#homeMotionPicker").innerHTML = CaptionMotion.picker("homeCaptionMotion");
+  CaptionMotion.demo($("#homeMotionDemo"), $("#homeCaptionMotion"));
 
   $("#nav").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-page]");
@@ -1665,7 +1668,7 @@ document.querySelectorAll('[data-analysis-source]').forEach(button => button.add
 async function initHomeAnalysis() {
   const control = document.createElement('div');
   control.className = 'field';
-  control.innerHTML = `<div id="momentModelControls"><label for="processingMode">Model pemilih momen</label><select id="processingMode"><option value="local">Offline · model di komputer</option><option value="online_ai">Online · provider & API key</option><option value="offline">Offline penuh · hanya berkas lokal</option></select></div><div id="localLlmFields" class="local-llm-controls"><label for="localModel">Model pemilih momen lokal (LLM)</label><select id="localModel"><option value="">Tanpa LLM · rekomendasi heuristik</option></select><button type="button" id="detectLocalModel" class="ghost">Cari model lokal</button><label for="ggufModel">Model GGUF di komputer</label><select id="ggufModel"><option value="">Pilih model GGUF</option></select><div class="actions"><button type="button" id="loadGguf">Muat model GGUF</button><button type="button" id="stopGguf" class="ghost">Lepaskan dari RAM</button></div><p id="localModelStatus" role="status">Tanpa LLM, kandidat memakai pola transkrip dan aktivitas audio. Skor perlu ditinjau.</p></div>`;
+  control.innerHTML = `<div id="momentModelControls"><label for="processingMode">Model pemilih momen</label><select id="processingMode"><option value="local">Offline · model di komputer</option><option value="online_ai">Online · provider & API key</option><option value="offline">Offline penuh · hanya berkas lokal</option></select></div><div id="localLlmFields" class="local-llm-controls"><label for="localModel">Model pemilih momen lokal (LLM)</label><select id="localModel"><option value="">Tanpa LLM · rekomendasi heuristik</option></select><button type="button" id="detectLocalModel" class="ghost">Cari model lokal</button><details class="model-advanced"><summary>Model GGUF & penggunaan RAM</summary><label for="ggufModel">Model GGUF di komputer</label><select id="ggufModel"><option value="">Pilih model GGUF</option></select><div class="actions"><button type="button" id="loadGguf">Muat model GGUF</button><button type="button" id="stopGguf" class="ghost">Lepaskan dari RAM</button></div></details><p id="localModelStatus" role="status">Tanpa LLM, kandidat memakai pola transkrip dan aktivitas audio. Skor perlu ditinjau.</p></div>`;
   document.querySelector('#aiPanel').before(control);
   document.querySelector('.analysis-modes').hidden = true;
   const localFields = document.querySelector('#localLlmFields');

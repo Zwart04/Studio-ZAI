@@ -58,6 +58,7 @@ class ProcessRequest(BaseModel):
     source: str
     processing_mode: Literal["local", "hybrid", "offline", "online_ai", "legacy"] = "local"
     task: Literal["moments", "transcript"] = "moments"
+    caption_motion: Literal["plain", "pop", "elastic", "karaoke", "typewriter", "word"] | None = None
     count: int = Field(default=0, ge=0, le=20)
     analysis_mode: Literal["auto", "podcast"] = "auto"
     review_first: bool = True
@@ -710,6 +711,9 @@ def _process_task(project_id: str, payload: ProcessRequest):
             job=job,
         )
         for clip in list(project.clips):
+            if payload.caption_motion:
+                from .pipeline.caption_style import apply_motion
+                apply_motion(clip.captions, payload.caption_motion)
             clip.subtitle_position = payload.subtitle_position
             clip.canvas = payload.canvas
             clip.crop = payload.crop

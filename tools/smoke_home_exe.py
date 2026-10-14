@@ -44,9 +44,10 @@ try:
     with urllib.request.urlopen('http://127.0.0.1:8740' + route + '/transcript.srt') as response:
         assert 'Packaged transcript fixture.' in response.read().decode()
     task = wait_job(request(route + '/process', {'source': str(source), 'task': 'moments', 'processing_mode': 'local',
-        'canvas': 'classic', 'crop': 'fit', 'use_llm': False, 'count': 1}))
+        'canvas': 'classic', 'crop': 'fit', 'use_llm': False, 'count': 1, 'caption_motion': 'elastic'}))
     clip = task['project']['clips'][0]
     assert clip['canvas'] == 'classic' and clip['crop'] == 'fit'
+    assert clip['captions'] and all(c['style']['animation'] == 'bounce' for c in clip['captions'])
     preview = wait_job(request(route + '/clips/0/preview', {}))
     final = wait_job(request(route + '/clips/0/render', {}))['files']['mp4']
     video = next(s for s in ffmpeg.ffprobe_json(final)['streams'] if s['codec_type'] == 'video')

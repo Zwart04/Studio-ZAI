@@ -1,3 +1,13 @@
+# v1.14.0 — 14 Oktober 2026
+
+- Pilihan cepat animasi subtitle: Sorot + Pop, Lentur, Karaoke, Muncul per kata, Satu kata, Tanpa gerak.
+- Beranda Windows dua kolom, kontrol GGUF ringkas, contoh animasi yang dapat diputar.
+- Samakan kurva pop/lentur pada preview dengan ekspor; hanya kata aktif yang bergerak pada highlight.
+
+[Validasi](RELEASE-1.14.0.md).
+
+---
+
 # v1.10.0 — 8 Oktober 2026
 
 - Perbaiki default portrait pada klip manual dan tampilan kanvas; sinkronkan rasio timeline dan klip, serta buang hasil lama setelah perubahan.

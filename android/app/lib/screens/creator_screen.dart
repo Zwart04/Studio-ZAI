@@ -396,6 +396,18 @@ class _CreatorScreenState extends State<CreatorScreen> {
             },
             child: const Text('Pilih semua kata pada baris'),
           ),
+          const Text('Animasi untuk semua subtitle'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final name in CreatorTools.motionPresets.keys)
+              OutlinedButton(
+                  onPressed: () => setState(() {
+                        CreatorTools.applyMotion(rows, name);
+                        revision++;
+                      }),
+                  child: Text(name)),
+          ]),
+          const Text(
+              'Teks dan timestamp tetap. Simpan caption untuk menerapkan perubahan.'),
           DropdownButtonFormField<String>(
             key: ValueKey('mode-$cue-${row!['style']?['mode']}'),
             initialValue: row!['style']?['mode'] ?? 'line',

@@ -78,12 +78,17 @@ class LiveSubtitle extends StatelessWidget {
                     final mode = '${base['mode'] ?? 'line'}',
                         animation = '${style['animation'] ?? 'none'}';
                     final p = ((seconds - start) / .22).clamp(0.0, 1.0);
-                    var scale = 1.0, dy = 0.0, opacity = 1.0;
+                    final age = math.max(0.0, seconds - start);
+                    var scale = 1.0, scaleY = 1.0, dy = 0.0, opacity = 1.0;
                     if (active && animation == 'pop') {
-                      scale = p < .6 ? .75 + p * .55 : 1.2 - p * .2;
+                      scale = age < .13
+                          ? .75 + (age / .13).clamp(0.0, 1.0) * .33
+                          : 1.08 - ((age - .13) / .09).clamp(0.0, 1.0) * .08;
                     }
                     if (active && animation == 'bounce') {
-                      dy = -math.sin(p * math.pi) * 8;
+                      scaleY = age < .1
+                          ? .7 + age * 5
+                          : 1.2 - ((age - .1) / .12).clamp(0.0, 1.0) * .2;
                     }
                     if (active && animation == 'rise') dy = (1 - p) * 8;
                     if (active && animation == 'zoom') scale = .85 + p * .15;
@@ -113,7 +118,8 @@ class LiveSubtitle extends StatelessWidget {
                     return Transform.translate(
                         offset: Offset(0, dy),
                         child: Transform.scale(
-                            scale: scale,
+                            scaleX: scale,
+                            scaleY: scale * scaleY,
                             child: Opacity(
                                 opacity: opacity,
                                 child: ColoredBox(

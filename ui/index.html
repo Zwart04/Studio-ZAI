@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.13.0" />
-<link rel="stylesheet" href="/styles.css?v=1.13.0" />
-<link rel="stylesheet" href="/studio.css?v=1.13.0" />
+<link rel="stylesheet" href="/tokens.css?v=1.14.0" />
+<link rel="stylesheet" href="/styles.css?v=1.14.0" />
+<link rel="stylesheet" href="/studio.css?v=1.14.0" />
 </head>
 <body>
 <div id="app">
@@ -39,6 +39,7 @@
       <p class="lead" data-i18n="home.lead">Tempel link YouTube / TikTok / Instagram atau pilih berkas video lokal. Klip 9:16, subtitle otomatis, dan voiceover dibuat lokal di perangkatmu.</p>
 
       <div class="card source-card">
+        <div class="home-source-heading"><h2>Mulai dari video</h2><p>Tentukan sumber, pilih momen, lalu sesuaikan hasilnya.</p></div>
         <div class="source-modes" role="tablist" aria-label="Sumber video">
           <button type="button" data-source-mode="link" class="active" role="tab" aria-selected="true">
             <svg class="mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -88,6 +89,7 @@
               <p class="field-help">Pilih tampilkan utuh untuk menjaga wajah atau teks di tepi. Framing wajah dapat disesuaikan per klip di editor.</p>
             </fieldset>
             <div id="qualityWrap" class="field" style="display:none"><label for="quality" data-i18n="home.quality">Kualitas video</label><select id="quality"><option value="720p">720p — disarankan (cepat, hemat)</option><option value="1080p">1080p — full HD</option><option value="480p">480p — paling cepat</option><option value="best">Terbaik — ukuran besar</option><option value="audio">Audio saja — tanpa gambar</option></select><p class="field-help" id="qualityHint"></p></div>
+            <section class="home-caption-style"><div id="homeMotionPicker"></div><div id="homeMotionDemo"></div><p class="field-help">Warna mengikuti timestamp ucapan. Timing dari teks tanpa timestamp kata merupakan perkiraan dan bisa diedit.</p></section>
             <input type="hidden" id="onlineMode" value="true">
           </section>
           <section class="source-setting-section" aria-labelledby="analysisHeading">
@@ -383,11 +385,12 @@
 </div>
 <div id="toast"></div>
 
-<script src="/app.js?v=1.13.0"></script>
-<script src="/finishing.js?v=1.13.0"></script>
-<script src="/creator.js?v=1.13.0"></script>
-<script src="/subtitle_overlay.js?v=1.13.0"></script>
-<script src="/timeline.js?v=1.13.0"></script>
-<script src="/studio.js?v=1.13.0"></script>
+<script src="/app.js?v=1.14.0"></script>
+<script src="/finishing.js?v=1.14.0"></script>
+<script src="/creator.js?v=1.14.0"></script>
+<script src="/subtitle_overlay.js?v=1.14.0"></script>
+<script src="/caption_motion.js?v=1.14.0"></script>
+<script src="/timeline.js?v=1.14.0"></script>
+<script src="/studio.js?v=1.14.0"></script>
 </body>
 </html>

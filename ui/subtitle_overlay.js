@@ -85,13 +85,13 @@ const SubtitleOverlay = (() => {
           span.style.background = `linear-gradient(90deg,${highlight} ${filled}%,${normal} ${filled}%)`;
           span.style.backgroundClip='text';span.style.webkitBackgroundClip='text';span.style.color='transparent';
         }
-        let scale = 1, y = 0, opacity = 1;
-        if (active && animation === 'pop') scale = progress < .6 ? .75 + progress*.55 : 1.2 - progress*.2;
-        if (active && animation === 'bounce') y = -Math.sin(progress*Math.PI)*8;
+        let scale = 1, scaleY = 1, y = 0, opacity = 1;
+        if (active && animation === 'pop') scale = age < .13 ? .75 + Math.min(1,age/.13)*.33 : 1.08 - Math.min(1,(age-.13)/.09)*.08;
+        if (active && animation === 'bounce') scaleY = age < .1 ? .7 + age*5 : 1.2 - Math.min(1,(age-.1)/.12)*.2;
         if (active && animation === 'rise') y = (1-progress)*8;
         if (active && animation === 'zoom') scale = .85 + progress*.15;
         if (active && animation === 'fade') opacity = progress;
-        span.style.transform = `translateY(${y}px) scale(${scale})`; span.style.opacity = String(opacity);
+        span.style.transform = `translateY(${y}px) scale(${scale},${scale*scaleY})`; span.style.opacity = String(opacity);
       });
     };
     const tick = () => {paint(); if (!player.paused) raf = requestAnimationFrame(tick);};

@@ -67,6 +67,13 @@ async function main(){
     }
     await page.setViewportSize({width:1440,height:1000});
     await page.screenshot({path:path.join(OUT,'home-redesign.png'),fullPage:true});
+    await page.locator('#homeCaptionMotion').selectOption('elastic');
+    await page.locator('#homeMotionDemo button').click();
+    await wait(90);
+    assert.match(await page.locator('#homeMotionDemo button').innerText(),/Jeda/);
+    await page.locator('#homeMotionDemo button').click();
+    await page.locator('#homeCaptionMotion').selectOption('pop');
+    report.checks.push('motion demo starts, pauses, and switches preset');
     await page.locator('[name=creationTask][value=transcript]').check();
     await page.locator('#source').fill(fixture.source);
     await page.locator('#startBtn').click();
@@ -102,11 +109,22 @@ async function main(){
     assert.ok(Math.abs(box.width/box.height-9/16)<.02,'Portrait frame ratio');
     await page.evaluate(()=>{const video=document.querySelector('#tlVideo');video.currentTime=1.5;});
     await wait(150);
-    assert.match(await page.locator('.live-subtitle').innerText(),/Halo.*dunia/);
-    const early=await page.locator('.live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
+    assert.match(await page.locator('#tlStage .live-subtitle').innerText(),/Halo.*dunia/);
+    const early=await page.locator('#tlStage .live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
     await page.evaluate(()=>{document.querySelector('#tlVideo').currentTime=3;});await wait(150);
-    const late=await page.locator('.live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
+    const late=await page.locator('#tlStage .live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
     assert.notEqual(early,late,'Active word updates after seek');
+    await page.locator('[data-inspector="subtitles"]').click();
+    const originalTiming=await page.locator('#tlCaptions').inputValue();
+    for(const motion of ['pop','elastic','karaoke','typewriter','word','plain']) {
+      await page.locator('#tlCaptionMotion').selectOption(motion);
+      await page.locator('#tlApplyMotion').click();
+      await page.evaluate(()=>{document.querySelector('#tlVideo').currentTime=1.25;});
+      await wait(80);
+      assert.ok(await page.locator('#tlStage .live-subtitle span').count()>0);
+      assert.equal(await page.locator('#tlCaptions').inputValue(),originalTiming);
+    }
+    report.checks.push('six motion presets preserve actual clip text and timestamps');
     await page.locator('[data-inspector="clip"]').click();
     for(const canvas of ['square','classic','landscape','portrait']){
       await page.locator('#tlCanvas').selectOption(canvas);await wait(250);
