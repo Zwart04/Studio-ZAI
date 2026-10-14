@@ -684,6 +684,18 @@ function clipPreviewPath(files = {}) {
   return exportFormats.map(([key]) => files[key]).find(Boolean);
 }
 
+function draftPoster(projectId, clip) {
+  const url = `/api/projects/${encodeURIComponent(projectId)}/clips/${clip.index}/poster?storage=${encodeURIComponent(clip.storage_id)}&start=${encodeURIComponent(clip.start)}`;
+  return `<img class="thumb clip-frame" src="${escapeHtml(url)}" alt="Frame awal klip" loading="lazy" />`;
+}
+document.addEventListener('error', event => {
+  if (!event.target.matches?.('img.clip-frame')) return;
+  const notice = document.createElement('div');
+  notice.className = 'gallery-draft';
+  notice.textContent = 'Frame klip belum tersedia. Buka sumber atau muat ulang untuk mencoba lagi.';
+  event.target.replaceWith(notice);
+}, true);
+
 function clipThumbnailPath(files = {}) {
   const key = exportFormats.find(([name]) => files[name])?.[0] || "mp4";
   return files[key.replace("mp4", "thumb")] || files.thumb;
@@ -718,7 +730,7 @@ function paintGallery() {
     const poster = clipThumbnailPath(files);
     const media = preview
       ? `<video controls playsinline preload="none" ${poster ? `poster="${mediaUrl(poster)}"` : ""} src="${mediaUrl(preview)}" aria-label="${escapeHtml(clip.title)}"></video>`
-      : clip.source_thumbnail ? `<img class="thumb" src="${escapeHtml(clip.source_thumbnail)}" alt="Gambar sumber video" loading="lazy" />` : `<div class="gallery-draft">${t("gallery.draft")}</div>`;
+      : draftPoster(clip.project_id, clip);
     return `<article class="clip gallery-clip"><div class="clip-preview" style="--preview-ratio:${previewAspect(renderedPreviewCanvas(files, clip.canvas), clip.source_width, clip.source_height)}">${media}${potentialBadge(clip.score)}</div>
       <div class="meta"><span class="score">${escapeHtml(clip.project_title)}</span><strong>${escapeHtml(clip.title)}</strong>
       <span class="score">${formatClock(clip.start)}–${formatClock(clip.end)} · ${t("clips.score")} ${Number(clip.score || 0).toFixed(2)}</span></div>
@@ -874,7 +886,7 @@ function renderProjectDetail() {
     const poster = clipThumbnailPath(clip.files);
     const thumb = poster
       ? `<img class="thumb" src="${mediaUrl(poster)}" alt="" loading="lazy" />`
-      : project.source_thumbnail ? `<img class="thumb" src="${escapeHtml(project.source_thumbnail)}" alt="Gambar sumber, belum frame klip" loading="lazy" />` : `<div class="thumb">Preview belum tersedia</div>`;
+      : draftPoster(project.id, clip);
     const ready = Boolean(clipPreviewPath(clip.files));
     const status = (ready ? `<span class="badge ok">siap</span>` : `<span class="badge warn">draft</span>`) + (project.execution?.ranking === "heuristic-only" ? `<span class="badge">heuristik</span>` : "");
     return `<article class="clip">

@@ -1055,6 +1055,23 @@ def create_subtitle_preset(values: dict[str, Any]) -> dict[str, str]:
     return {"id": key}
 
 
+@app.get("/api/projects/{project_id}/clips/{index}/poster")
+def clip_poster(project_id: str, index: int, storage: str, start: float):
+    project = _project(project_id)
+    try:
+        clip = project.clip(index)
+        if clip.storage_id != storage or abs(clip.start - start) > 0.001:
+            raise HTTPException(409, "Klip berubah; muat ulang daftar.")
+        with _POSTER_SLOTS:
+            path = service.clip_poster(project, clip)
+        return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+    except (KeyError, IndexError, FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise HTTPException(404, "Frame klip belum tersedia. Buka video sumber atau coba lagi.") from exc
+
+
+_POSTER_SLOTS = threading.BoundedSemaphore(2)
+
+
 @app.post("/api/projects/{project_id}/clips/{index}/source-preview")
 def source_preview(project_id: str, index: int, values: ClipUpdate | None = None):
     project = _project(project_id)

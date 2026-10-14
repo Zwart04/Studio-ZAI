@@ -18,6 +18,37 @@ from .utils.text import clock, human_size, sanitize_filename
 Report = Callable[[float, str, str], None]
 
 
+def clip_poster(project: projects.Project, clip: projects.Clip) -> Path:
+    """Read the first frame at the clip boundary, without encoding a preview."""
+    import hashlib
+    import tempfile
+
+    media = project.media_path()
+    offset = 0.0
+    identity = cache.file_identity(media) if media else project.source_url
+    key = hashlib.sha256(repr((clip.start, identity)).encode()).hexdigest()[:20]
+    target = project.clip_dir(clip.index) / f"poster-{key}.jpg"
+    with projects.project_lock(f"poster:{project.id}:{clip.storage_id}"):
+        if target.is_file():
+            return target
+        if media is None:
+            segment = project.segment_path(clip.storage_id)
+            start, end = project.segment_bounds(clip.storage_id)
+            if segment and start <= clip.start < end:
+                media, offset = segment, start
+        if media:
+            return render.thumbnail(media, target, at=max(0, clip.start - offset))
+        if project.processing_mode == "offline" or not project.online or not project.source_url:
+            raise FileNotFoundError("Frame klip belum tersedia; buka atau hubungkan video sumber.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="poster-", dir=target.parent) as temp:
+            result = download.download_range(project.source_url, clip.start,
+                min(clip.end, clip.start + 1), temp, max_height=360,
+                cookies=config.load_settings().get("cookies_path") or None)
+            return render.thumbnail(result["path"], target,
+                at=max(0, clip.start - float(result["start"])))
+
+
 def _emit_progress(sse: Any, prog: float, msg: str) -> None:
     """Emit a progress SSE event without touching a job dict."""
     try:
