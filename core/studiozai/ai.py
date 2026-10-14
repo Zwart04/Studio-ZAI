@@ -87,6 +87,9 @@ def discover_models(provider: str, base: str = "", key: str = "", kind: str = "a
     if not ordered:
         raise ValueError("Tidak ada model yang sesuai. Pilih jenis/provider lain atau isi model manual.")
     data = {"models": ordered, "recommended": ordered[0]["id"], "source": "provider", "note": "Saran berdasarkan jenis/nama model, bukan jaminan biaya atau kualitas. Akses inferensi tetap mengikuti kuota akun."}
+    if kind == "ai":
+        from .model_guidance import enrich
+        data["guidance"] = enrich(provider, ordered, data["recommended"])
     if len(_MODEL_CACHE) > 64:
         _MODEL_CACHE.clear()
     _MODEL_CACHE[cache_key] = (time.monotonic(), data)

@@ -1,7 +1,7 @@
 name: studiozai
 description: Studio ZAI - auto clip, subtitle & voiceover studio (Android, on-device)
 publish_to: none
-version: 1.14.0+20
+version: 1.15.0+21
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -42,6 +42,7 @@ flutter:
     - assets/images/logo.png
     - assets/fonts/
     - assets/licenses/
+    - assets/providers/
   fonts:
     - family: Anton
       fonts:

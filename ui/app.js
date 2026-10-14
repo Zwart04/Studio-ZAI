@@ -1532,6 +1532,7 @@ async function boot() {
   await initHomeAnalysis();
   $("#homeMotionPicker").innerHTML = CaptionMotion.picker("homeCaptionMotion");
   CaptionMotion.demo($("#homeMotionDemo"), $("#homeCaptionMotion"));
+  HomeGuide.init();
 
   $("#nav").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-page]");
@@ -1648,6 +1649,7 @@ function syncAnalysisSourceUI() {
   document.querySelector('.analysis-modes').hidden = true;
   document.querySelector('#clipResultSettings').hidden = transcriptOnly;
   document.querySelector('#advDetails').hidden = transcriptOnly;
+  document.querySelector('[aria-labelledby=analysisHeading]').hidden = transcriptOnly;
   document.querySelector('#analysisHeading').textContent = transcriptOnly ? 'Model untuk transkrip' : 'Model untuk memilih momen';
   document.querySelector('#analysisHelp').textContent = transcriptOnly ? 'Subtitle sumber dipakai jika tersedia. Whisper offline mengubah audio menjadi teks jika subtitle tidak tersedia. Tidak ada permintaan ke model pemilih momen.' : 'Model membaca transkrip untuk menyarankan bagian menarik. Tautan video tetap memerlukan internet meskipun modelnya offline.';
   document.querySelector('#startBtn').removeAttribute('data-i18n');
@@ -1668,7 +1670,7 @@ document.querySelectorAll('[data-analysis-source]').forEach(button => button.add
 async function initHomeAnalysis() {
   const control = document.createElement('div');
   control.className = 'field';
-  control.innerHTML = `<div id="momentModelControls"><label for="processingMode">Model pemilih momen</label><select id="processingMode"><option value="local">Offline · model di komputer</option><option value="online_ai">Online · provider & API key</option><option value="offline">Offline penuh · hanya berkas lokal</option></select></div><div id="localLlmFields" class="local-llm-controls"><label for="localModel">Model pemilih momen lokal (LLM)</label><select id="localModel"><option value="">Tanpa LLM · rekomendasi heuristik</option></select><button type="button" id="detectLocalModel" class="ghost">Cari model lokal</button><details class="model-advanced"><summary>Model GGUF & penggunaan RAM</summary><label for="ggufModel">Model GGUF di komputer</label><select id="ggufModel"><option value="">Pilih model GGUF</option></select><div class="actions"><button type="button" id="loadGguf">Muat model GGUF</button><button type="button" id="stopGguf" class="ghost">Lepaskan dari RAM</button></div></details><p id="localModelStatus" role="status">Tanpa LLM, kandidat memakai pola transkrip dan aktivitas audio. Skor perlu ditinjau.</p></div>`;
+  control.innerHTML = `<div id="momentModelControls"><label for="processingMode">Model pemilih momen</label><select id="processingMode"><option value="local">Offline · model di komputer</option><option value="online_ai">Online · provider & API key</option><option value="offline">Offline penuh · hanya berkas lokal</option></select></div><div id="localLlmFields" class="local-llm-controls"><label for="localModel">Model pemilih momen lokal (LLM)</label><select id="localModel"><option value="">Tanpa LLM · rekomendasi heuristik</option></select><button type="button" id="detectLocalModel" class="ghost">Cari model lokal</button><div class="model-advanced"><label for="ggufModel">Model GGUF di komputer</label><select id="ggufModel"><option value="">Pilih model GGUF</option></select><div class="gguf-actions" role="group" aria-label="Memori model GGUF"><button type="button" id="loadGguf" class="ghost gguf-load">Muat model GGUF</button><button type="button" id="stopGguf" class="ghost gguf-stop">Lepaskan dari RAM</button></div><p class="field-help">Muat untuk memakai model. Lepaskan saat selesai agar RAM kembali tersedia; berkas model tetap tersimpan.</p></div><p id="localModelStatus" role="status">Tanpa LLM, kandidat memakai pola transkrip dan aktivitas audio. Skor perlu ditinjau.</p></div>`;
   document.querySelector('#aiPanel').before(control);
   document.querySelector('.analysis-modes').hidden = true;
   const localFields = document.querySelector('#localLlmFields');
@@ -1708,7 +1710,8 @@ async function initHomeAnalysis() {
     const button = document.querySelector('#loadGguf'), status = document.querySelector('#localModelStatus');
     const path = document.querySelector('#ggufModel').value;
     if (!path || state.jobId) { status.textContent = t('hybrid.select'); return; }
-    button.disabled = true;
+    button.disabled = true; button.textContent = 'Memuat model…'; button.setAttribute('aria-busy','true');
+    document.querySelector('#stopGguf').disabled = true;
     try {
       const started = await api('/api/local-llm/start', {method:'POST', body:JSON.stringify({path})});
       trackJob(started);
@@ -1725,11 +1728,16 @@ async function initHomeAnalysis() {
         }
       }
     } catch (error) { status.textContent = error.message; }
-    finally { button.disabled = false; }
+    finally { button.disabled = false; button.textContent = 'Muat model GGUF'; button.removeAttribute('aria-busy'); document.querySelector('#stopGguf').disabled = false; }
   };
   document.querySelector('#stopGguf').onclick = async () => {
-    try { await api('/api/local-llm/stop', {method:'POST'}); document.querySelector('#localModelStatus').textContent = t('hybrid.stopped'); }
-    catch (error) { document.querySelector('#localModelStatus').textContent = error.message; }
+    const button = document.querySelector('#stopGguf'), load = document.querySelector('#loadGguf'), status = document.querySelector('#localModelStatus');
+    if (state.jobId) { status.textContent = 'Tunggu pekerjaan selesai sebelum melepas model.'; return; }
+    const wasDisabled = load.disabled;
+    button.disabled = true; load.disabled = true; button.textContent = 'Melepas model…'; button.setAttribute('aria-busy','true');
+    try { await api('/api/local-llm/stop', {method:'POST'}); status.textContent = t('hybrid.stopped'); }
+    catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; load.disabled = wasDisabled; button.textContent = 'Lepaskan dari RAM'; button.removeAttribute('aria-busy'); }
   };
   document.querySelector('#localModel').onchange = async () => {
     try { await api('/api/settings', {method:'POST', body:JSON.stringify({values:{llm_model:document.querySelector('#localModel').value}})}); }
@@ -1804,6 +1812,7 @@ async function detectHomeAiModel() {
     const model = document.querySelector('#aiModel');
     model.innerHTML = `<option value="auto">${t('home.aiModelAuto')}</option>` + result.models.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label)}${m.id === result.recommended ? ' · disarankan' : ''}</option>`).join('');
     model.value = result.recommended || 'auto';
+    HomeGuide.models(result);
     status.textContent = `${result.models.length} model terdeteksi. ${result.note || ''}`;
   } catch (error) { if (generation === homeDiscoveryGeneration) status.textContent = error.message; }
 }

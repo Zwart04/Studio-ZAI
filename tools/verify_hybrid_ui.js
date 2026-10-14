@@ -24,6 +24,18 @@ async function main(){
     page.on('request',r=>{if(r.url().endsWith('/api/link-info'))metadataRequests++;});
     await page.goto(BASE,{waitUntil:'networkidle'});
     await page.evaluate(()=>{const wizard=document.querySelector('#wizardOverlay');if(wizard)wizard.hidden=true;});
+    assert.equal(await page.locator('#subPos').isVisible(),true,'Subtitle position visible without expanding');
+    assert.equal(await page.locator('#analysisMode').isVisible(),true,'Analysis visible without expanding');
+    assert.equal(await page.locator('#advDetails').evaluate(el=>el.tagName),'SECTION');
+    assert.equal(await page.locator('#transcriptSettings #asrSpeed').count(),1);
+    assert.equal(await page.locator('#ggufModel').isVisible(),true,'GGUF controls not collapsed');
+    await page.route('**/api/local-llm/stop', async route=>{await wait(250); await route.fulfill({json:{stopped:true}});});
+    await page.locator('#stopGguf').click();
+    assert.equal(await page.locator('#stopGguf').getAttribute('aria-busy'),'true');
+    assert.equal(await page.locator('#stopGguf').isDisabled(),true);
+    await page.locator('#stopGguf:not([aria-busy])').waitFor();
+    assert.match(await page.locator('#stopGguf').innerText(),/Lepaskan/);
+    for(const id of ['loadGguf','stopGguf']) assert.ok((await page.locator('#'+id).boundingBox()).height>=44);
     await page.locator('#processingMode').selectOption('offline');
     assert.equal(await page.locator('#processingMode').inputValue(),'offline');
     await page.locator('#source').fill('https://youtu.be/abcdefghijk');
@@ -44,6 +56,27 @@ async function main(){
     await wait(700);
     assert.equal(await page.locator('#aiModel').inputValue(),'auto');
     report.checks.push('provider switch clears key and ignores stale discovery; cloud discovery uses an explicit fixture');
+    await page.unroute('**/api/ai/models');
+    await page.route('**/api/ai/models',route=>route.fulfill({json:{models:[{id:'gpt-6-luna',label:'GPT Luna',price:{input:.1,output:.5,checked:'2026-10-14'}},{id:'gpt-6-astra',label:'GPT Astra'}],recommended:'gpt-6-luna',guidance:{recommended:'gpt-6-luna',cheapest:'gpt-6-luna',smartest:'gpt-6-astra',note:'Fixture guidance'}}}));
+    await page.locator('[data-provider-pick="openai"]').click();
+    await page.locator('#aiKey').fill('fixture-placeholder');
+    await page.locator('#aiDetect').click();
+    await page.locator('[data-model-priority="cheapest"]:enabled').waitFor();
+    await page.locator('[data-model-priority="smartest"]').click();
+    assert.equal(await page.locator('#aiModel').inputValue(),'gpt-6-astra');
+    await page.locator('[data-model-priority="cheapest"]').click();
+    assert.equal(await page.locator('#aiModel').inputValue(),'gpt-6-luna');
+    assert.match(await page.locator('#aiModelDetail').innerText(),/0.1/);
+    for(const provider of ['openai','anthropic','gemini','groq','deepseek']) {
+      await page.locator(`[data-provider-pick="${provider}"]`).click();
+      assert.ok(await page.locator(`[data-provider-pick="${provider}"] img`).evaluate(img=>img.complete&&img.naturalWidth>0));
+      assert.ok((await page.locator('#providerHelp a').first().getAttribute('href')).startsWith('https://'));
+    }
+    await page.locator('[data-provider-pick="gemini"]').click();
+    assert.match(await page.locator('#providerHelp').innerText(),/gratis/);
+    assert.equal(await page.locator('[data-model-priority="cheapest"]').isDisabled(),true);
+    report.checks.push('official local icons, API help links, free quota badge, model priorities and stale-provider reset');
+
     await page.locator('#processingMode').selectOption('local');
     assert.equal(await page.locator('#localLlmFields').isVisible(),true);
     assert.equal(await page.locator('#processingMode option[value="hybrid"]').count(),0);

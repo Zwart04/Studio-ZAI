@@ -1,0 +1,11 @@
+{
+  "checked": "2026-10-14",
+  "sources": {
+    "openai": "https://developers.openai.com/favicon.png",
+    "anthropic": "https://cdn.prod.website-files.com/67ce28cfec624e2b733f8a52/681d52619fec35886a7f1a70_favicon.png",
+    "gemini": "https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png",
+    "groq": "https://console.groq.com/favicon.ico?cache=rounded-bolt",
+    "deepseek": "https://www.deepseek.com/favicon.ico"
+  },
+  "note": "Official website icons. Trademarks belong to their owners; used only to identify API providers."
+}

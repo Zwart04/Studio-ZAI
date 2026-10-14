@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../services/model_guidance.dart';
 
 import '../services/cloud_ai.dart';
 import '../theme/tokens.dart';
@@ -64,6 +66,8 @@ class _ProviderFormState extends State<_ProviderForm> {
   int _revision = 0;
   String _selection = 'auto', _notice = '';
   List<Map<String, dynamic>> _models = [];
+  Map<String, dynamic> _help = {};
+  Map<String, String> _priorities = {};
   @override
   void initState() {
     super.initState();
@@ -71,12 +75,15 @@ class _ProviderFormState extends State<_ProviderForm> {
   }
 
   Future<void> _load() async {
+    final help = await ModelGuidance.help();
     final settings = await CloudAI.settings(widget.kind);
     final stored = await CloudAI.storage.containsKey(
       key: '${widget.kind}_api_key',
     );
     if (!mounted) return;
     setState(() {
+      _help = help;
+      _priorities = {};
       _provider = settings['provider']!;
       _url.text = settings['base_url']!;
       _model.text = settings['model']!;
@@ -107,9 +114,15 @@ class _ProviderFormState extends State<_ProviderForm> {
         widget.kind,
         useSavedKey: _savedKey && _key.text.isEmpty,
       );
+      final models = (catalog['models'] as List).cast<Map<String, dynamic>>();
+      final priorities = widget.kind == 'ai'
+          ? await ModelGuidance.choices(
+              _provider, models, catalog['recommended'] as String)
+          : <String, String>{};
       if (!mounted || revision != _revision) return;
       setState(() {
-        _models = (catalog['models'] as List).cast<Map<String, dynamic>>();
+        _priorities = priorities;
+        _models = models;
         _selection = catalog['recommended'] as String;
         _model.text = _selection;
         _notice =
@@ -176,6 +189,7 @@ class _ProviderFormState extends State<_ProviderForm> {
               ? [const LinearProgressIndicator()]
               : [
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue:
                         widget.providers.contains(_provider) ? _provider : '',
                     decoration: const InputDecoration(labelText: 'Penyedia'),
@@ -185,9 +199,20 @@ class _ProviderFormState extends State<_ProviderForm> {
                       ...widget.providers.map(
                         (p) => DropdownMenuItem(
                           value: p,
-                          child: Text(
-                            p == 'sd_local' ? 'Stable Diffusion lokal' : p,
-                          ),
+                          child: Row(children: [
+                            if (!['sd_local', 'compatible'].contains(p)) ...[
+                              Image.asset('assets/providers/$p.png',
+                                  width: 24, height: 24),
+                              const SizedBox(width: 8)
+                            ],
+                            Expanded(
+                                child: Text(
+                                    _help[p]?['name'] ??
+                                        (p == 'sd_local'
+                                            ? 'Stable Diffusion lokal'
+                                            : p),
+                                    overflow: TextOverflow.ellipsis)),
+                          ]),
                         ),
                       ),
                     ],
@@ -199,10 +224,36 @@ class _ProviderFormState extends State<_ProviderForm> {
                       _key.clear();
                       _selection = 'auto';
                       _models = [];
+                      _priorities = {};
                       _savedKey = false;
                       _notice = '';
                     }),
                   ),
+                  if (_help[_provider] != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_help[_provider]['badge'],
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(_help[_provider]['steps']),
+                    for (final key in ['key', 'docs', 'pricing'])
+                      if (_help[_provider][key] != null)
+                        TextButton.icon(
+                            icon: const Icon(Icons.copy_outlined),
+                            label: Text({
+                              'key': 'Salin link API key',
+                              'docs': 'Salin panduan resmi',
+                              'pricing': 'Salin harga & batas'
+                            }[key]!),
+                            onPressed: () async {
+                              await Clipboard.setData(
+                                  ClipboardData(text: _help[_provider][key]));
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Tautan disalin; buka di browser Anda.')));
+                              }
+                            }),
+                  ],
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     key: ValueKey('$_provider/$_selection/${_models.length}'),
@@ -232,6 +283,29 @@ class _ProviderFormState extends State<_ProviderForm> {
                       if (_selection != 'manual') _model.text = _selection;
                     }),
                   ),
+                  if (widget.kind == 'ai') ...[
+                    Wrap(spacing: 8, children: [
+                      for (final choice in {
+                        'recommended': 'Rekomendasi',
+                        'cheapest': 'Termurah',
+                        'smartest': 'Paling pintar'
+                      }.entries)
+                        OutlinedButton(
+                            onPressed: _priorities[choice.key] == null
+                                ? null
+                                : () => setState(() {
+                                      _selection = _priorities[choice.key]!;
+                                      _model.text = _selection;
+                                    }),
+                            child: Text(choice.value)),
+                    ]),
+                    const Text(
+                        'Termurah: estimasi 5.000 token input + 1.000 output pada model dengan harga tercatat; belum termasuk kuota gratis. DeepSeek memakai tarif peak. Paling pintar: saran keluarga model, bukan benchmark.'),
+                    for (final model in _models)
+                      if (model['id'] == _selection &&
+                          model['priceLabel'] != null)
+                        Text(model['priceLabel']),
+                  ],
                   if (_selection == 'manual')
                     TextField(
                       controller: _model,
@@ -262,7 +336,10 @@ class _ProviderFormState extends State<_ProviderForm> {
                     enableSuggestions: false,
                     autocorrect: false,
                     onChanged: (_) {
-                      _revision++;
+                      setState(() {
+                        _revision++;
+                        _priorities = {};
+                      });
                     },
                     onSubmitted: (_) => _detect(),
                     decoration: InputDecoration(

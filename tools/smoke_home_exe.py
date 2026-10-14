@@ -36,6 +36,9 @@ try:
         if path.suffix in {'.js', '.css', '.html'}:
             with urllib.request.urlopen('http://127.0.0.1:8740/' + path.name) as response:
                 assert response.read() == path.read_bytes(), path.name
+    for path in (root / 'ui/assets/providers').glob('*.png'):
+        with urllib.request.urlopen('http://127.0.0.1:8740/assets/providers/' + path.name) as response:
+            assert response.read() == path.read_bytes(), path.name
     project = request('/api/projects', {'title': 'Home regression fixture', 'source': '', 'lang': 'en-US'})
     route = '/api/projects/' + project['id']
     task = wait_job(request(route + '/process', {'source': str(source), 'task': 'transcript', 'processing_mode': 'local'}))

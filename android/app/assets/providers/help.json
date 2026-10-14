@@ -1,0 +1,47 @@
+{
+  "openai": {
+    "name": "OpenAI",
+    "badge": "API berbayar",
+    "key": "https://platform.openai.com/api-keys",
+    "docs": "https://developers.openai.com/api/docs/quickstart",
+    "pricing": "https://developers.openai.com/api/docs/pricing",
+    "steps": "Masuk ke OpenAI Platform → buat API key pada proyek → siapkan saldo API. Langganan ChatGPT tidak otomatis menjadi saldo API."
+  },
+  "anthropic": {
+    "name": "Anthropic",
+    "badge": "API berbayar",
+    "key": "https://platform.claude.com/settings/keys",
+    "docs": "https://platform.claude.com/docs/en/api/overview",
+    "pricing": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "steps": "Masuk ke Claude Console → API keys → buat key. Periksa kredit dan batas pemakaian akun sebelum menggunakan API."
+  },
+  "gemini": {
+    "name": "Google Gemini",
+    "badge": "Ada kuota gratis",
+    "key": "https://aistudio.google.com/apikey",
+    "docs": "https://ai.google.dev/gemini-api/docs/api-key",
+    "pricing": "https://ai.google.dev/gemini-api/docs/pricing",
+    "steps": "Masuk ke Google AI Studio → Get API key → pilih atau buat proyek → salin key. Gratis hanya untuk model dan wilayah yang memenuhi syarat; kuota mengikuti akun. Data pada layanan gratis dapat digunakan untuk peningkatan produk sesuai kebijakan Google."
+  },
+  "groq": {
+    "name": "Groq",
+    "badge": "Ada paket gratis",
+    "key": "https://console.groq.com/keys",
+    "docs": "https://console.groq.com/docs/quickstart",
+    "pricing": "https://console.groq.com/docs/rate-limits",
+    "steps": "Masuk ke Groq Console → API Keys → Create API Key. Paket Free memiliki batas permintaan dan token per model; lihat halaman Limits akun."
+  },
+  "deepseek": {
+    "name": "DeepSeek",
+    "badge": "API berbayar",
+    "key": "https://platform.deepseek.com/api_keys",
+    "docs": "https://api-docs.deepseek.com/",
+    "pricing": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "steps": "Masuk ke DeepSeek Platform → API keys → buat key → periksa saldo API. Biaya mengikuti model, token, cache, dan jam pemakaian."
+  },
+  "compatible": {
+    "name": "API kompatibel / Ollama",
+    "badge": "Sesuai layanan",
+    "steps": "Atur alamat endpoint di Pengaturan. Untuk server lokal, API key mengikuti konfigurasi server. Biaya dan model mengikuti penyedia endpoint tersebut."
+  }
+}

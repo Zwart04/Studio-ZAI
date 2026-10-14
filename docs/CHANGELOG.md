@@ -1,3 +1,13 @@
+# v1.15.0 — 14 Oktober 2026
+
+- Kelompok analisis, transkrip, subtitle, dan hasil klip terlihat langsung di beranda Windows.
+- Tombol GGUF lebih besar dengan status proses dan perlindungan klik berulang.
+- Ikon resmi provider, panduan API, penanda kuota gratis, dan pilihan model berdasarkan prioritas di Windows dan Android.
+
+[Validasi dan batas saran model](RELEASE-1.15.0.md).
+
+---
+
 # v1.14.0 — 14 Oktober 2026
 
 - Pilihan cepat animasi subtitle: Sorot + Pop, Lentur, Karaoke, Muncul per kata, Satu kata, Tanpa gerak.

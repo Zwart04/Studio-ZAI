@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.14.0" />
-<link rel="stylesheet" href="/styles.css?v=1.14.0" />
-<link rel="stylesheet" href="/studio.css?v=1.14.0" />
+<link rel="stylesheet" href="/tokens.css?v=1.15.0" />
+<link rel="stylesheet" href="/styles.css?v=1.15.0" />
+<link rel="stylesheet" href="/studio.css?v=1.15.0" />
 </head>
 <body>
 <div id="app">
@@ -124,8 +124,8 @@
             <div id="audioTrackWrap" class="field" style="display:none"><label for="audioTrack">Track audio sumber</label><select id="audioTrack"></select><p class="field-help" id="audioTrackHint">Jika ada beberapa bahasa, pilih suara sumber yang dipakai saat klip dibuat.</p></div>
           </section>
         </div>
-        <details id="advDetails" class="clip-options">
-          <summary>Subtitle &amp; analisis <span>Atur teks dan pemilihan momen</span></summary>
+        <section id="advDetails" class="clip-options">
+          <h3>Subtitle &amp; analisis</h3>
           <div class="advanced-content">
             <label>Jenis konten<select id="analysisMode"><option value="auto">Otomatis / ulasan</option><option value="podcast">Podcast · tanya jawab & cerita</option></select></label>
             <label><input id="reviewFirst" type="checkbox" checked> Tinjau momen & judul sebelum render</label>
@@ -133,7 +133,7 @@
             <div class="field"><label for="subPos">Posisi subtitle</label><select id="subPos" aria-describedby="subPosHelp"><option value="bottom">Bawah (standar)</option><option value="middle">Tengah</option><option value="top">Atas</option><option value="off">Tanpa subtitle tambahan</option></select><p class="field-help" id="subPosHelp">Pilih tanpa subtitle jika video sumber sudah menampilkan teks permanen.</p></div>
             <input type="checkbox" id="useLlm" hidden>
           </div>
-        </details>
+        </section>
 
         <div class="row" style="margin-top:var(--s5)">
           <button class="primary" id="startBtn" data-i18n="home.start">Mulai buat klip</button>
@@ -385,12 +385,13 @@
 </div>
 <div id="toast"></div>
 
-<script src="/app.js?v=1.14.0"></script>
-<script src="/finishing.js?v=1.14.0"></script>
-<script src="/creator.js?v=1.14.0"></script>
-<script src="/subtitle_overlay.js?v=1.14.0"></script>
-<script src="/caption_motion.js?v=1.14.0"></script>
-<script src="/timeline.js?v=1.14.0"></script>
-<script src="/studio.js?v=1.14.0"></script>
+<script src="/home_guide.js?v=1.15.0"></script>
+<script src="/app.js?v=1.15.0"></script>
+<script src="/finishing.js?v=1.15.0"></script>
+<script src="/creator.js?v=1.15.0"></script>
+<script src="/subtitle_overlay.js?v=1.15.0"></script>
+<script src="/caption_motion.js?v=1.15.0"></script>
+<script src="/timeline.js?v=1.15.0"></script>
+<script src="/studio.js?v=1.15.0"></script>
 </body>
 </html>
