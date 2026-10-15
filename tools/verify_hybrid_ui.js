@@ -132,7 +132,7 @@ async function main(){
     assert.ok(Math.abs(box.width/box.height-9/16)<.02,'Portrait frame ratio');
     await page.evaluate(()=>{const video=document.querySelector('#tlVideo');video.currentTime=Number(video.dataset.sourceStart)+.5;window.originalPlayer=video;});
     await wait(150);
-    assert.match(await page.locator('#tlStage .live-subtitle').innerText(),/Halo.*dunia/);
+    assert.match(await page.locator('#tlStage .live-subtitle').innerText(),/Halo\s*dunia/);
     const early=await page.locator('#tlStage .live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
     await page.evaluate(()=>{const video=document.querySelector('#tlVideo');video.currentTime=Number(video.dataset.sourceStart)+2;});await wait(150);
     const late=await page.locator('#tlStage .live-subtitle span').first().evaluate(el=>getComputedStyle(el).color);
@@ -148,6 +148,44 @@ async function main(){
       assert.equal(await page.locator('#tlCaptions').inputValue(),originalTiming);
     }
     report.checks.push('twelve motion presets preserve actual clip text and timestamps');
+    await page.locator('#tlCaptionMotion').selectOption('plain');
+    await page.locator('[data-cue-text="0"]').fill('terus di sini kayak ada tekstur-teksturnya dan tulisan panjang tetap terbaca di dalam video');
+    await page.locator('#tlLiveSize').fill('120');
+    await page.locator('#tlLiveSize').dispatchEvent('input');
+    await wait(150);
+    for(const width of [360,768,1440]){
+      await page.setViewportSize({width,height:1000});await wait(150);
+      for(const full of [true,false]){
+        await page.locator('[data-tl="expand"]').click();await wait(150);
+        assert.equal(await page.locator('.preview-workspace').evaluate(el=>el.classList.contains('expanded')),full);
+        const bounds=await page.evaluate(()=>{
+          const frame=document.querySelector('#tlStage .output-frame').getBoundingClientRect();
+          return [...document.querySelectorAll('#tlStage .live-subtitle span')].map(n=>{const r=n.getBoundingClientRect();return r.left>=frame.left-1&&r.right<=frame.right+1&&r.top>=frame.top-1&&r.bottom<=frame.bottom+1;});
+        });
+        assert.ok(bounds.length && bounds.every(Boolean),`Subtitle within frame at ${width}, expanded=${full}`);
+        assert.equal(await page.evaluate(()=>window.originalPlayer===document.querySelector('#tlVideo')),true);
+      }
+    }
+    await page.locator('[data-tl="expand"]').click();
+    await page.locator('#tlPreviewSeek').focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('[data-tl="subtitle-edit"]').evaluate(n=>n===document.activeElement),true,'Fullscreen focus stays within preview controls');
+    await page.screenshot({path:path.join(OUT,'full-preview.png')});
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.editor-overlay').isVisible(),true,'Escape leaves full preview before closing editor');
+    await page.locator('[data-tl="subtitle-edit"]').click();
+    assert.equal(await page.locator('#tlCaptionMotion').evaluate(n=>n===document.activeElement),true);
+    await page.locator('#tlCaptionMotion').selectOption('word');await wait(150);
+    assert.equal(await page.locator('#tlStage .live-subtitle span').count(),1,'Motion select applies without a second button');
+    await page.locator('[data-tl="play"]').click();
+    await page.waitForFunction(()=>!document.querySelector('#tlVideo').paused);
+    await page.locator('[data-tl="play"]').click();
+    assert.equal(await page.locator('#tlVideo').evaluate(v=>v.paused),true);
+    await page.locator('#tlPreviewSeek').fill('0.5');
+    await page.locator('#tlPreviewSeek').dispatchEvent('input');
+    await wait(100);
+    assert.ok(Math.abs(await page.locator('#tlVideo').evaluate(v=>v.currentTime-Number(v.dataset.sourceStart))-.5)<.05);
+    report.checks.push('long subtitles wrap within portrait frame at mobile/tablet/desktop and full preview; Escape returns to editor; animation applies immediately');
     await page.locator('[data-inspector="clip"]').click();
     for(const canvas of ['square','classic','landscape','portrait']){
       await page.locator('#tlCanvas').selectOption(canvas);await wait(250);
@@ -168,7 +206,7 @@ async function main(){
     await page.locator('[data-tl="add-text"]').click();
     await page.locator('#tlText').fill('Overlay langsung');
     await page.locator('#tlLiveFont').selectOption('Anton');await wait(400);
-    assert.match(await page.locator('#tlStage').innerText(),/Overlay langsung/);
+    assert.match(await page.locator('#tlStage').innerText(),/Overlay\s*langsung/);
     assert.equal(await page.evaluate(()=>window.originalPlayer===document.querySelector('#tlVideo')),true,'Adding text retains video element');
     assert.equal(encodes,0);
     report.checks.push('template font, editable transcript and added text update live without replacing or encoding the player');
@@ -191,13 +229,27 @@ async function main(){
       assert.equal(overflow,false,`Editor overflow at ${width}`);
     }
     await page.setViewportSize({width:1440,height:1000});
+    await page.locator('[data-tl="subtitle-edit"]').click();
+    await page.locator('#tlInspector').evaluate(n=>n.scrollTop=0);
+    await wait(250);
     await page.screenshot({path:path.join(OUT,'editor.png')});
+    await page.locator('[data-tl="save"]').click();
+    await wait(500);
+    const saved=await (await fetch(BASE+'/api/projects/'+fixture.project_id)).json();
+    assert.equal(saved.clips[0].captions[0].style.mode,'word');
+    report.checks.push('play/pause and scrub controls; subtitle animation persists through Save');
     await page.keyboard.press('Escape');
-    await page.locator('[data-tl="close"]').click().catch(()=>{});
+    assert.equal(await page.locator('.editor-overlay').isVisible(),false);
     await page.locator('#nav [data-page="home"]').click();
     await page.locator('#processingMode').focus();await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#processingMode').evaluate(el=>el===document.activeElement),true);
     report.checks.push('keyboard select focus');
+    for(const name of ['projects','gallery','voice','images','models','settings','home']){
+      await page.locator(`#nav [data-page="${name}"]`).click();
+      assert.equal(await page.locator(`#page-${name}`).isVisible(),true);
+    }
+    report.checks.push('all seven main navigation destinations open');
+    await wait(500);
     await page.screenshot({path:path.join(OUT,'home.png')});
     assert.deepEqual(report.errors,[]);
     report.success=true;

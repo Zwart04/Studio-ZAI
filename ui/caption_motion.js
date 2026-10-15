@@ -6,7 +6,7 @@ const CaptionMotion = (() => {
     typewriter: {label:'Muncul per kata', hint:'Kata muncul berurutan saat diucapkan.', mode:'line', animation:'typewriter'},
     word: {label:'Satu kata', hint:'Satu kata bergantian dengan efek pop.', mode:'word', animation:'pop'},
     plain: {label:'Tanpa gerak', hint:'Seluruh baris tetap terlihat.', mode:'line', animation:'none'},
-    rise: {label:'Naik lembut',hint:'Kata aktif masuk dari bawah.',mode:'highlight',animation:'rise'},
+    rise: {label:'Baris naik lembut',hint:'Seluruh baris masuk dari bawah secara bersamaan.',mode:'line',animation:'rise'},
     fade: {label:'Sorot memudar',hint:'Kata aktif muncul secara lembut.',mode:'highlight',animation:'fade'},
     zoom: {label:'Zoom kata',hint:'Kata aktif membesar ke ukuran normal.',mode:'highlight',animation:'zoom'},
     box: {label:'Kotak aktif',hint:'Satu kata disorot dalam kotak.',mode:'box',animation:'pop'},
@@ -16,7 +16,7 @@ const CaptionMotion = (() => {
   function apply(rows, name, highlight = '#abff66') {
     const preset = presets[name]; if (!preset) return;
     rows.forEach(row => {
-      row.style = {...row.style, mode:preset.mode, animation:preset.animation, highlight, bold:true};
+      row.style = {...row.style, mode:preset.mode, animation:preset.animation, highlight};
       (row.words || []).forEach(word => {if (word.style) {word.style = {...word.style}; delete word.style.animation;}});
     });
   }

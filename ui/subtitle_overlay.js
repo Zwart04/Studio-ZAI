@@ -12,7 +12,13 @@ const SubtitleOverlay = (() => {
     const all = words(cue).filter(row => Number.isFinite(row.start) && Number.isFinite(row.end) && row.end > row.start);
     const mode = cue.style?.mode || 'line';
     if (mode === 'word' || mode === 'box') return all.filter(row => row.start <= time && time < row.end);
-    if (mode !== 'highlight') return all;
+    if (mode === 'overlay') return all;
+    if (mode !== 'highlight') {
+      const pages=[];let page=[],length=0;
+      all.forEach(row=>{const token=String(row.word);if(page.length && (page.length>=6||length+token.length>38)){pages.push(page);page=[];length=0;}page.push(row);length+=token.length+1;});
+      if(page.length)pages.push(page);
+      return pages.find((page,i)=>(i? page[0].start:cue.start)<=time && time<(pages[i+1]?.[0].start??cue.end))||[];
+    }
     const chunks = []; let current = [], chars = 0;
     all.forEach(row => {
       const token = String(row.word), last = current[current.length-1];
@@ -57,28 +63,34 @@ const SubtitleOverlay = (() => {
       const style = cue.style || {}, visibleWords = previewWords(cue,time), id = JSON.stringify([cue,visibleWords]);
       if (id !== cueId) {
         cueId = id; rows = visibleWords; layer.replaceChildren();
-        spans = rows.map(row => {const span = document.createElement('span'); span.textContent = row.word + ' '; layer.append(span); return span;});
+        spans = rows.map(row => {const span = document.createElement('span'); span.textContent = String(row.word).trim(); layer.append(span); return span;});
         layer.dataset.timing = cue.timing_quality || (cue.words?.length ? 'platform/measured' : 'estimated');
-        timing.textContent = layer.dataset.timing === 'estimated' ? 'Timing kata diperkirakan' : '';
+        timing.textContent = '';
+        frame.dataset.timing = layer.dataset.timing;
         layer.title = cue.words?.length ? 'Timestamp kata dari sumber' : 'Timestamp kata diperkirakan';
       }
       layer.style.fontFamily = fonts.includes(style.font) ? style.font : 'Inter, sans-serif';
-      layer.style.fontSize = `${Math.max(12, clamp(style.size,56,14,160) * frame.clientHeight / 1920)}px`;
+      const fontScale = frame.clientHeight / 1920;
+      const x = clamp(style.x,.5,.05,.95);
+      layer.style.width = `${Math.min(.88, 2 * Math.min(x-.02, .98-x)) * 100}%`;
+      layer.style.fontSize = `${clamp(style.size,56,14,160) * fontScale}px`;
       layer.style.fontWeight = style.bold ? '700' : '600';
       layer.style.fontStyle=style.italic?'italic':'normal';
       layer.style.opacity=String(clamp(style.opacity,1,0,1));
       layer.style.textShadow=style.outlineColor?`1px 1px 2px ${color(style.outlineColor,'#111111')}, -1px -1px 2px ${color(style.outlineColor,'#111111')}`:'';
       layer.style.background=style.box?color(style.outlineColor,'#111111'):'transparent';
-      layer.style.left = `${clamp(style.x,.5,.05,.95) * 100}%`;
+      layer.style.left = `${x * 100}%`;
       layer.style.top = `${clamp(style.y,({top:.15,middle:.5,bottom:.82}[clip.subtitle_position] || .82),.05,.95) * 100}%`;
       rows.forEach((row, i) => {
         const span = spans[i], active = row.start <= time && time < row.end;
         const wordStyle = {...style, ...(row.style || {})};
         span.style.fontFamily = fonts.includes(wordStyle.font) ? wordStyle.font : layer.style.fontFamily;
-        span.style.fontSize = `${Math.max(12, clamp(wordStyle.size,56,14,160) * frame.clientHeight / 1920)}px`;
+        span.style.fontSize = `${clamp(wordStyle.size,56,14,160) * fontScale}px`;
         span.style.fontWeight = wordStyle.bold === false ? '400' : wordStyle.bold ? '700' : layer.style.fontWeight;
         const mode = style.mode || 'line', animation = row.style?.animation || style.animation || 'none';
-        const age = Math.max(0, time-row.start), progress = Math.min(1, age/.22);
+        const lineMotion = ['line','overlay'].includes(mode);
+        const animate = lineMotion || active;
+        const age = Math.max(0, time-(lineMotion ? (mode==='overlay'?cue.start:rows[0]?.start??cue.start) : row.start)), progress = Math.min(1, age/.22);
         span.style.visibility = mode === 'word' && !active || ['type','typewriter'].includes(animation) && time < row.start ? 'hidden' : 'visible';
         const normal = color(row.style?.color || style.color,'#ffffff'), highlight = color(style.highlight,'#abff66');
         span.style.color = active && ['highlight','box'].includes(mode) ? highlight : normal;
@@ -90,20 +102,25 @@ const SubtitleOverlay = (() => {
           span.style.backgroundClip='text';span.style.webkitBackgroundClip='text';span.style.color='transparent';
         }
         let scale = 1, scaleY = 1, y = 0, opacity = 1;
-        if (active && animation === 'pop') scale = age < .13 ? .75 + Math.min(1,age/.13)*.33 : 1.08 - Math.min(1,(age-.13)/.09)*.08;
-        if (active && animation === 'bounce') scaleY = age < .1 ? .7 + age*5 : 1.2 - Math.min(1,(age-.1)/.12)*.2;
-        if (active && animation === 'rise') y = (1-progress)*8;
-        if (active && animation === 'zoom') scale = .85 + Math.min(1,age/.3)*.15;
-        if (active && animation === 'fade') opacity = Math.min(1,age/.15);
+        if (animate && animation === 'pop') scale = age < .13 ? .75 + Math.min(1,age/.13)*.33 : 1.08 - Math.min(1,(age-.13)/.09)*.08;
+        if (animate && animation === 'bounce') scaleY = age < .1 ? .7 + age*5 : 1.2 - Math.min(1,(age-.1)/.12)*.2;
+        if (animate && animation === 'rise') y = (1-progress)*frame.clientHeight*.04;
+        if (animate && animation === 'zoom') scale = .85 + Math.min(1,age/.3)*.15;
+        if (animate && animation === 'fade') opacity = Math.min(1,age/.15);
         span.style.transform = `translateY(${y}px) scale(${scale},${scale*scaleY})`; span.style.opacity = String(opacity);
       });
+      const safeTop = frame.clientHeight * .04 + layer.offsetHeight / 2;
+      const safeBottom = frame.clientHeight * .96 - layer.offsetHeight / 2;
+      const desiredY = clamp(style.y,({top:.15,middle:.5,bottom:.82}[clip.subtitle_position] || .82),.05,.95) * frame.clientHeight;
+      layer.style.top = `${Math.max(safeTop, Math.min(safeBottom, desiredY))}px`;
     };
     let lastPaint=0;
     const tick = (now=0) => {if(now-lastPaint>=40||!now){paint();lastPaint=now;} if (!player.paused&&!manual) raf = requestAnimationFrame(tick);};
     const play = () => {cancelAnimationFrame(raf); tick();};
     if(!manual)player.addEventListener('play', play); player.addEventListener('seeked', paint); player.addEventListener('timeupdate', paint);
     paint();
-    return {paint, destroy(){cancelAnimationFrame(raf);player.removeEventListener('play',play);player.removeEventListener('seeked',paint);player.removeEventListener('timeupdate',paint);layer.remove();timing.remove();}};
+    const resize = new ResizeObserver(paint); resize.observe(frame);
+    return {paint, destroy(){resize.disconnect();cancelAnimationFrame(raf);player.removeEventListener('play',play);player.removeEventListener('seeked',paint);player.removeEventListener('timeupdate',paint);layer.remove();timing.remove();}};
   }
   return {mount, words, previewWords};
 })();

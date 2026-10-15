@@ -1,3 +1,14 @@
+# v1.17.0 — 15 Oktober 2026
+
+- Workspace editor Windows memenuhi jendela, dengan preview penuh yang tetap memuat subtitle dan overlay.
+- Animasi dipilih langsung di editor; subtitle panjang dibagi mengikuti ucapan dan dapat pindah baris dalam frame.
+- Perbaikan pop, fade, posisi, dan karaoke saat ekspor; tata letak beranda serta kontrol bersama diperbarui.
+- Paket Windows kini menyertakan teks lisensi SIL OFL dan catatan asal empat font subtitle yang dibundel.
+
+[Cakupan, validasi, dan batas](RELEASE-1.17.0.md) · [Laporan penerapan antislop](ANTISLOP-1.17.0.md).
+
+---
+
 # v1.16.0 — 15 Oktober 2026
 
 - Beranda Windows menampilkan semua klip beserta transkrip; pilihan Transkrip saja dihapus.

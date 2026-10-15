@@ -14,7 +14,7 @@ class CreatorTools {
     'Muncul per kata': {'mode': 'line', 'animation': 'typewriter'},
     'Satu kata': {'mode': 'word', 'animation': 'pop'},
     'Tanpa gerak': {'mode': 'line', 'animation': 'none'},
-    'Naik lembut': {'mode': 'highlight', 'animation': 'rise'},
+      'Baris naik lembut': {'mode': 'line', 'animation': 'rise'},
     'Sorot memudar': {'mode': 'highlight', 'animation': 'fade'},
     'Zoom kata': {'mode': 'highlight', 'animation': 'zoom'},
     'Kotak aktif': {'mode': 'box', 'animation': 'pop'},
@@ -394,7 +394,7 @@ class CreatorTools {
           'pop':
               r'\fscx75\fscy75\t(0,130,\fscx108\fscy108)\t(130,220,\fscx100\fscy100)',
           'bounce': r'\fscy70\t(0,100,\fscy120)\t(100,220,\fscy100)',
-          'fade': r'\fad(150,120)',
+          'fade': r'\alpha&HFF&\t(0,150,\alpha&H00&)',
           'rise': r'\fad(100,80)',
           'zoom': r'\fscx85\fscy85\t(0,300,\fscx100\fscy100)',
         }[style['animation']] ??

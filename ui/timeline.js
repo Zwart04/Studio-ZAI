@@ -1,11 +1,4 @@
-/* ---------------------------------------------------------------------------
- * Studio ZAI — editor timeline multi-track (versi ringkas ala CapCut).
- *
- * Empat track: Video (satu item sumber), Media (overlay gambar/video),
- * Teks (template tipografi) dan Audio (musik tambahan). Bentuk data sama persis
- * dengan versi Android & core Python (lihat core/studiozai/pipeline/timeline.py)
- * supaya hasil render konsisten.
- * ------------------------------------------------------------------------- */
+// Timeline data follows core/studiozai/pipeline/timeline.py for export compatibility.
 
 const StudioTimeline = (() => {
   const KINDS = ["video", "media", "text", "audio"];
@@ -102,6 +95,8 @@ const StudioTimeline = (() => {
     },
 
     close() {
+      if (document.fullscreenElement && this.el?.contains(document.fullscreenElement)) document.exitFullscreen().catch(()=>{});
+      document.removeEventListener('keydown', this.editorKeys);
       clearInterval(this.changeTimer);
       clearTimeout(this.previewTimer);
       this.generation++;this.stageObserver?.disconnect();
@@ -115,6 +110,8 @@ const StudioTimeline = (() => {
         });
         this.el.hidden = true;
       }
+      if(this.previousBodyOverflow!==undefined)document.body.style.overflow=this.previousBodyOverflow;
+      this.returnFocus?.focus();
     },
 
     /** Timeline awal dari sebuah klip (satu item video + track kosong). */
@@ -194,7 +191,7 @@ const StudioTimeline = (() => {
             </div>
           </header>
           <div class="editor-body">
-            <div class="editor-stage" id="tlStage"></div>
+            <section class="preview-workspace" aria-label="Preview video"><div class="preview-toolbar"><span>Preview klip</span><div><button class="ghost" data-tl="subtitle-edit">Edit subtitle</button><button class="ghost" data-tl="expand" aria-pressed="false">Layar penuh</button></div></div><div class="editor-stage" id="tlStage"></div><div class="preview-transport"><button class="ghost" data-tl="play" aria-label="Putar atau jeda preview">Putar / jeda</button><input id="tlPreviewSeek" type="range" min="0" max="${this.duration()}" step="0.01" value="0" aria-label="Posisi preview"><span id="tlPreviewClock">00:00</span></div><p class="preview-note" id="tlTimingNote">Pilih gaya dan animasi melalui panel Subtitle.</p></section>
             <aside class="editor-side" id="tlInspector"></aside>
           </div>
           <section class="editor-timeline" aria-label="Timeline editor">
@@ -211,6 +208,22 @@ const StudioTimeline = (() => {
           </section>
         </div>`;
       this.el.hidden = false;
+      this.el.setAttribute('role','dialog');this.el.setAttribute('aria-modal','true');this.el.setAttribute('aria-label','Editor klip');
+      this.returnFocus=document.activeElement;
+      this.previousBodyOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
+      this.editorKeys=event=>{
+        if(event.key==='Escape'){
+          if(this.el.querySelector('.preview-workspace.expanded')){this.toggleFullPreview();event.preventDefault();}
+          else if(!document.querySelector('dialog[open]'))this.close();
+        }
+        if(event.key==='Tab' && !document.querySelector('dialog[open]')){
+          const nodes=[...this.el.querySelectorAll('button,input,select,textarea,[tabindex="0"]')].filter(n=>!n.disabled&&!n.closest('[inert]')&&n.getClientRects().length);
+          const first=nodes[0],last=nodes.at(-1);
+          if(event.shiftKey&&document.activeElement===first){last?.focus();event.preventDefault();}
+          if(!event.shiftKey&&document.activeElement===last){first?.focus();event.preventDefault();}
+        }
+      };
+      document.addEventListener('keydown',this.editorKeys);
 
       const bind = (action, handler) => {
         const node = this.el.querySelector(`[data-tl="${action}"]`);
@@ -220,6 +233,10 @@ const StudioTimeline = (() => {
       bind("save", () => this.save());
       bind("draft", () => this.preview());
       bind("render", () => this.render());
+      bind("expand", () => this.toggleFullPreview());
+      bind("play", () => {const video=this.el.querySelector('#tlVideo');if(video){if(video.paused)video.play().catch(error=>this.setPreviewState('error',error.message));else video.pause();}});
+      bind("subtitle-edit", () => {if(this.el.querySelector('.preview-workspace.expanded'))this.toggleFullPreview();this.inspectorTab='subtitles';this.renderInspector();this.el.querySelector('#tlCaptionMotion')?.focus();});
+      this.el.querySelector('#tlPreviewSeek').oninput=event=>this.seek(Number(event.target.value));
       bind("add-text", () => this.addText());
       bind("add-media", () => this.addMedia());
       bind("add-music", () => this.addMusic());
@@ -237,6 +254,18 @@ const StudioTimeline = (() => {
       const hint = this.el.querySelector("#tlHint");
       if (hint) hint.textContent = 'Klik penggaris untuk memutar dari titik tertentu. Seret blok untuk memindahkan, tepinya untuk memangkas; seret berkas gambar/video/audio ke track yang sesuai.';
       this.updatePlayhead();
+      this.el.querySelector('[data-tl="subtitle-edit"]').focus();
+    },
+
+    toggleFullPreview() {
+      const workspace=this.el.querySelector('.preview-workspace');
+      const expanded=workspace.classList.toggle('expanded');
+      const button=this.el.querySelector('[data-tl="expand"]');
+      button.textContent=expanded?'Kembali ke editor':'Layar penuh';button.setAttribute('aria-pressed',String(expanded));
+      this.el.querySelector('.editor-side').inert=expanded;
+      this.el.querySelector('.editor-timeline').inert=expanded;
+      this.el.querySelector('.editor-head').inert=expanded;
+      this.fitStage();this.subtitleOverlay?.paint();this.liveLayers?.paint();button.focus();
     },
 
     renderAll() {
@@ -264,7 +293,7 @@ const StudioTimeline = (() => {
       if (!stage || !frame) return;
       const ratio = this.stageRatio || 9 / 16;
       const availW = Math.max(40, stage.clientWidth - 16);
-      const availH = Math.max(40, stage.clientHeight - 45);
+      const availH = Math.max(40, stage.clientHeight - 16);
       const width = Math.min(availW, availH * ratio);
       frame.style.aspectRatio = String(ratio);
       frame.style.width = `${Math.round(width)}px`;
@@ -337,7 +366,7 @@ const StudioTimeline = (() => {
       const sourceStart = this.encodedDraft ? 0 : this.clip.start - (this.sourceOffset || 0);
       this.renderedStart = this.clip.start; this.renderedCanvas = this.clip.canvas;
       stage.querySelectorAll('video').forEach(v => v.pause());
-      stage.innerHTML = chrome(`<div class="output-frame"><video id="tlVideo" controls playsinline preload="metadata" data-source-start="${sourceStart}" src="${mediaUrl(path)}"></video></div>`);
+      stage.innerHTML = chrome(`<div class="output-frame"><video id="tlVideo" playsinline preload="metadata" data-source-start="${sourceStart}" src="${mediaUrl(path)}"></video></div>`);
       this.watchStage();
       if(!this.encodedDraft)stage.querySelector("video").style.objectFit=["center","manual"].includes(base.crop)?"cover":"contain";
       const player = stage.querySelector('video');
@@ -353,6 +382,9 @@ const StudioTimeline = (() => {
       player.addEventListener('timeupdate', () => {
         this.playhead = clamp(player.currentTime - Number(player.dataset.sourceStart), 0, this.duration());
         this.updatePlayhead();
+        this.el.querySelector('#tlPreviewSeek').value=this.playhead;
+        this.el.querySelector('#tlPreviewClock').textContent=this.timeLabel(this.playhead);
+        this.el.querySelector('#tlTimingNote').textContent=stage.querySelector('.output-frame')?.dataset.timing==='estimated'?'Waktu kata diperkirakan. Perbaiki melalui editor per kata.':'Preview langsung mengikuti perubahan di editor.';
       });
       if (!this.encodedDraft) player.addEventListener('timeupdate', () => {
         const sourceStart=Number(player.dataset.sourceStart);
@@ -674,6 +706,15 @@ const StudioTimeline = (() => {
             <div class="grid-2"><label>Mulai (detik)<input type="number" step="0.1" id="tlItemStart" value="${selected.start}"></label><label>Selesai (detik)<input type="number" step="0.1" id="tlItemEnd" value="${selected.end}"></label></div><button class="ghost danger" data-tl-item="delete">Hapus elemen</button>
           ` : '<div class="empty">Pilih elemen di timeline, atau tambahkan teks, media, dan musik melalui tombol di bawah pratinjau.</div>'}
         </section>`;
+      const motionControls=host.querySelector('.caption-motion-controls');
+      if(motionControls){
+        const play=document.createElement('button');play.type='button';play.className='ghost';play.textContent='Putar animasi pada klip';
+        play.disabled=!clip.captions?.length;
+        play.onclick=()=>{const cue=clip.captions.find(c=>c.start<=this.playhead&&this.playhead<c.end)||clip.captions[0];this.seek(cue.start);this.el.querySelector('#tlVideo')?.play().catch(error=>this.setPreviewState('error',error.message));};
+        motionControls.querySelector('#tlApplyMotion').textContent='Terapkan ulang ke semua baris';
+        motionControls.querySelector('.field-help').textContent='Pilih animasi untuk langsung mengganti gerakan seluruh subtitle. Font dan warna dasar tetap mengikuti gaya pilihan.';
+        motionControls.append(play);
+      }
       const typography=document.createElement('div');typography.className='editor-typography';
       const target=this.inspectorTab==='element'&&this.selected?.kind==='text'?selected:null;
       const current=target?.style||clip.captions?.[0]?.style||{};
@@ -699,11 +740,14 @@ const StudioTimeline = (() => {
         const row=this.clip.captions[Number(input.dataset.cueText)];row.text=input.value;row.words=[];row.timing_quality='estimated';
         host.querySelector('#tlCaptions').value=captionsToText(this.clip.captions);this.schedulePreview();
       });
-      host.querySelector('#tlApplyMotion')?.addEventListener('click', () => {
+      const applyMotion = () => {
         CaptionMotion.apply(this.clip.captions || [], host.querySelector('#tlCaptionMotion').value, host.querySelector('#tlHighlightColor').value);
         this.schedulePreview();
         const note=host.querySelector('.caption-motion-controls .field-help');note.setAttribute('role','status');note.textContent='Animasi diterapkan. Putar preview untuk melihat geraknya.';
-      });
+      };
+      host.querySelector('#tlApplyMotion')?.addEventListener('click',applyMotion);
+      host.querySelector('#tlCaptionMotion')?.addEventListener('change',applyMotion);
+      host.querySelector('#tlHighlightColor')?.addEventListener('input',applyMotion);
       const selected = this.selectedItem();
       // Dideklarasikan di awal: closure di bawah dievaluasi saat klik (setelah
       // bind selesai), tapi deklarasi di atas menghindari risiko TDZ saat refactor.

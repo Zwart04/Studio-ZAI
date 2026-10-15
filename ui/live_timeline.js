@@ -1,5 +1,5 @@
 const LiveTimeline = (() => {
-  function style(p){return p?{font:p.font,size:Number(p.size||76),color:p.color,bold:p.bold!==false,italic:p.italic==='yes',outlineColor:p.outline,box:p.box==='yes',mode:'line',animation:'none'}:{};}
+  function style(p){return p?{font:p.font,size:Number(p.size||76),color:p.color,bold:p.bold!==false,italic:p.italic==='yes',outlineColor:p.outline,box:p.box==='yes',mode:p.karaoke?'karaoke':'line',animation:'none'}:{};}
   function mount(frame,player,editor){
     const entries=new Map();let raf=null,last=0;
     const canvas=document.createElement('canvas'),toggle=document.createElement('button');
@@ -10,7 +10,7 @@ const LiveTimeline = (() => {
     function paint(){
       const time=player.currentTime-offset(), wanted=new Set();
       const base=editor.items('video')[0]||{}, special=['manual','split','blur'].includes(base.crop);
-      canvas.hidden=toggle.hidden=!special;player.controls=!special;toggle.textContent=player.paused?'Putar':'Jeda';
+      canvas.hidden=!special;toggle.hidden=true;player.controls=false;
       if(special&&player.readyState>=2){
         const w=Math.max(2,Math.min(640,Math.round(frame.clientWidth))),h=Math.max(2,Math.round(w/editor.stageRatio));
         if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
@@ -34,7 +34,7 @@ const LiveTimeline = (() => {
             const overlay=SubtitleOverlay.mount(frame,player,()=>{
               const current=editor.items('text').find(row=>row.id===item.id)||item;
               return {subtitle_position:'middle',captions:[{start:current.start,end:current.end,text:current.text,
-                style:{...style(editor.presets.find(p=>p.id===current.template)),...(current.fontSize?{size:current.fontSize}:{}),...current.style,opacity:current.opacity??1,x:current.x,y:current.y}}]};
+                style:{...style(editor.presets.find(p=>p.id===current.template)),...(current.fontSize?{size:current.fontSize}:{}),...current.style,mode:'overlay',opacity:current.opacity??1,x:current.x,y:current.y}}]};
             },offset,true);
             entry={src:item.src,paint:overlay.paint,destroy:overlay.destroy};
           }else{

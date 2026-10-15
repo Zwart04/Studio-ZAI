@@ -26,7 +26,9 @@ UI = ROOT / "ui"
 
 datas = [
     (str(CORE / "studiozai" / "models" / "registry.json"), "studiozai/models"),
-    *[(str(f), str(Path("ui") / f.parent.relative_to(UI))) for f in UI.rglob("*") if f.is_file() and f.suffix in {".html", ".css", ".js", ".svg", ".png", ".ico", ".woff", ".woff2", ".ttf"}],
+    # .txt carries the SIL OFL notices that must ship with the bundled fonts; .json
+    # carries the font provenance record.
+    *[(str(f), str(Path("ui") / f.parent.relative_to(UI))) for f in UI.rglob("*") if f.is_file() and f.suffix in {".html", ".css", ".js", ".svg", ".png", ".ico", ".woff", ".woff2", ".ttf", ".txt", ".json"}],
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "docs" / "licenses"), "licenses"),
     (str(ROOT / "vendor" / "face_detection_yunet_2023mar.onnx"), "vendor"),

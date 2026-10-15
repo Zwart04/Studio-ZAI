@@ -15,7 +15,7 @@ MOTION_STYLES = {
     "karaoke": {"mode": "karaoke", "animation": "none"},
     "typewriter": {"mode": "line", "animation": "typewriter"},
     "word": {"mode": "word", "animation": "pop"},
-    "rise": {"mode": "highlight", "animation": "rise"},
+    "rise": {"mode": "line", "animation": "rise"},
     "fade": {"mode": "highlight", "animation": "fade"},
     "zoom": {"mode": "highlight", "animation": "zoom"},
     "box": {"mode": "box", "animation": "pop"},
@@ -35,11 +35,8 @@ def apply_motion(captions: list[dict], name: str) -> None:
             if word.get("style"):
                 word["style"] = {k: v for k, v in word["style"].items() if k != "animation"}
 
-# Mode "highlight" meniru animasi kata aktif dari cheat-clip-pro: kata dikemas
-# ke potongan pendek satu baris, lalu dipotong menjadi irisan waktu yang saling
-# bersambung sehingga sorotan tidak pernah berkedip di sela jeda bicara.
-# Angka-angka di bawah persis milik cheat-clip-pro (video_engine.py).
-CHUNK_MAX_WORDS = 3       # maksimum kata per potongan -> dijamin satu baris
+# Short chunks keep active-word captions readable at portrait widths.
+CHUNK_MAX_WORDS = 3
 CHUNK_MAX_CHARS = 22      # maksimum karakter per potongan
 CHUNK_PAUSE = 0.38        # jeda bicara (detik) yang memecah potongan
 CHUNK_MIN_DURATION = 0.35 # panjang minimum satu potongan
@@ -58,9 +55,7 @@ def number(value: Any, fallback: float, low: float, high: float) -> float:
 
 def tags(style: dict, scale: float, width: int, height: int, *, position: bool = True) -> str:
     result = ""
-    # \q2 = tanpa wrap. Mode highlight selalu memakai potongan <= CHUNK_MAX_CHARS
-    # sehingga teks dijamin tetap satu baris (cheat-clip-pro memasang \q2 pada
-    # setiap Dialogue-nya). Diletakkan setelah \rDefault di pemanggilan kata.
+    # Explicit no-wrap remains supported for custom caption styles.
     if style.get("nowrap"):
         result += r"\q2"
     if style.get("font") in FONTS:
@@ -82,7 +77,7 @@ def tags(style: dict, scale: float, width: int, height: int, *, position: bool =
     animation = style.get("animation")
     result += {"pop": r"\fscx75\fscy75\t(0,130,\fscx108\fscy108)\t(130,220,\fscx100\fscy100)",
                "bounce": r"\fscy70\t(0,100,\fscy120)\t(100,220,\fscy100)",
-               "fade": r"\fad(150,120)", "zoom": r"\fscx85\fscy85\t(0,300,\fscx100\fscy100)",
+               "fade": r"\alpha&HFF&\t(0,150,\alpha&H00&)", "zoom": r"\fscx85\fscy85\t(0,300,\fscx100\fscy100)",
                "rise": r"\fad(100,80)"}.get(animation, "")
     return result
 
@@ -93,7 +88,8 @@ def text(caption, preset: dict, width: int, height: int) -> str:
     base = caption.style or {}
     if not base and not any(w.get("style") for w in caption.words):
         return str(preset.get("anim", "")) + _karaoke_text(caption, preset)
-    prefix = "{" + tags(base, scale, width, height) + "}" if base else str(preset.get("anim", ""))
+    prefix_style = {**base, "animation": "none"} if base.get("mode") == "highlight" else base
+    prefix = "{" + tags(prefix_style, scale, width, height) + "}" if base else str(preset.get("anim", ""))
     if not caption.words:
         return prefix + ass_escape(caption.text)
     parts = []
@@ -106,7 +102,7 @@ def text(caption, preset: dict, width: int, height: int) -> str:
         if style.get("animation") in {"type", "typewriter"}:
             at = round((start - caption.start) * 1000)
             override += rf"\alpha&HFF&\t({at},{at + 1},\alpha&H00&)"
-        elif preset.get("karaoke") or base.get("mode") == "karaoke":
+        elif (preset.get("karaoke") and not base.get("mode")) or base.get("mode") == "karaoke":
             # Explicit start also preserves pauses between recognized words.
             override += rf"\kt{round((start - caption.start) * 100)}\kf{max(1, round((end - start) * 100))}"
             if base.get("mode") == "karaoke":
@@ -220,7 +216,7 @@ def _highlight_events(caption, words, event, copy) -> list[str]:
             row = copy.deepcopy(caption)
             row.text = " ".join(str(item.get("word", "")) for item in chunk)
             row.words = [
-                {**item, "style": {**(item.get("style") or {}), "nowrap": True,
+                {**item, "style": {**(item.get("style") or {}), "nowrap": False,
                                    **({"color": color} if index == active else {"animation": "none"})}}
                 for index, item in enumerate(chunk)
             ]
@@ -235,13 +231,33 @@ def events(caption, preset: dict, width: int, height: int) -> list[str]:
     def event(start, end, row, name="Default"):
         return f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},{name},,0,0,0,,{text(row, preset, width, height)}"
     mode = (caption.style or {}).get("mode", "line")
-    if mode not in {"word", "box", "highlight"}:
-        return [event(caption.start, max(caption.end, caption.start + .2), caption)]
     words = caption.words
     if not words:
         tokens = caption.text.split()
         span = (caption.end - caption.start) / max(1, len(tokens))
         words = [{"word": w, "start": caption.start + i * span, "end": caption.start + (i + 1) * span} for i, w in enumerate(tokens)]
+    if mode not in {"word", "box", "highlight"}:
+        pages, page, chars = [], [], 0
+        for word in _normalized_words(caption, words):
+            token = str(word.get("word", ""))
+            if page and (len(page) >= 6 or chars + len(token) > 38):
+                pages.append(page)
+                page, chars = [], 0
+            page.append(word)
+            chars += len(token) + 1
+        if page:
+            pages.append(page)
+        if len(pages) <= 1:
+            return [event(caption.start, max(caption.end, caption.start + .2), caption)]
+        result = []
+        for index, page in enumerate(pages):
+            row = copy.deepcopy(caption)
+            row.start = caption.start if index == 0 else page[0]["start"]
+            row.end = pages[index + 1][0]["start"] if index + 1 < len(pages) else caption.end
+            row.words = page
+            row.text = " ".join(str(word.get("word", "")) for word in page)
+            result.append(event(row.start, row.end, row))
+        return result
     if mode == "highlight":
         return _highlight_events(caption, words, event, copy)
     result = []
@@ -258,6 +274,8 @@ def events(caption, preset: dict, width: int, height: int) -> list[str]:
         if mode == "box":
             color = str(row.style.get("boxColor", "#111111"))
             row.style["boxColor"] = color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#111111"
+            highlight = str(row.style.get("highlight", "#abff66"))
+            row.style["color"] = highlight if re.fullmatch(r"#[0-9a-fA-F]{6}", highlight) else "#abff66"
         rendered = event(start, end, row, "ActiveBox" if mode == "box" else "Default")
         if mode == "box":
             color = row.style.get("boxColor", "#111111")

@@ -51,7 +51,7 @@ def test_to_ass_has_style_and_dialogue():
     assert "PlayResX: 1080" in ass
     assert "[V4+ Styles]" in ass
     assert "Dialogue: 0,0:00:00.00,0:00:01.00" in ass
-    assert "{\\k" in ass
+    assert r"\kt0\kf50" in ass
 
 
 def test_captions_from_segments_without_word_timings():

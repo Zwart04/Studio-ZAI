@@ -76,7 +76,7 @@ def test_slices_are_contiguous_and_never_below_the_minimum_duration():
         assert row["end"] - row["start"] >= 0.15, rows
 
 
-def test_only_the_active_word_is_coloured_and_q2_is_set():
+def test_only_the_active_word_is_coloured_and_wrapping_is_allowed():
     caption = subtitle.Caption(0, 3, "halo teman semua", words=[
         {"word": "halo", "start": 0.0, "end": 1.0},
         {"word": "teman", "start": 1.0, "end": 2.0},
@@ -89,8 +89,7 @@ def test_only_the_active_word_is_coloured_and_q2_is_set():
         active = re.search(rf"\{{[^}}]*\\c&H{HIGHLIGHT_HEX}&[^}}]*\}}(\S+)", row["text"])
         assert active, row["text"]
         assert active.group(1) == ["halo", "teman", "semua"][index]
-        # \q2 menahan teks tetap satu baris, persis resep cheat-clip-pro.
-        assert r"\q2" in row["text"]
+        assert r"\q2" not in row["text"]
 
 
 def test_chunks_stay_within_three_words_and_twenty_two_characters():

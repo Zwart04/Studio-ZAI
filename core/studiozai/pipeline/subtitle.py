@@ -202,7 +202,7 @@ def preset_list() -> list[dict[str, Any]]:
     """Daftar template untuk galeri di UI."""
     return [{"id": key, "label": value.get("label", key),
              "font": value.get("font", "Inter"), "category": value.get("category", "Essential"),
-             "size": value.get("size", 76), "bold": bool(value.get("bold", 0)),
+             "size": value.get("size", 76), "bold": bool(value.get("bold", 0)), "karaoke": bool(value.get("karaoke")),
              "sample": value.get("sample", "Tell your story"),
              "color": value.get("preview_color", "#FFFFFF"),
              "outline": value.get("preview_outline", "#161B22"),
@@ -508,8 +508,11 @@ def to_ass(
     events: list[str] = []
     if position != "off":
         for caption in captions:
+            from dataclasses import replace
+
             from .caption_style import events as styled_events
-            events.extend(styled_events(caption, style, width, height))
+            positioned = replace(caption, style={"x": .5, "y": {"top": .15, "middle": .5}.get(position, .82), **(caption.style or {})})
+            events.extend(styled_events(positioned, style, width, height))
     events.extend(text_item_events(text_items or [], width, height))
     return "\n".join(header + events) + "\n"
 
