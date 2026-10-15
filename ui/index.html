@@ -7,10 +7,10 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.17.0" />
-<link rel="stylesheet" href="/styles.css?v=1.17.0" />
-<link rel="stylesheet" href="/studio.css?v=1.17.0" />
-<link rel="stylesheet" href="/workspace.css?v=1.17.0" />
+<link rel="stylesheet" href="/tokens.css?v=1.17.1" />
+<link rel="stylesheet" href="/styles.css?v=1.17.1" />
+<link rel="stylesheet" href="/studio.css?v=1.17.1" />
+<link rel="stylesheet" href="/workspace.css?v=1.17.1" />
 </head>
 <body>
 <div id="app">
@@ -40,7 +40,7 @@
       <p class="lead" data-i18n="home.lead">Tempel link YouTube / TikTok / Instagram atau pilih berkas video lokal. Klip 9:16, subtitle otomatis, dan voiceover dibuat lokal di perangkatmu.</p>
 
       <div class="card source-card">
-        <div class="home-source-heading"><h2>Mulai dari video</h2><p>Tentukan sumber, pilih momen, lalu sesuaikan hasilnya.</p></div>
+        <div class="home-source-heading"><h2>Mulai dari video</h2></div>
         <div class="source-modes" role="tablist" aria-label="Sumber video">
           <button type="button" data-source-mode="link" class="active" role="tab" aria-selected="true">
             <svg class="mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -67,7 +67,7 @@
         <input type="radio" name="creationTask" value="moments" checked hidden>
         <div class="source-settings">
           <section id="clipResultSettings" class="source-setting-section" aria-labelledby="clipResultHeading">
-            <div class="setting-heading"><h3 id="clipResultHeading">Hasil klip</h3><p>AI memilih titik awal dan akhir tiap momen. Kamu dapat mengubah potongan di editor.</p></div>
+            <div class="setting-heading"><h3 id="clipResultHeading">Hasil klip</h3></div>
             <div class="grid-2">
               <div class="field"><label for="count" data-i18n="home.count">Jumlah klip</label><select id="count" aria-describedby="countHelp"><option value="0" data-i18n="home.countAuto">Otomatis · 3–10 momen</option><option value="3">3 klip</option><option value="5">5 klip</option><option value="8">8 klip</option><option value="10">10 klip</option><option value="15">15 klip</option><option value="20">20 klip</option></select><p class="field-help" id="countHelp" data-i18n="home.countHelp">Otomatis menyesuaikan dengan durasi. Hasil bisa lebih sedikit jika sumber pendek.</p></div>
               <div class="field"><label for="clipLength" data-i18n="home.length">Durasi klip</label><select id="clipLength" aria-describedby="clipLengthHelp"><option value="auto" data-i18n="home.lenAuto">Otomatis · ikut momen</option><option value="s15" data-i18n="home.len15">Pendek · ±15 detik</option><option value="s30" data-i18n="home.len30">Sedang · ±30 detik</option><option value="s60" data-i18n="home.len60">Panjang · ±60 detik</option></select><p class="field-help" id="clipLengthHelp" data-i18n="home.lengthHelp">Batas dipotong di jeda kalimat terdekat agar tidak terpotong aneh.</p></div>
@@ -84,10 +84,9 @@
               <input type="hidden" id="canvasSize" value="portrait">
               <p id="canvasSizeHelp" class="field-help" role="status">Kanvas 9:16, hingga 1080 × 1920. Sumber kecil mengikuti tinggi sumber.</p>
               <label for="frameFit">Isi video dalam kanvas</label><select id="frameFit"><option value="center">Penuhi kanvas · potong sisi video</option><option value="fit">Tampilkan utuh · margin hitam</option><option value="blur">Tampilkan utuh · latar video buram</option></select>
-              <p class="field-help">Pilih tampilkan utuh untuk menjaga wajah atau teks di tepi. Framing wajah dapat disesuaikan per klip di editor.</p>
             </fieldset>
             <div id="qualityWrap" class="field" style="display:none"><label for="quality" data-i18n="home.quality">Kualitas video</label><select id="quality"><option value="720p">720p — disarankan (cepat, hemat)</option><option value="1080p">1080p — full HD</option><option value="480p">480p — paling cepat</option><option value="best">Terbaik — ukuran besar</option><option value="audio">Audio saja — tanpa gambar</option></select><p class="field-help" id="qualityHint"></p></div>
-            <section class="home-caption-style"><div id="homeMotionPicker"></div><div id="homeMotionDemo"></div><p class="field-help">Warna mengikuti timestamp ucapan. Timing dari teks tanpa timestamp kata merupakan perkiraan dan bisa diedit.</p></section>
+            <section class="home-caption-style"><div id="homeMotionPicker"></div><div id="homeMotionDemo"></div></section>
             <input type="hidden" id="onlineMode" value="true">
           </section>
           <section class="source-setting-section" aria-labelledby="analysisHeading">
@@ -385,14 +384,14 @@
 </div>
 <div id="toast"></div>
 
-<script src="/home_guide.js?v=1.17.0"></script>
-<script src="/app.js?v=1.17.0"></script>
-<script src="/finishing.js?v=1.17.0"></script>
-<script src="/creator.js?v=1.17.0"></script>
-<script src="/subtitle_overlay.js?v=1.17.0"></script>
-<script src="/live_timeline.js?v=1.17.0"></script>
-<script src="/caption_motion.js?v=1.17.0"></script>
-<script src="/timeline.js?v=1.17.0"></script>
-<script src="/studio.js?v=1.17.0"></script>
+<script src="/home_guide.js?v=1.17.1"></script>
+<script src="/app.js?v=1.17.1"></script>
+<script src="/finishing.js?v=1.17.1"></script>
+<script src="/creator.js?v=1.17.1"></script>
+<script src="/subtitle_overlay.js?v=1.17.1"></script>
+<script src="/live_timeline.js?v=1.17.1"></script>
+<script src="/caption_motion.js?v=1.17.1"></script>
+<script src="/timeline.js?v=1.17.1"></script>
+<script src="/studio.js?v=1.17.1"></script>
 </body>
 </html>

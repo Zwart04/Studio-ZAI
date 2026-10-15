@@ -1,3 +1,14 @@
+# v1.17.1 — 15 Oktober 2026
+
+- Palet ulang gaya editor video: latar arang, permukaan bertingkat, kartu radius besar. Aksen biru hanya untuk tombol utama dan merah hanya untuk tombol hapus; tab aktif, seleksi, fokus, progress, playhead, dan preset memakai netral.
+- Beranda disusun ulang jadi dua kolom yang mengalir sendiri, sehingga bagian dengan tinggi berbeda tidak meninggalkan lubang kosong. "Kinerja laptop" dilipat, judul dan keterangan diringkas.
+- Tombol Hapus pada proyek, model, kunci API, dan klip kini konsisten merah. Strip merah dekoratif di bawah app bar Android dihapus mengikuti penghapusan strip serupa di web.
+- Token warna Android disinkronkan dengan web dan `docs/DESIGN.md` diperbarui mengikuti kebijakan aksen baru.
+
+[Pengujian dan batas](RELEASE-1.17.1.md).
+
+---
+
 # v1.17.0 — 15 Oktober 2026
 
 - Workspace editor Windows memenuhi jendela, dengan preview penuh yang tetap memuat subtitle dan overlay.

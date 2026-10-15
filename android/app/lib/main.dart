@@ -158,20 +158,6 @@ class _RootShellState extends State<RootShell> {
           child: _LogoMark(size: 32),
         ),
         title: const Text('Studio ZAI'),
-        // Sedikit aksen merah di bawah app bar: palet utama tetap biru/abu,
-        // merah hanya muncul sebagai penanda tipis (bukan memenuhi layar).
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2),
-          child: Container(
-            height: 2,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Tokens.accent2, Colors.transparent],
-                stops: [0.0, 0.3],
-              ),
-            ),
-          ),
-        ),
       ),
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: NavigationBar(

@@ -64,7 +64,7 @@
     ].map(([kind,label,capability]) => `<details class="card ai-profile" data-kind="${kind}" ${kind==='ai'?'open':''}><summary>${label}</summary>
       <div class="grid-2"><label>Provider<select data-ai="${kind}_provider"><option value="">Pilih provider</option>${Object.entries(providers).filter(([,p])=>p[capability]).map(([id,p])=>`<option value="${id}">${escapeHtml(p.label)}</option>`).join('')}</select></label>
       <label>API key<input data-ai="${kind}_api_key" type="password" autocomplete="off" spellcheck="false" placeholder="${saved[kind+'_api_key']?'Tersimpan · kosongkan untuk mempertahankan':'API key milikmu'}"></label></div>
-      <div class="row"><button data-detect="${kind}" class="ghost">Deteksi & sarankan model</button><button class="mini" data-clear-key="${kind}">Hapus kunci</button></div>
+      <div class="row"><button data-detect="${kind}" class="ghost">Deteksi & sarankan model</button><button class="mini danger" data-clear-key="${kind}">Hapus kunci</button></div>
       <label>Model<select data-model="${kind}"><option value="auto">Otomatis · saran provider</option><option value="custom">Isi model manual</option></select></label>
       <input data-ai="${kind}_model" hidden placeholder="ID model dari provider">
       <label data-url-wrap="${kind}" hidden>Alamat API<input data-ai="${kind}_base_url" placeholder="Alamat server kompatibel"></label>

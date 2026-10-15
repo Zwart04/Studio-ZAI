@@ -1,36 +1,41 @@
 # DESIGN — Studio ZAI
-### Design System (Apple-style, minimalis)
+### Design System (CapCut-style workspace, minimalis)
 
-> **EN TL;DR** — One design language for the web UI (desktop) and the Flutter app (Android), modelled on Apple's dark UI: pure black canvas, grouped inset cards, hairline separators, iOS-blue accent, SF-like typography, translucent sheets, 220 ms motion, one clear primary action per screen. Tokens live in `ui/tokens.css` and `android/app/lib/theme/tokens.dart` — keep them in sync.
+> **EN TL;DR** — One design language for the web UI (desktop) and the Flutter app (Android), modelled on CapCut's dark editor: charcoal canvas (not pure black), layered surfaces, hairline separators, rounded cards, SF-like typography, 220 ms motion, one clear primary action per screen. **Colour policy: blue accent is only for the primary button, red only for delete — every selected/focused/progress state is neutral.** Tokens live in `ui/tokens.css` and `android/app/lib/theme/tokens.dart` — keep them in sync.
 
 ---
 
 ## 1. Prinsip
 
-1. **Satu aksi utama per layar** — tidak ada dua tombol bersaing.
-2. **Tenang dan lapang** — latar hitam, sedikit garis, tanpa gradient ramai, tanpa shadow tebal.
-3. **Hierarki tipografi jelas** — judul besar, isi 15px, keterangan 13px.
-4. **Konsisten lintas platform** — kartu klip, progress tipis, sheet edit yang sama di web & Android.
-5. **Aksesibel** — kontras teks ≥ 4.5:1, target sentuh ≥ 44px, focus ring terlihat.
+1. **Satu aksi utama per layar** — tidak ada dua tombol bersaing. Hanya `--action` (biru) yang menonjol; sisanya netral.
+2. **Aksen terbatas** — biru = tombol utama, merah = tombol hapus. Tab aktif, seleksi, focus ring, progress, dan berita selalu netral (putih bertingkat).
+3. **Tenang dan lapang** — latar arang, sedikit garis, tanpa gradient dekoratif, tanpa glow, tanpa shadow tebal.
+4. **Hierarki tipografi jelas** — judul besar, label seksi kecil, isi 15px, keterangan 12–13px.
+5. **Konsisten lintas platform** — kartu klip, progress tipis, sheet edit yang sama di web & Android.
+6. **Aksesibel** — kontras teks ≥ 4.5:1, target sentuh ≥ 44px, focus ring kontras tinggi.
 
-## 2. Token Warna (palet iOS dark)
+## 2. Token Warna (palet arang / CapCut-style)
 
 | Token | Nilai | Pemakaian |
 |---|---|---|
-| `--bg` | `#000000` | Latar aplikasi |
-| `--bg-elevated` | `#0B0B0D` | Sidebar / tab bar |
-| `--surface` | `#1C1C1E` | Kartu "inset grouped" |
-| `--surface-2` | `#2C2C2E` | Input, elemen di dalam kartu |
-| `--surface-3` | `#3A3A3C` | Hover / thumb segmented |
-| `--separator` | `rgba(255,255,255,.09)` | Garis rambut 1px |
-| `--fill` | `rgba(120,120,128,.24)` | Tombol sekunder, chip |
-| `--text` | `#FFFFFF` | Teks utama |
-| `--text-dim` | `#8E8E93` | Teks sekunder (systemGray) |
-| `--text-dim-2` | `#636366` | Placeholder/tersier |
-| `--accent` | `#0A84FF` | Aksi utama, progress, fokus |
-| `--green` | `#30D158` | Selesai/aktif |
+| `--bg` | `#141417` | Latar aplikasi |
+| `--bg-elevated` | `#1A1A1E` | Sidebar / tab bar |
+| `--surface` | `#202024` | Kartu |
+| `--surface-2` | `#2A2A2F` | Input, elemen di dalam kartu |
+| `--surface-3` | `#36363C` | Hover / tombol sekunder |
+| `--separator` | `rgba(255,255,255,.08)` | Garis rambut 1px |
+| `--separator-strong` | `rgba(255,255,255,.15)` | Batas kartu/pilihan |
+| `--fill` | `rgba(120,120,128,.26)` | Tombol sekunder, chip |
+| `--sel` / `--sel-strong` | `rgba(255,255,255,.10)` / `.17` | Seleksi, tab aktif, chip terpilih |
+| `--ring` | `rgba(255,255,255,.72)` | Focus ring, garis terpilih, playhead |
+| `--text` | `#F5F5F7` | Teks utama |
+| `--text-2` | `#E8E8ED` | Teks sekunder |
+| `--text-dim` / `--text-dim-2` | `#A5A5AE` | Keterangan / placeholder |
+| `--accent` | `#5AA9FF` | Tautan & sorotan biru (teks di atas gelap) |
+| `--action` / `--accent-press` | `#1F6FE0` / `#1A5FC4` | **Hanya** latar tombol utama |
+| `--green` | `#34C759` | Selesai/aktif (status) |
 | `--orange` | `#FF9F0A` | Peringatan (draft, model eksperimental) |
-| `--red` | `#FF453A` | Hapus, error |
+| `--red` | `#FF8478` | **Hanya** tombol hapus & error |
 
 ## 3. Tipografi
 
@@ -51,12 +56,14 @@
 
 | Komponen | Deskripsi |
 |---|---|
-| **Sidebar / Tab bar** | Desktop: sidebar 240px, item 36px, aktif = accent 16%. Mobile: tab bar bawah translusen, ikon 22px + label 11px |
-| **Kartu grup (inset grouped)** | `--surface`, radius 14, baris 48px + separator rambut, tanpa border luar |
+| **Sidebar / Tab bar** | Desktop: sidebar 240px, item 44px, aktif = `--sel-strong` + garis bawah `--ring` (netral, bukan biru). Mobile: tab bar bawah, ikon 22px + label 11px |
+| **Kartu grup** | `--surface`, radius 16 (beranda 20), baris 44–48px + separator rambut |
 | **Prompt utama** | Input besar + tombol "Pilih berkas" sejajar, placeholder satu baris |
+| **Beranda** | Kartu sumber tunggal; bagian pengaturan dibagi **dua wadah kolom** (`.home-col`) di JS, bukan grid baris — supaya tinggi bagian yang berbeda tidak meninggalkan lubang kosong. Bagian tinggi (mis. "Kinerja laptop") dilipat jadi `<details>` |
 | **Kartu klip** | Thumbnail 9:16 radius atas, judul 15px semibold, meta 13px dim, aksi pill kecil |
-| **Pill/badge** | Tinggi 22px, latar tinted 12–16%, teks 12px (ok/warn/info) |
-| **Progress** | Bar 4px, track `--surface-3`, isi accent + label tahap 13px |
+| **Pill/badge** | Tinggi 22px, latar tinted netral, teks 12px (ok/warn) |
+| **Progress** | Bar 4px, track `--surface-3`, isi **netral** `--ring` + label tahap 13px |
+| **Tombol hapus** | Merah `--red` di atas latar `rgba(255,77,68,.16)` — satu-satunya tempat merah selain toast error |
 | **Sheet panel** | Desktop 460px dari kanan (blur + separator kiri); mobile memenuhi layar |
 | **Toast** | Tengah bawah, kartu 14px, hilang otomatis 4.5s (error 9s) |
 | **Segmented control** | Track `--fill`, thumb `--surface-3`, teks 13px — untuk ganti bahasa ID/EN |
@@ -66,7 +73,7 @@
 
 - Ikon garis, 18–24px, mengikuti warna teks sekunder.
 - Feedback tekan: `scale(0.985)` pada tombol utama; tanpa animasi dekoratif lain.
-- Fokus keyboard: outline accent 2px, offset 2px.
+- Fokus keyboard: outline `--ring` 2px, offset 2–3px (putih, kontras tinggi — bukan biru).
 
 ## 7. Tata Letak
 

@@ -1,32 +1,37 @@
-/* Studio ZAI design tokens - Apple-ish (iOS/macOS dark) */
+/* Studio ZAI design tokens - CapCut-style dark workspace
+   Latar arang (bukan hitam pekat), permukaan bertingkat, teks putih lembut.
+   KEBIJAKAN WARNA: --accent/--action hanya untuk TOMBOL UTAMA, dan --red untuk
+   TOMBOL HAPUS. Semua keadaan terpilih/fokus/progress/berita pakai netral. */
 :root {
   /* surfaces */
-  --bg: #000000;
-  --bg-elevated: #0b0b0d;
-  --surface: #1c1c1e;
-  --surface-2: #2c2c2e;
-  --surface-3: #3a3a3c;
-  --separator: rgba(255, 255, 255, 0.09);
-  --separator-strong: rgba(255, 255, 255, 0.16);
-  --fill: rgba(120, 120, 128, 0.24);
+  --bg: #141417;
+  --bg-elevated: #1a1a1e;
+  --surface: #202024;
+  --surface-2: #2a2a2f;
+  --surface-3: #36363c;
+  --separator: rgba(255, 255, 255, 0.08);
+  --separator-strong: rgba(255, 255, 255, 0.15);
+  --fill: rgba(120, 120, 128, 0.26);
+
+  /* netral: dipakai untuk tab aktif, seleksi, fokus, progress, berita */
+  --sel: rgba(255, 255, 255, 0.1);
+  --sel-strong: rgba(255, 255, 255, 0.17);
+  --ring: rgba(255, 255, 255, 0.72);
 
   /* text */
-  --text: #ffffff;
-  --text-2: #ebebf5;
-  --text-dim: #b0b0b5;
-  --text-dim-2: #b0b0b5;
+  --text: #f5f5f7;
+  --text-2: #e8e8ed;
+  --text-dim: #a5a5ae;
+  --text-dim-2: #a5a5ae;
 
-  /* accents (iOS system colors, dark variants) */
-  /* aksen utama tetap biru; merah dipakai hemat (rekam/hapus/brand) */
-  --accent: #61afff;
-  --action: #006ad3;
-  --accent-press: #005bb5;
-  --accent-soft: rgba(10, 132, 255, 0.16);
-  --accent-2: #ff453a;
-  --accent-2-soft: rgba(255, 69, 58, 0.12);
-  --green: #30d158;
+  /* accents - HANYA tombol utama (biru) dan tombol hapus (merah) */
+  --accent: #5aa9ff;
+  --action: #1f6fe0;
+  --accent-press: #1a5fc4;
+  --accent-soft: rgba(90, 169, 255, 0.18);
+  --green: #34c759;
   --orange: #ff9f0a;
-  --red: #ff8d88;
+  --red: #ff8478;
   --purple: #bf5af2;
   --teal: #40c8e0;
 

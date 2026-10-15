@@ -25,7 +25,7 @@ const I18N = {
     "common.refresh": "Muat ulang", "common.back": "Kembali", "common.save": "Simpan", "common.cancel": "Batal",
     "common.delete": "Hapus", "common.render": "Render", "common.edit": "Edit", "common.close": "Tutup", "common.preview": "Pratinjau",
     "home.title": "Pilih momen. Susun klipmu.",
-    "home.lead": "Masukkan video, tentukan format, lalu edit momen dan subtitle sebelum ekspor. Klip yang sudah dibuat tersedia di bawah.",
+    "home.lead": "Tempel link atau pilih video. Klip 9:16 dan subtitle dibuat lokal di perangkat.",
     "home.source": "Link atau lokasi berkas", "home.pick": "Pilih berkas", "home.count": "Jumlah klip",
     "home.countAuto": "Otomatis · 3–10 momen",
     "home.countHelp": "Otomatis menyesuaikan dengan durasi. Hasil bisa lebih sedikit jika sumber pendek.",
@@ -114,7 +114,7 @@ const I18N = {
     "common.refresh": "Refresh", "common.back": "Back", "common.save": "Save", "common.cancel": "Cancel",
     "common.delete": "Delete", "common.render": "Render", "common.edit": "Edit", "common.close": "Close", "common.preview": "Preview",
     "home.title": "Choose a moment. Shape your clip.",
-    "home.lead": "Add a video, choose its format, then edit moments and subtitles before exporting. Your existing clips are below.",
+    "home.lead": "Paste a link or pick a video. 9:16 clips and subtitles are built locally on your device.",
     "home.source": "Link or file path", "home.pick": "Pick file", "home.count": "Number of clips",
     "home.countAuto": "Auto · 3–10 moments",
     "home.countHelp": "Auto adapts to duration. Results may be fewer for short sources.",
@@ -825,7 +825,7 @@ async function renderProjects() {
         </div>
         <div class="row" style="gap:var(--s2)">
           <button class="mini" data-open="${project.id}">${t("common.edit")}</button>
-          <button class="mini" data-delete="${project.id}">${t("common.delete")}</button>
+          <button class="mini danger" data-delete="${project.id}">${t("common.delete")}</button>
         </div>
       </div>`).join("")}</div>`;
     list.querySelectorAll("[data-open]").forEach((node) => node.addEventListener("click", () => openProject(node.dataset.open)));
@@ -1209,7 +1209,7 @@ async function renderModels() {
           <div class="row" style="gap:var(--s2)">
             ${modelRightsBadge(model)}
             ${model.installed ? `<span class="badge ok">${t("models.installed")}</span>` : (model.requires_pip ? `<span class="badge">${t("models.pip")}</span>` : "")}
-            ${model.installed ? `<button class="mini" data-remove-model="${model.id}">${t("models.remove")}</button>`
+            ${model.installed ? `<button class="mini danger" data-remove-model="${model.id}">${t("models.remove")}</button>`
     : `<button class="primary" data-download="${model.id}">${t("models.download")}</button>`}
           </div>
         </div>

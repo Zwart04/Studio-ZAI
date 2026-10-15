@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 
-/// Design tokens shared with the web UI (see ui/tokens.css) - Apple-ish dark.
+/// Design tokens shared with the web UI (see ui/tokens.css) - CapCut-style dark.
+///
+/// Kebijakan warna: [accent]/[action] hanya untuk tombol utama, [red] untuk
+/// tombol hapus. Tab aktif, seleksi, fokus, dan progress memakai netral.
 class Tokens {
-  static const bg = Color(0xFF000000);
-  static const bgElevated = Color(0xFF0B0B0D);
-  static const surface = Color(0xFF1C1C1E);
-  static const surface2 = Color(0xFF2C2C2E);
-  static const surface3 = Color(0xFF3A3A3C);
-  static const separator = Color(0x17FFFFFF);
-  static const fill = Color(0x3D787880);
+  static const bg = Color(0xFF141417);
+  static const bgElevated = Color(0xFF1A1A1E);
+  static const surface = Color(0xFF202024);
+  static const surface2 = Color(0xFF2A2A2F);
+  static const surface3 = Color(0xFF36363C);
+  static const separator = Color(0x14FFFFFF);
+  static const fill = Color(0x42787880);
 
-  static const text = Color(0xFFFFFFFF);
-  static const text2 = Color(0xFFEBEBF5);
-  static const textDim = Color(0xFFB0B0B5);
-  static const textDim2 = Color(0xFFB0B0B5);
+  static const text = Color(0xFFF5F5F7);
+  static const text2 = Color(0xFFE8E8ED);
+  static const textDim = Color(0xFFA5A5AE);
+  static const textDim2 = Color(0xFFA5A5AE);
 
-  static const accent = Color(0xFF61AFFF);
-  static const action = Color(0xFF006AD3);
-  static const accentPress = Color(0xFF005BB5);
-  // Aksen kedua (merah) dipakai hemat: rekam, hapus, peringatan.
-  static const accent2 = Color(0xFFFF453A);
-  static const green = Color(0xFF30D158);
+  static const accent = Color(0xFF5AA9FF);
+  static const action = Color(0xFF1F6FE0);
+  static const accentPress = Color(0xFF1A5FC4);
+  static const green = Color(0xFF34C759);
   static const orange = Color(0xFFFF9F0A);
-  static const red = Color(0xFFFF8D88);
+  static const red = Color(0xFFFF8478);
   static const purple = Color(0xFFBF5AF2);
 
   // aliases kept for readability in screens

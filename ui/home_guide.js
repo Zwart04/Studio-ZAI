@@ -59,19 +59,28 @@ const HomeGuide = (() => {
   function init(){
     const layout=document.querySelector('.source-settings'), analysis=document.querySelector('[aria-labelledby=analysisHeading]');
     layout.classList.add('home-feature-grid');
+    // Dua wadah kolom eksplisit: tiap kolom mengalir sendiri sehingga bagian
+    // dengan tinggi berbeda tidak pernah meninggalkan lubang kosong di tengah
+    // kolom (multikolom CSS merusak grid kanvas di Chromium).
+    // Kiri = model & transkrip. Kanan = bentuk hasil & subtitle.
+    const colLeft=document.createElement('div'), colRight=document.createElement('div');
+    colLeft.className=colRight.className='home-col';
+    colLeft.append(analysis);
+    colRight.append(document.getElementById('clipResultSettings'));
+    layout.append(colLeft,colRight);
     const transcript=document.createElement('section');transcript.className='source-setting-section';transcript.id='transcriptSettings';
-    transcript.innerHTML='<div class="setting-heading"><h3>Transkrip & audio</h3><p>Ubah ucapan menjadi teks dan pilih bahasa sumber.</p></div>';
+    transcript.innerHTML='<div class="setting-heading"><h3>Transkrip &amp; audio</h3></div>';
     const asr=document.querySelector('#asrSpeed').closest('.field'), checkbox=document.querySelector('#useTranscript'), explanation=checkbox.nextElementSibling;
     transcript.append(asr,checkbox,explanation,document.querySelector('#lang').closest('.grid-2'),document.querySelector('#audioTrackWrap'));
-    layout.append(transcript);
+    colLeft.append(transcript);
     const old=document.querySelector('#advDetails'), advanced=old.querySelector('.advanced-content');
     const extras=document.createElement('div');extras.id='momentExtras';extras.className='moment-extras';
     extras.append(document.querySelector('#analysisMode').closest('label'),document.querySelector('#reviewFirst').closest('label'),advanced.querySelector('p'),document.querySelector('#useLlm'));
     analysis.append(extras);
     const subtitles=document.createElement('section');subtitles.id='advDetails';subtitles.className='source-setting-section home-subtitle-settings';
-    subtitles.innerHTML='<div class="setting-heading"><h3>Subtitle & animasi</h3><p>Atur posisi teks, sorotan kata, dan gerakan saat berbicara.</p></div>';
+    subtitles.innerHTML='<div class="setting-heading"><h3>Subtitle &amp; animasi</h3></div>';
     subtitles.append(document.querySelector('#subPos').closest('.field'),document.querySelector('.home-caption-style'));
-    old.replaceWith(subtitles);layout.append(subtitles);
+    old.replaceWith(subtitles);colRight.append(subtitles);
     const gguf=document.querySelector('.model-advanced');
     if(gguf?.tagName==='DETAILS'){const group=document.createElement('div');group.className='model-advanced';gguf.querySelector('summary').remove();group.append(...gguf.childNodes);gguf.replaceWith(group);}
     const panel=document.querySelector('#aiPanel');panel.classList.add('online-model-form');
@@ -87,8 +96,8 @@ const HomeGuide = (() => {
     document.querySelector('#aiProvider').addEventListener('change',showProvider);
     document.querySelector('#aiModel').addEventListener('change',()=>{updateButtons();describe();});
     document.querySelector('#aiKey').addEventListener('input',()=>{discovered=null;document.querySelector('#aiModel').replaceChildren(new Option('Otomatis · saran provider','auto'));updateButtons();document.querySelector('#aiModelDetail').textContent='API key berubah. Deteksi ulang model untuk akun ini.';});
-    const performance=document.createElement('section');performance.className='performance-controls';
-    performance.innerHTML='<h3>Kinerja laptop</h3><label for="performanceMode">Pemakaian CPU & RAM</label><select id="performanceMode"><option value="balanced">Seimbang</option><option value="light">Hemat RAM · laptop lama</option></select><p class="field-help">Hemat RAM memilih Whisper tiny dan analisis tanpa LLM. Preview 360p disiapkan satu per satu; ekspor tetap memakai sumber asli.</p><div class="gguf-actions"><button type="button" class="ghost" id="pickSmallGguf">Pilih GGUF terkecil</button><button type="button" class="ghost" id="pickNoLlm">Tanpa LLM · paling ringan</button></div><p class="field-help">GGUF hingga 1.200 MB diberi label Ringan. Ukuran berkas bukan total kebutuhan RAM. Model harus sudah tersedia di komputer.</p>';
+    const performance=document.createElement('details');performance.className='performance-controls home-fold';
+    performance.innerHTML='<summary>Kinerja laptop</summary><label for="performanceMode">Pemakaian CPU & RAM</label><select id="performanceMode"><option value="balanced">Seimbang</option><option value="light">Hemat RAM · laptop lama</option></select><p class="field-help">Hemat RAM memilih Whisper tiny dan analisis tanpa LLM. Preview 360p disiapkan satu per satu; ekspor tetap memakai sumber asli.</p><div class="gguf-actions"><button type="button" class="ghost" id="pickSmallGguf">Pilih GGUF terkecil</button><button type="button" class="ghost" id="pickNoLlm">Tanpa LLM · paling ringan</button></div><p class="field-help">GGUF hingga 1.200 MB diberi label Ringan. Ukuran berkas bukan total kebutuhan RAM. Model harus sudah tersedia di komputer.</p>';
     document.querySelector('#localLlmFields').append(performance);
     const performanceMode=performance.querySelector('#performanceMode');
     api('/api/settings').then(settings=>{performanceMode.value=settings.performance_mode||'balanced';}).catch(()=>{});

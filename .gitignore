@@ -50,6 +50,9 @@ android/app/android/app/build/
 **/*.keystore
 **/key.properties
 
+# Node (hanya alat bantu pengujian browser; repo ini tidak punya package.json)
+node_modules/
+
 # OS / editors
 .DS_Store
 Thumbs.db
