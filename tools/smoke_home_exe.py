@@ -49,6 +49,14 @@ try:
     task = wait_job(request(route + '/process', {'source': str(source), 'task': 'moments', 'processing_mode': 'local',
         'canvas': 'classic', 'crop': 'fit', 'use_llm': False, 'count': 1, 'caption_motion': 'elastic'}))
     clip = task['project']['clips'][0]
+    assert len(request('/api/subtitle-presets')) >= 30
+    prepared = wait_job(request(route + '/prepare-previews', {}))
+    assert prepared['ready'] == 1 and not prepared['failed'], prepared
+    prepared_clip = request(route)['clips'][0]
+    assert prepared_clip['edit_source']
+    ffmpeg.validate_video(prepared_clip['edit_source']['path'], duration=clip['end']-clip['start'], require_audio=True)
+    gallery = request('/api/gallery')
+    assert any(row['project_id'] == project['id'] and row['transcript'] for row in gallery)
     assert clip['canvas'] == 'classic' and clip['crop'] == 'fit'
     assert clip['captions'] and all(c['style']['animation'] == 'bounce' for c in clip['captions'])
     preview = wait_job(request(route + '/clips/0/preview', {}))
@@ -57,7 +65,7 @@ try:
     assert (video['width'], video['height']) == (1440, 1080)
     assert Path(preview['mp4']).stat().st_size > 1000
     report = {'version': health['version'], 'ui_matches_source': True, 'transcript_only': True,
-        'srt': True, 'moments': True, 'preview': True, 'render_dimensions': [video['width'], video['height']], 'data': str(isolated)}
+        'srt': True, 'moments': True, 'preview': True, 'prepared_edit_proxy': True, 'templates': 30, 'render_dimensions': [video['width'], video['height']], 'data': str(isolated)}
     (isolated / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))
 finally:

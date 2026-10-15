@@ -15,6 +15,12 @@ MOTION_STYLES = {
     "karaoke": {"mode": "karaoke", "animation": "none"},
     "typewriter": {"mode": "line", "animation": "typewriter"},
     "word": {"mode": "word", "animation": "pop"},
+    "rise": {"mode": "highlight", "animation": "rise"},
+    "fade": {"mode": "highlight", "animation": "fade"},
+    "zoom": {"mode": "highlight", "animation": "zoom"},
+    "box": {"mode": "box", "animation": "pop"},
+    "wordBounce": {"mode": "word", "animation": "bounce"},
+    "wordFade": {"mode": "word", "animation": "fade"},
 }
 
 

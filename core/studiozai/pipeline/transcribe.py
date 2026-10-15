@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 from collections.abc import Callable
 from contextvars import ContextVar
@@ -73,6 +72,7 @@ def _device() -> tuple[str, str]:
 
 
 def load_model(model_id: str = "whisper-small-int8") -> Any:
+    from ..resources import cpu_threads
     if model_id in MODEL_ALIASES and not models.manager.is_installed(model_id):
         raise RuntimeError(f"Model {model_id} belum terpasang. Pilih model terpasang atau unduh melalui halaman Model.")
     try:
@@ -84,7 +84,7 @@ def load_model(model_id: str = "whisper-small-int8") -> Any:
 
     size = MODEL_ALIASES.get(model_id, model_id)
     device, compute_type = _device()
-    key = (size, device, model_revision(model_id))
+    key = (size, device, model_revision(model_id), cpu_threads())
     if key not in ModelCache:
         if model_id in MODEL_ALIASES:
             if not models.manager.is_installed(model_id):
@@ -101,12 +101,12 @@ def load_model(model_id: str = "whisper-small-int8") -> Any:
                 ModelCache.clear()
                 try:
                     ModelCache[key] = WhisperModel(size, device=device, compute_type=compute_type, local_files_only=True,
-                                                  cpu_threads=min(4, os.cpu_count() or 1))
+                                                  cpu_threads=cpu_threads())
                 except (RuntimeError, ValueError):
                     if device != "cuda":
                         raise
                     ModelCache[key] = WhisperModel(size, device="cpu", compute_type="int8", local_files_only=True,
-                                                  cpu_threads=min(4, os.cpu_count() or 1))
+                                                  cpu_threads=cpu_threads())
     return ModelCache[key]
 
 

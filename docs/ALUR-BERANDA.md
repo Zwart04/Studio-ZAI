@@ -1,6 +1,6 @@
 # Alur beranda Studio ZAI
 
-Dicek dari kode pada 14 Oktober 2026.
+Dicek dari kode pada 14 Oktober 2026. Pada 1.16.0, pilihan Transkrip saja dihapus dari beranda Windows dan diganti alur klip. Lihat [perubahan beranda/editor 1.16.0](RELEASE-1.16.0.md); penjelasan API transkrip di bawah tetap berlaku untuk API lama.
 
 ## Dari sumber sampai klip
 

@@ -14,6 +14,12 @@ class CreatorTools {
     'Muncul per kata': {'mode': 'line', 'animation': 'typewriter'},
     'Satu kata': {'mode': 'word', 'animation': 'pop'},
     'Tanpa gerak': {'mode': 'line', 'animation': 'none'},
+    'Naik lembut': {'mode': 'highlight', 'animation': 'rise'},
+    'Sorot memudar': {'mode': 'highlight', 'animation': 'fade'},
+    'Zoom kata': {'mode': 'highlight', 'animation': 'zoom'},
+    'Kotak aktif': {'mode': 'box', 'animation': 'pop'},
+    'Satu kata memantul': {'mode': 'word', 'animation': 'bounce'},
+    'Satu kata lembut': {'mode': 'word', 'animation': 'fade'},
   };
   static void applyMotion(List<Map<String, dynamic>> rows, String name) {
     final preset = motionPresets[name];

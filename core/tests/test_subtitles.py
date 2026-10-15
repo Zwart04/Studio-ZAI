@@ -67,7 +67,7 @@ def test_write_subtitles_mode_off_tanpa_dialogue(tmp_path) -> None:
 
 def test_template_kreator_tersedia() -> None:
     ids = [preset["id"] for preset in subtitle.preset_list()]
-    assert len(ids) == 24
+    assert len(ids) == 30
     for expected in ("clean", "bold_highlight", "tiktok_pop", "karaoke_fill", "title_card",
                      "minimal_lower", "neon", "subtitle_box"):
         assert expected in ids

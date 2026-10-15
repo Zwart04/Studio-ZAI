@@ -4,7 +4,7 @@ import math
 import time
 from urllib.parse import urlparse
 
-from . import ai, cache
+from . import ai, cache, resources
 
 SCHEMA = {"type": "array", "maxItems": 24, "items": {"type": "object", "properties": {
     "candidate_id": {"type": "integer"}, "start": {"type": "number"}, "end": {"type": "number"},
@@ -77,7 +77,7 @@ def _rank_shortlist(transcript, candidates, count=5, base_url="http://127.0.0.1:
         if native:
             response = ai.request(native[0], "/api/chat", api_key or "", {
                 "model": model, "messages": [{"role": "user", "content": prompt}], "format": SCHEMA,
-                "stream": False, "keep_alive": "60s", "options": {"num_ctx": 4096, "num_thread": 4, "num_predict": 1000, "temperature": 0},
+                "stream": False, "keep_alive": "60s", "options": {"num_ctx": 4096, "num_thread": resources.cpu_threads(), "num_predict": 1000, "temperature": 0},
                 **({"think": False} if "thinking" in native[1] else {})}, check_cancel=kwargs.get("check_cancel"))
             content = response["message"]["content"]
         elif provider:

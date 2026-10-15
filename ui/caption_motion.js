@@ -6,6 +6,12 @@ const CaptionMotion = (() => {
     typewriter: {label:'Muncul per kata', hint:'Kata muncul berurutan saat diucapkan.', mode:'line', animation:'typewriter'},
     word: {label:'Satu kata', hint:'Satu kata bergantian dengan efek pop.', mode:'word', animation:'pop'},
     plain: {label:'Tanpa gerak', hint:'Seluruh baris tetap terlihat.', mode:'line', animation:'none'},
+    rise: {label:'Naik lembut',hint:'Kata aktif masuk dari bawah.',mode:'highlight',animation:'rise'},
+    fade: {label:'Sorot memudar',hint:'Kata aktif muncul secara lembut.',mode:'highlight',animation:'fade'},
+    zoom: {label:'Zoom kata',hint:'Kata aktif membesar ke ukuran normal.',mode:'highlight',animation:'zoom'},
+    box: {label:'Kotak aktif',hint:'Satu kata disorot dalam kotak.',mode:'box',animation:'pop'},
+    wordBounce: {label:'Satu kata memantul',hint:'Satu kata bergantian dengan pantulan.',mode:'word',animation:'bounce'},
+    wordFade: {label:'Satu kata lembut',hint:'Satu kata bergantian dengan transisi lembut.',mode:'word',animation:'fade'},
   };
   function apply(rows, name, highlight = '#abff66') {
     const preset = presets[name]; if (!preset) return;

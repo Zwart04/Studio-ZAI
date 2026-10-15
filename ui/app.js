@@ -617,20 +617,49 @@ async function showDoctor() {
 
 async function renderHomeProjects() {
   try {
-    const projects = await api("/api/projects");
+    const clips = await api("/api/gallery");
     const box = $("#homeProjects");
-    if (!projects.length) {
-      box.innerHTML = `<div class="empty">${t("projects.empty")}</div>`;
+    if (!clips.length) {
+      box.innerHTML = `<div class="empty">Belum ada klip. Masukkan video untuk mencari momen pertama.</div>`;
       return;
     }
-    box.innerHTML = projects.slice(0, 6).map(projectCard).join("");
-    box.querySelectorAll("[data-project]").forEach((node) =>
-      node.addEventListener("click", () => openProject(node.dataset.project))
-    );
+    box.innerHTML = clips.map(clip => `<article class="clip home-clip"><button class="clip-open clip-preview" data-home-edit="${escapeHtml(clip.project_id)}" data-storage="${escapeHtml(clip.storage_id)}" style="--preview-ratio:${previewAspect(clip.canvas,clip.source_width,clip.source_height)}" aria-label="Edit ${escapeHtml(clip.title)}">${clipThumbnailPath(clip.files) ? `<img class="thumb" loading="lazy" src="${mediaUrl(clipThumbnailPath(clip.files))}" alt="Frame klip">` : draftPoster(clip.project_id,clip)}${potentialBadge(clip.score)}<span class="clip-open-hint">${clip.edit_source ? 'Preview siap · Edit' : 'Buka editor'}</span></button><div class="meta"><span class="muted">${escapeHtml(clip.project_title)} · ${formatClock(clip.start)}–${formatClock(clip.end)}</span><strong>${escapeHtml(clip.title)}</strong><p class="clip-transcript">${escapeHtml(clip.transcript || 'Belum ada transkrip. Buat subtitle di editor.')}</p><button class="ghost" data-home-edit="${escapeHtml(clip.project_id)}" data-storage="${escapeHtml(clip.storage_id)}">Edit klip & transkrip</button></div></article>`).join('');
+    box.querySelectorAll('[data-home-edit]').forEach(button => button.onclick = async () => {
+      try { await openProject(button.dataset.homeEdit); const clip=state.project.clips.find(c=>c.storage_id===button.dataset.storage); if(clip)openEditor(clip.index); }
+      catch(error){toast(error.message,'error');}
+    });
+    HomePreviewQueue.add(clips);
   } catch (error) {
     toast(error.message, "error");
   }
 }
+
+const HomePreviewQueue = (() => {
+  const attempted=new Set(), pending=[]; let running=false,currentJob=null,paused=false;
+  async function waitJob(id){
+    for(;;){const job=await api(`/api/jobs/${id}`);if(job.status==='done')return job.result;
+      if(['error','cancelled'].includes(job.status))throw new Error(job.error||'Persiapan dibatalkan');
+      await new Promise(resolve=>setTimeout(resolve,1500));}
+  }
+  async function run(){
+    if(running)return; running=true;
+    while(pending.length&&!paused){
+      const id=pending.shift(), status=$('#homePreviewStatus');
+      status.textContent='Menyiapkan preview ringan di latar belakang · satu klip sekaligus.';
+      try {
+        const job=await api(`/api/projects/${encodeURIComponent(id)}/prepare-previews`,{method:'POST'});
+        currentJob=job.id;$('#cancelHomePreviews').hidden=false;
+        const result=await waitJob(job.id);
+        status.textContent=result.failed?.length ? `${result.ready} preview siap; ${result.failed.length} belum tersedia. Buka editor untuk mencoba kembali.` : 'Preview siap. Perubahan teks dan gaya ditampilkan langsung di editor.';
+        if(!document.querySelector('.editor-overlay:not([hidden])')) await renderHomeProjects();
+      } catch(error){status.textContent=`Preview belum siap: ${error.message}`;}
+    }
+    running=false;currentJob=null;$('#cancelHomePreviews').hidden=true;
+  }
+  return {add(clips){for(const clip of clips){if(!clip.edit_source&&!attempted.has(clip.project_id)){attempted.add(clip.project_id);pending.push(clip.project_id);}}void run();},retry(){paused=false;attempted.clear();pending.length=0;void renderHomeProjects();},async stop(){paused=true;pending.length=0;if(currentJob)await api(`/api/jobs/${currentJob}/cancel`,{method:'POST'});$('#homePreviewStatus').textContent='Persiapan dihentikan. Preview yang sudah siap tetap tersimpan.';}};
+})();
+document.querySelector('#refreshHomeClips').onclick=()=>HomePreviewQueue.retry();
+document.querySelector('#cancelHomePreviews').onclick=()=>HomePreviewQueue.stop().catch(error=>toast(error.message,'error'));
 
 function previewAspect(canvas, width = 0, height = 0) {
   if (canvas === "portrait") return "9 / 16";
@@ -1715,7 +1744,7 @@ async function initHomeAnalysis() {
   };
   try {
     const data = await api('/api/local-llm/gguf');
-    document.querySelector('#ggufModel').innerHTML += data.models.map(row => `<option value="${escapeHtml(row.path)}">${escapeHtml(row.name)} · ${row.size_mb} MB</option>`).join('');
+    document.querySelector('#ggufModel').innerHTML += data.models.map(row => `<option value="${escapeHtml(row.path)}">${escapeHtml(row.name)} · ${row.size_mb} MB${row.size_mb<=1200?' · Ringan':''}</option>`).join('');
     document.querySelector('#loadGguf').disabled = !data.runtime_available || !data.models.length;
   } catch (error) { document.querySelector('#localModelStatus').textContent = error.message; }
   document.querySelector('#loadGguf').onclick = async () => {

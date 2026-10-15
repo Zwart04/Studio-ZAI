@@ -7,9 +7,9 @@
 <title>Studio ZAI</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 <link rel="apple-touch-icon" href="/assets/icon-180.png" />
-<link rel="stylesheet" href="/tokens.css?v=1.15.0" />
-<link rel="stylesheet" href="/styles.css?v=1.15.0" />
-<link rel="stylesheet" href="/studio.css?v=1.15.0" />
+<link rel="stylesheet" href="/tokens.css?v=1.16.0" />
+<link rel="stylesheet" href="/styles.css?v=1.16.0" />
+<link rel="stylesheet" href="/studio.css?v=1.16.0" />
 </head>
 <body>
 <div id="app">
@@ -63,10 +63,7 @@
           <div class="card tight" id="linkPreview" style="width:100%"></div>
         </div>
 
-        <fieldset class="task-picker"><legend>Mau membuat apa?</legend>
-          <label><input type="radio" name="creationTask" value="moments" checked><span><strong>Cari momen untuk klip</strong><small>Pilih bagian menarik, tinjau, lalu render video.</small></span></label>
-          <label><input type="radio" name="creationTask" value="transcript"><span><strong>Transkrip saja</strong><small>Teks bertimestamp dan unduhan SRT, tanpa membuat klip.</small></span></label>
-        </fieldset>
+        <input type="radio" name="creationTask" value="moments" checked hidden>
         <div class="source-settings">
           <section id="clipResultSettings" class="source-setting-section" aria-labelledby="clipResultHeading">
             <div class="setting-heading"><h3 id="clipResultHeading">Hasil klip</h3><p>AI memilih titik awal dan akhir tiap momen. Kamu dapat mengubah potongan di editor.</p></div>
@@ -156,7 +153,9 @@
         </div>
       </div>
 
-      <h2 data-i18n="home.recent">Proyek terakhir</h2>
+      <div class="spread"><h2>Semua klip</h2><button class="ghost" id="refreshHomeClips">Muat ulang klip</button></div>
+      <p id="homePreviewStatus" class="field-help" role="status">Preview disiapkan bertahap. Teks dan gaya dapat diedit langsung setelah media siap.</p>
+      <button class="ghost" id="cancelHomePreviews" hidden>Hentikan persiapan preview</button>
       <div id="homeProjects" class="grid-clips"></div>
     </section>
 
@@ -385,13 +384,14 @@
 </div>
 <div id="toast"></div>
 
-<script src="/home_guide.js?v=1.15.0"></script>
-<script src="/app.js?v=1.15.0"></script>
-<script src="/finishing.js?v=1.15.0"></script>
-<script src="/creator.js?v=1.15.0"></script>
-<script src="/subtitle_overlay.js?v=1.15.0"></script>
-<script src="/caption_motion.js?v=1.15.0"></script>
-<script src="/timeline.js?v=1.15.0"></script>
-<script src="/studio.js?v=1.15.0"></script>
+<script src="/home_guide.js?v=1.16.0"></script>
+<script src="/app.js?v=1.16.0"></script>
+<script src="/finishing.js?v=1.16.0"></script>
+<script src="/creator.js?v=1.16.0"></script>
+<script src="/subtitle_overlay.js?v=1.16.0"></script>
+<script src="/live_timeline.js?v=1.16.0"></script>
+<script src="/caption_motion.js?v=1.16.0"></script>
+<script src="/timeline.js?v=1.16.0"></script>
+<script src="/studio.js?v=1.16.0"></script>
 </body>
 </html>

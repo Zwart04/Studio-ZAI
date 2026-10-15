@@ -171,6 +171,12 @@ for _id, _label, _font, _color, _outline, _box, _category, _sample in [
     ("pink_label", "Pink Label", "Barlow Condensed", "#311529", "#FFA9DB", True, "Label", "GOOD TO KNOW"),
     ("mint_label", "Mint Label", "Barlow Condensed", "#112A23", "#91EDCC", True, "Label", "QUICK TUTORIAL"),
     ("news_flash", "News Flash", "Anton", "#FFFFFF", "#D92D40", True, "Label", "THE BIG UPDATE"),
+    ("podcast_white", "Podcast Bold", "Anton", "#FFFFFF", "#121212", False, "Pop", "INI INTINYA"),
+    ("coral_caption", "Coral Caption", "Barlow Condensed", "#FFB49E", "#25150F", False, "Pop", "CERITA HARI INI"),
+    ("paper_note", "Paper Note", "Kalam", "#FFFFFF", "#182333", False, "Editorial", "Catatan kecil"),
+    ("serif_story", "Serif Story", "DM Serif Display", "#DCE8FF", "#15243A", False, "Editorial", "Di balik cerita"),
+    ("white_label", "White Label", "Anton", "#161616", "#FFFFFF", True, "Label", "SATU HAL PENTING"),
+    ("blue_label", "Blue Label", "Barlow Condensed", "#FFFFFF", "#174C83", True, "Label", "COBA CARA INI"),
 ]:
     def _ass_color(hex_color: str) -> str:
         return "&H00" + hex_color[5:7] + hex_color[3:5] + hex_color[1:3]
@@ -192,10 +198,11 @@ POSITIONS: dict[str, int] = {"bottom": 2, "middle": 5, "top": 8}
 POSITION_CHOICES = ("bottom", "middle", "top", "off")
 
 
-def preset_list() -> list[dict[str, str]]:
+def preset_list() -> list[dict[str, Any]]:
     """Daftar template untuk galeri di UI."""
     return [{"id": key, "label": value.get("label", key),
              "font": value.get("font", "Inter"), "category": value.get("category", "Essential"),
+             "size": value.get("size", 76), "bold": bool(value.get("bold", 0)),
              "sample": value.get("sample", "Tell your story"),
              "color": value.get("preview_color", "#FFFFFF"),
              "outline": value.get("preview_outline", "#161B22"),
@@ -436,7 +443,10 @@ def text_item_events(text_items: Sequence[dict[str, Any]], width: int, height: i
         x = int(max(0.0, min(1.0, float(item.get("x", 0.5)))) * width)
         y = int(max(0.0, min(1.0, float(item.get("y", 0.5)))) * height)
         anim = PRESETS[template].get("anim", "")
-        from .caption_style import number
+        from .caption_style import number, tags
+        item_style = item.get("style") or {}
+        if item_style:
+            anim = "{" + tags({**item_style, "x": item.get("x", .5), "y": item.get("y", .5)}, height / 1920, width, height) + "}"
         size = number(item.get("fontSize") or PRESETS[template].get("size", 56), 56, 14, 160) * height / 1920
         alpha = round((1 - number(item.get("opacity"), 1, 0, 1)) * 255)
         events.append(

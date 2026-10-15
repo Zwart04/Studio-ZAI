@@ -1,6 +1,7 @@
 """Isolated real API fixture for browser regression tests."""
 import argparse
 import json
+import uuid
 from pathlib import Path
 import uvicorn
 from studiozai import config, projects
@@ -15,7 +16,8 @@ def main():
     parser.add_argument('--port',type=int,default=8768)
     args=parser.parse_args()
     OUT.mkdir(parents=True,exist_ok=True)
-    config._base_dir=lambda:OUT/'isolated-data'
+    isolated=OUT/f'isolated-{uuid.uuid4().hex[:8]}'
+    config._base_dir=lambda:isolated
     source=OUT/'source.mp4'
     result=ffmpeg.run_ffmpeg(['-f','lavfi','-i','testsrc2=size=640x360:r=15:d=5','-f','lavfi','-i',
         'sine=frequency=440:duration=5','-c:v','libx264','-preset','ultrafast','-c:a','aac','-shortest',str(source)])

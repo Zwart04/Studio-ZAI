@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import ai, config
+from . import ai, config, resources
 from .jobs import inference_slot
 from .utils import proc
 
@@ -81,7 +81,7 @@ def start(model_path, check_cancel=None):
                 raise RuntimeError("Port runtime dipakai proses lain. Runtime tersebut tidak dihentikan.")
         _KEY = secrets.token_urlsafe(32)
         args = [str(executable), "-m", str(path), "--alias", path.stem, "--host", "127.0.0.1", "--port", str(PORT),
-                "-c", "4096", "-t", "4", "-np", "1", "-ngl", "0", "-b", "128", "-ub", "128", "--jinja", "--api-key", _KEY,
+                "-c", "4096", "-t", str(resources.cpu_threads()), "-np", "1", "-ngl", "0", "-b", "64", "-ub", "64", "--jinja", "--api-key", _KEY,
                 "--chat-template-kwargs", '{"enable_thinking":false}', "--log-disable", "--no-webui"]
         _CHILD = proc.spawn(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _MODEL = str(path)

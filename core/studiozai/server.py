@@ -14,7 +14,18 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, ai, config, credentials, jobs, models, projects, service, typography
+from . import (
+    __version__,
+    ai,
+    config,
+    credentials,
+    edit_preview,
+    jobs,
+    models,
+    projects,
+    service,
+    typography,
+)
 from .pipeline import download as download_pipeline
 from .pipeline import subtitle, voice
 from .utils.text import clock, sanitize_filename
@@ -58,7 +69,7 @@ class ProcessRequest(BaseModel):
     source: str
     processing_mode: Literal["local", "hybrid", "offline", "online_ai", "legacy"] = "local"
     task: Literal["moments", "transcript"] = "moments"
-    caption_motion: Literal["plain", "pop", "elastic", "karaoke", "typewriter", "word"] | None = None
+    caption_motion: Literal["plain", "pop", "elastic", "karaoke", "typewriter", "word", "rise", "fade", "zoom", "box", "wordBounce", "wordFade"] | None = None
     count: int = Field(default=0, ge=0, le=20)
     analysis_mode: Literal["auto", "podcast"] = "auto"
     review_first: bool = True
@@ -517,6 +528,8 @@ def clip_gallery() -> list[dict[str, Any]]:
                 "source_thumbnail": projects.source_thumbnail_url(project.source_url) if project.processing_mode != "offline" else "",
                 "updated": project.updated,
                 "files": available,
+                "edit_source": edit_preview.ready(project, clip),
+                "transcript": " ".join(str(row.get("text", "")) for row in clip.captions),
             })
     return sorted(gallery, key=lambda item: item["updated"], reverse=True)
 
@@ -561,6 +574,8 @@ def _ingest_task(project_id: str, source: str, online: bool = False):
 def get_project(project_id: str) -> dict[str, Any]:
     project = _project(project_id)
     result = project.as_dict()
+    for row, clip in zip(result["clips"], project.clips):
+        row["edit_source"] = edit_preview.ready(project, clip)
     result["source_thumbnail"] = projects.source_thumbnail_url(project.source_url) if project.processing_mode != "offline" else ""
     return result
 
@@ -1039,7 +1054,7 @@ def _preview_task(project_id: str, index: int, values: dict | None = None):
 
 
 @app.get("/api/subtitle-presets")
-def subtitle_presets() -> list[dict[str, str]]:
+def subtitle_presets() -> list[dict[str, Any]]:
     """Daftar template tipografi untuk galeri di editor."""
     subtitle.PRESETS.update(typography.load())
     return subtitle.preset_list()
@@ -1079,10 +1094,14 @@ def source_preview(project_id: str, index: int, values: ClipUpdate | None = None
     if values:
         clip = project.update_clip(index, {k: v for k, v in values.model_dump().items() if v is not None})
     def run(job):
-        path, offset = service._resolve_render_media(project, clip, job)
-        end = project.segment_bounds(clip.storage_id)[1] if project.online else project.duration
-        return {"path": str(path), "offset": offset, "end": end, "width": project.width, "height": project.height}
+        return edit_preview.prepare(project, clip, job)
     return jobs.MANAGER.submit("source-preview", "Sumber preview", run).as_dict()
+
+
+@app.post("/api/projects/{project_id}/prepare-previews")
+def prepare_project_previews(project_id: str):
+    _project(project_id)
+    return edit_preview.enqueue(project_id).as_dict()
 
 
 @app.post("/api/projects/{project_id}/assets")

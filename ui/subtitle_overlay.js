@@ -44,13 +44,13 @@ const SubtitleOverlay = (() => {
     points.push(Math.min(end,cue.end));
     return chunk.map((row,i)=>({...row,start:points[i],end:points[i+1]}));
   }
-  function mount(frame, player, readClip, sourceStart) {
+  function mount(frame, player, readClip, sourceStart, manual = false) {
     const layer = document.createElement('div'); layer.className = 'live-subtitle'; layer.setAttribute('aria-hidden', 'true');
     frame.append(layer);
     const timing = document.createElement('small'); timing.className = 'subtitle-timing'; frame.append(timing);
     let cueId = null, spans = [], rows = [], raf = null;
     const paint = () => {
-      const clip = readClip(), time = player.currentTime - sourceStart;
+      const clip = readClip(), time = player.currentTime - (typeof sourceStart==='function'?sourceStart():sourceStart);
       const cue = clip.captions?.find(row => row.start <= time && time < row.end);
       layer.hidden = !cue || clip.subtitle_position === 'off';
       if (!cue || clip.subtitle_position === 'off') { timing.textContent = ''; return; }
@@ -65,6 +65,10 @@ const SubtitleOverlay = (() => {
       layer.style.fontFamily = fonts.includes(style.font) ? style.font : 'Inter, sans-serif';
       layer.style.fontSize = `${Math.max(12, clamp(style.size,56,14,160) * frame.clientHeight / 1920)}px`;
       layer.style.fontWeight = style.bold ? '700' : '600';
+      layer.style.fontStyle=style.italic?'italic':'normal';
+      layer.style.opacity=String(clamp(style.opacity,1,0,1));
+      layer.style.textShadow=style.outlineColor?`1px 1px 2px ${color(style.outlineColor,'#111111')}, -1px -1px 2px ${color(style.outlineColor,'#111111')}`:'';
+      layer.style.background=style.box?color(style.outlineColor,'#111111'):'transparent';
       layer.style.left = `${clamp(style.x,.5,.05,.95) * 100}%`;
       layer.style.top = `${clamp(style.y,({top:.15,middle:.5,bottom:.82}[clip.subtitle_position] || .82),.05,.95) * 100}%`;
       rows.forEach((row, i) => {
@@ -89,14 +93,15 @@ const SubtitleOverlay = (() => {
         if (active && animation === 'pop') scale = age < .13 ? .75 + Math.min(1,age/.13)*.33 : 1.08 - Math.min(1,(age-.13)/.09)*.08;
         if (active && animation === 'bounce') scaleY = age < .1 ? .7 + age*5 : 1.2 - Math.min(1,(age-.1)/.12)*.2;
         if (active && animation === 'rise') y = (1-progress)*8;
-        if (active && animation === 'zoom') scale = .85 + progress*.15;
-        if (active && animation === 'fade') opacity = progress;
+        if (active && animation === 'zoom') scale = .85 + Math.min(1,age/.3)*.15;
+        if (active && animation === 'fade') opacity = Math.min(1,age/.15);
         span.style.transform = `translateY(${y}px) scale(${scale},${scale*scaleY})`; span.style.opacity = String(opacity);
       });
     };
-    const tick = () => {paint(); if (!player.paused) raf = requestAnimationFrame(tick);};
+    let lastPaint=0;
+    const tick = (now=0) => {if(now-lastPaint>=40||!now){paint();lastPaint=now;} if (!player.paused&&!manual) raf = requestAnimationFrame(tick);};
     const play = () => {cancelAnimationFrame(raf); tick();};
-    player.addEventListener('play', play); player.addEventListener('seeked', paint); player.addEventListener('timeupdate', paint);
+    if(!manual)player.addEventListener('play', play); player.addEventListener('seeked', paint); player.addEventListener('timeupdate', paint);
     paint();
     return {paint, destroy(){cancelAnimationFrame(raf);player.removeEventListener('play',play);player.removeEventListener('seeked',paint);player.removeEventListener('timeupdate',paint);layer.remove();timing.remove();}};
   }

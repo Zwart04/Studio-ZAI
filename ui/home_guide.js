@@ -11,9 +11,11 @@ const HomeGuide = (() => {
   function showProvider() {
     discovered = null;
     const id=document.querySelector('#aiProvider').value, p=providers[id], host=document.querySelector('#providerHelp');
-    document.querySelectorAll('[data-provider-pick]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.providerPick===id)));
     host.replaceChildren();
     if(p){
+      const identity=document.createElement('div');identity.className='provider-identity';
+      if(id!=='compatible'){const img=document.createElement('img');img.id='providerLogo';img.src=`/assets/providers/${id}.png`;img.alt=`Logo ${p.name}`;img.width=32;img.height=32;identity.append(img);}
+      const name=document.createElement('strong');name.textContent=p.name;identity.append(name);host.append(identity);
       const badge=document.createElement('strong');badge.className='provider-access';badge.textContent=p.badge;
       const copy=document.createElement('p');copy.textContent=p.steps;host.append(badge,copy);
       const links=document.createElement('div');links.className='provider-links';
@@ -28,11 +30,8 @@ const HomeGuide = (() => {
     updateButtons();
   }
   function updateButtons(){
-    document.querySelectorAll('[data-model-priority]').forEach(button=>{
-      button.disabled=!discovered?.guidance?.[button.dataset.modelPriority];
-      button.title=button.disabled ? (discovered ? 'Belum ada data yang cukup untuk model pada akun ini.' : 'Deteksi model terlebih dahulu.') : '';
-      button.setAttribute('aria-pressed','false');
-    });
+    const select=document.querySelector('#aiModelPriority');select.disabled=!discovered;select.value='manual';
+    for(const option of select.options)if(option.value!=='manual')option.disabled=!discovered?.guidance?.[option.value];
   }
   function describe(){
     const id=document.querySelector('#aiModel').value, row=discovered?.models.find(m=>m.id===id);
@@ -44,7 +43,17 @@ const HomeGuide = (() => {
   function models(result){
     discovered=result;
     if(!discovered.guidance)discovered.guidance={recommended:result.recommended};
-    updateButtons();describe();
+    const select=document.querySelector('#aiModel'), selected=select.value;
+    select.replaceChildren(new Option('Otomatis · saran provider','auto'));
+    const suggested=document.createElement('optgroup');suggested.label='Pilihan utama';
+    const others=document.createElement('optgroup');others.label='Model lain di akun';
+    for(const row of result.models){
+      const tags=Object.entries({recommended:'Rekomendasi',cheapest:'Termurah',smartest:'Paling pintar'}).filter(([key])=>result.guidance[key]===row.id).map(([,label])=>label);
+      const option=new Option(`${row.label||row.id}${tags.length?' · '+tags.join(' / '):''}`,row.id);
+      (tags.length?suggested:others).append(option);
+    }
+    if(suggested.children.length)select.append(suggested);if(others.children.length)select.append(others);select.value=selected;
+    updateButtons();document.querySelector('#aiModelPriority').value=selected===result.recommended?'recommended':'manual';describe();
     document.querySelector('#aiPriorityNote').textContent=result.guidance.note || 'Daftar mengikuti model yang tersedia di akun. Harga dan kemampuan belum tersedia.';
   }
   function init(){
@@ -65,26 +74,31 @@ const HomeGuide = (() => {
     old.replaceWith(subtitles);layout.append(subtitles);
     const gguf=document.querySelector('.model-advanced');
     if(gguf?.tagName==='DETAILS'){const group=document.createElement('div');group.className='model-advanced';gguf.querySelector('summary').remove();group.append(...gguf.childNodes);gguf.replaceWith(group);}
-    const picker=document.createElement('div');picker.className='provider-picker';picker.setAttribute('aria-label','Pilih provider online');
-    for(const [id,p] of Object.entries(providers)){
-      const button=document.createElement('button');button.type='button';button.dataset.providerPick=id;button.setAttribute('aria-pressed','false');
-      if(id!=='compatible'){const img=document.createElement('img');img.src=`/assets/providers/${id}.png`;img.alt='';img.width=28;img.height=28;button.append(img);}
-      const name=document.createElement('strong');name.textContent=p.name;const badge=document.createElement('small');badge.textContent=p.badge;button.append(name,badge);
-      button.onclick=()=>{const select=document.querySelector('#aiProvider');if(select.value!==id){select.value=id;select.dispatchEvent(new Event('change'));}};picker.append(button);
-    }
-    const panel=document.querySelector('#aiPanel');panel.prepend(picker);
-    const help=document.createElement('div');help.id='providerHelp';help.className='provider-help';picker.after(help);
+    const panel=document.querySelector('#aiPanel');panel.classList.add('online-model-form');
+    const help=document.createElement('div');help.id='providerHelp';help.className='provider-help';panel.querySelector('.grid-2').after(help);
     const priority=document.createElement('div');priority.className='model-priorities';
-    priority.innerHTML='<span>Prioritas model</span><div class="priority-buttons"><button type="button" data-model-priority="recommended">Rekomendasi</button><button type="button" data-model-priority="cheapest">Termurah</button><button type="button" data-model-priority="smartest">Paling pintar</button></div><p id="aiPriorityNote" class="field-help">Pilih provider, masukkan API key, lalu deteksi model. Termurah membandingkan harga yang tercatat; paling pintar merupakan saran keluarga model.</p><p id="aiModelDetail" role="status" class="model-price-detail"></p>';
+    priority.innerHTML='<label for="aiModelPriority">Pilih berdasarkan</label><select id="aiModelPriority" disabled><option value="manual">Pilih model sendiri</option><option value="recommended">Rekomendasi</option><option value="cheapest">Termurah dari harga tercatat</option><option value="smartest">Paling pintar · saran keluarga model</option></select><p id="aiPriorityNote" class="field-help">Pilih provider, masukkan API key, lalu deteksi model.</p><p id="aiModelDetail" role="status" class="model-price-detail"></p>';
     panel.append(priority);
-    priority.querySelectorAll('button').forEach(button=>button.onclick=()=>{
-      const id=discovered?.guidance?.[button.dataset.modelPriority];if(!id)return;
+    priority.querySelector('select').onchange=event=>{
+      const id=discovered?.guidance?.[event.target.value];if(!id)return;
       const select=document.querySelector('#aiModel');if(![...select.options].some(o=>o.value===id))return;
-      select.value=id;describe();priority.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
-    });
+      select.value=id;describe();
+    };
     document.querySelector('#aiProvider').addEventListener('change',showProvider);
     document.querySelector('#aiModel').addEventListener('change',()=>{updateButtons();describe();});
     document.querySelector('#aiKey').addEventListener('input',()=>{discovered=null;document.querySelector('#aiModel').replaceChildren(new Option('Otomatis · saran provider','auto'));updateButtons();document.querySelector('#aiModelDetail').textContent='API key berubah. Deteksi ulang model untuk akun ini.';});
+    const performance=document.createElement('section');performance.className='performance-controls';
+    performance.innerHTML='<h3>Kinerja laptop</h3><label for="performanceMode">Pemakaian CPU & RAM</label><select id="performanceMode"><option value="balanced">Seimbang</option><option value="light">Hemat RAM · laptop lama</option></select><p class="field-help">Hemat RAM memilih Whisper tiny dan analisis tanpa LLM. Preview 360p disiapkan satu per satu; ekspor tetap memakai sumber asli.</p><div class="gguf-actions"><button type="button" class="ghost" id="pickSmallGguf">Pilih GGUF terkecil</button><button type="button" class="ghost" id="pickNoLlm">Tanpa LLM · paling ringan</button></div><p class="field-help">GGUF hingga 1.200 MB diberi label Ringan. Ukuran berkas bukan total kebutuhan RAM. Model harus sudah tersedia di komputer.</p>';
+    document.querySelector('#localLlmFields').append(performance);
+    const performanceMode=performance.querySelector('#performanceMode');
+    api('/api/settings').then(settings=>{performanceMode.value=settings.performance_mode||'balanced';}).catch(()=>{});
+    performanceMode.onchange=async()=>{
+      try {await api('/api/settings',{method:'POST',body:JSON.stringify({values:{performance_mode:performanceMode.value}})});
+        if(performanceMode.value==='light'){$('#asrSpeed').value='fast';$('#localModel').value='';$('#localModel').dispatchEvent(new Event('change'));}
+      }catch(error){toast(error.message,'error');}
+    };
+    performance.querySelector('#pickNoLlm').onclick=()=>{$('#localModel').value='';$('#localModel').dispatchEvent(new Event('change'));};
+    performance.querySelector('#pickSmallGguf').onclick=()=>{const select=$('#ggufModel');if(select.options.length>1){select.selectedIndex=1;$('#localModelStatus').textContent='GGUF terkecil dipilih. Tekan Muat model untuk menjalankannya.';}else $('#localModelStatus').textContent='Belum ada GGUF lokal. Gunakan Tanpa LLM untuk mode paling ringan.';};
     showProvider();
   }
   return {init,models};

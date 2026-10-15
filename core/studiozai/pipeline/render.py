@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -46,12 +45,8 @@ def encoder_args(encoder: str | None = None) -> list[str]:
 
 # Leave CPU capacity for playback and the interface while the encoder runs.
 def threads_per_ffmpeg() -> int:
-    cores = os.cpu_count() or 2
-    if cores <= 4:
-        return 1
-    if cores <= 8:
-        return 2
-    return 3
+    from ..resources import cpu_threads
+    return cpu_threads()
 
 
 def thread_args() -> list[str]:

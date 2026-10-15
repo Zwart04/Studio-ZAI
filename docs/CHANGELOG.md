@@ -1,3 +1,14 @@
+# v1.16.0 — 15 Oktober 2026
+
+- Beranda Windows menampilkan semua klip beserta transkrip; pilihan Transkrip saja dihapus.
+- Preview 360p disiapkan bertahap, pemutar editor dipertahankan saat mengedit, dan overlay tampil langsung.
+- Transkrip per baris, panel editor terkelompok, 30 template teks dan 12 animasi.
+- Mode Hemat RAM, pilihan GGUF terkecil, serta pembatas thread CPU.
+
+[Cakupan, validasi, dan batas](RELEASE-1.16.0.md).
+
+---
+
 # v1.15.0 — 14 Oktober 2026
 
 - Kelompok analisis, transkrip, subtitle, dan hasil klip terlihat langsung di beranda Windows.
